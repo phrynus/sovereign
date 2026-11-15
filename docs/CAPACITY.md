@@ -176,3 +176,46 @@ win there is a behaviour change to the registration path, not a config flag.
   handshakes and per-connection overhead are outside the measurement.
 - **The rest of the server.** Operator UI polling, plugin hooks, event fan-out,
   AI context builders and cleanup loops all share the same core.
+
+## 8. The size of the binary
+
+The published binary is **59.5 MiB** (linux/amd64, built with `-s -w`). The
+unstripped build of the same code is 80.7 MiB; the difference is the symbol
+table and the DWARF data, nothing else. The release pipeline strips, so a
+download is 59.5 MiB and the one-click archives shrink by the same. (The 84 MiB
+figure that circulates is the **unstripped Windows** build left in a working
+directory, not the published artifact.)
+
+Where the size actually is, measured with `node scripts/binary-size.mjs --build`
+(which attributes symbol sizes to the modules that own them):
+
+| Part | server (linux/amd64) | implant (linux/amd64) |
+|---|---|---|
+| Go runtime + standard library | 41.3 MB | 35.1 MB |
+| This repository (code + the embedded console) | 4.8 MB | — |
+| `github.com/ugorji/go` (gin's JSON codec) | 3.1 MB | — |
+| `golang.org/x/text` | 1.6 MB | — |
+| `github.com/dop251/goja` (JS scripting) | 1.4 MB | — |
+| `github.com/jackc/pgx` (Postgres driver) | 1.3 MB | — |
+| `github.com/tetratelabs/wazero` (WASM plugins) | 1.1 MB | — |
+| **Pion (WebRTC / TURN / DTLS / STUN)** | **0.1 MB** | **~1.1 MB** |
+
+The Pion row is the one worth writing down, because "the WebRTC dependency chain
+is what makes the binary huge" costs an afternoon to disprove. On the server the
+whole Pion tree is **0.1 MB of 59.5 MB** — the server links the TURN/DTLS/STUN
+half (it is the TURN server); the ICE/RTP half belongs to the implant, where it
+is ~1.1 MB of a 26.3 MB stripped binary. Isolating Pion behind a build tag would
+save ~0.2% of the server binary, break remote desktop for everyone who builds
+from source, and split the release matrix. It is not worth doing.
+
+Reproduce the numbers:
+
+```bash
+node scripts/binary-size.mjs --build          # build + profile (linux/amd64)
+node scripts/binary-size.mjs path/to/binary    # profile a binary you already have
+```
+
+The release job also carries a **70 MiB budget** for the published binary: a
+heavy dependency arriving unnoticed fails the release instead of silently
+shipping 20 MB more to every download. The frontend has the same kind of
+budget (`check:bundle`).

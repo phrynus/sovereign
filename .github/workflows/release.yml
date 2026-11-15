@@ -86,7 +86,11 @@ jobs:
           # The release repository is stamped into the binary so the update
           # checker polls the repository that actually publishes the releases
           # (a fork tags its own releases and must not point at upstream).
-          go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=${{ github.ref_name }} -X github.com/forgec2/forgec2/internal/buildinfo.Repo=${{ github.repository }}" -o "$bin" ./cmd/server
+          # -s -w strips the symbol table and the DWARF data: the published
+          # binary is 59.5 MB instead of 80.7 MB, and the one-click archives
+          # shrink by the same. The version and repository stamps survive
+          # (-X is applied after the strip).
+          go build -ldflags "-s -w -X github.com/forgec2/forgec2/internal/server.ServerVersion=${{ github.ref_name }} -X github.com/forgec2/forgec2/internal/buildinfo.Repo=${{ github.repository }}" -o "$bin" ./cmd/server
           # Fail the job if the tag didn't make it into the binary.
           # (Windows/arm64 binaries can't execute on this runner — same
           # ldflags line builds them, and linux/amd64 proves the wiring.)
@@ -95,6 +99,19 @@ jobs:
               echo "version mismatch: binary reports [$(./"$bin" -version)] but tag is [${{ github.ref_name }}]"
               exit 1
             fi
+          fi
+          # The published binary has a size budget, like the frontend bundle.
+          # The stripped binary is 59.5 MiB; the ceiling leaves room for real
+          # growth and catches a heavy dependency arriving unnoticed.
+          if [ "${{ matrix.goos }}/${{ matrix.goarch }}" = "linux/amd64" ]; then
+            size=$(stat -c %s "$bin")
+            budget=$((70 * 1024 * 1024))
+            if [ "$size" -gt "$budget" ]; then
+              echo "the published binary is $((size / 1024 / 1024)) MiB, over the 70 MiB budget" >&2
+              echo "see what grew: node scripts/binary-size.mjs --build" >&2
+              exit 1
+            fi
+            echo "published binary: $((size / 1024 / 1024)) MiB (budget 70 MiB)"
           fi
           sha256sum "$bin" > "$bin.sha256"
           # Detached Ed25519 signature over the checksum file (hot-update

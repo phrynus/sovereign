@@ -380,6 +380,7 @@ Both sides carry a coverage floor, and **a floor that is never raised stops guar
 | Go | **58%** | 59.1% (was 51.5 at a 52.8 measurement — a 7-point regression would have passed) | `.github/workflows/ci.yml` "Coverage floor" |
 | frontend | **38.5%** | 39.36% statements / 25 095 | `frontend/scripts/check-coverage.mjs` (override with `COVERAGE_FLOOR`) |
 | first-paint bundle | **675 kB public / 720 kB authenticated** | 660 kB public, 708 kB authenticated (4.65 MB total under a 5.0 MB cap) | `frontend/scripts/check-bundle.mjs` |
+| server binary | **70 MiB** | 59.5 MiB (linux/amd64, stripped with `-s -w`; 80.7 MiB unstripped) | `release.yml` size budget; profile with `node scripts/binary-size.mjs --build` |
 
 Raise a floor in the same change that adds tests; lower it only as part of that change, never to make
 a regression pass. ~1 point of headroom is deliberate: it absorbs ordinary page work while a large
