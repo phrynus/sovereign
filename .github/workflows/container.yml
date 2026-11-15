@@ -8,6 +8,35 @@ on:
         required: true
         default: edge
         type: string
+      platforms:
+        description: 'Target platforms, comma separated (linux/amd64, linux/arm64)'
+        required: false
+        default: linux/amd64
+        type: string
+      publish_latest:
+        description: 'Also publish this build as :latest'
+        required: false
+        default: false
+        type: boolean
+  # The release workflow calls this one, so a tagged release publishes the same
+  # image shape (multi-arch, versioned, :latest) without a second copy of the
+  # build steps.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Container tag'
+        required: true
+        type: string
+      platforms:
+        description: 'Target platforms, comma separated'
+        required: false
+        default: linux/amd64
+        type: string
+      publish_latest:
+        description: 'Also publish this build as :latest'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -19,12 +48,17 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The arm64 leg builds the frontend and the Go binary under QEMU
+    # emulation, which is minutes-times-slower than native. The budget is for
+    # the emulation, not for the amd64 leg.
+    timeout-minutes: 150
     permissions:
       contents: read
       packages: write
     env:
       IMAGE_TAG: ${{ inputs.tag }}
+      PLATFORMS: ${{ inputs.platforms }}
+      PUBLISH_LATEST: ${{ inputs.publish_latest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate tag and prepare image name
@@ -35,42 +69,94 @@ jobs:
             echo 'Invalid container tag' >&2
             exit 1
           fi
+          if [[ -z "${PLATFORMS// /}" ]]; then
+            echo 'No platforms requested' >&2
+            exit 1
+          fi
+          IFS=',' read -ra WANTED <<< "$PLATFORMS"
+          for p in "${WANTED[@]}"; do
+            p="${p// /}"
+            case "$p" in
+              linux/amd64|linux/arm64) ;;
+              *)
+                echo "Unsupported platform: $p (linux/amd64 and linux/arm64 are published)" >&2
+                exit 1
+                ;;
+            esac
+          done
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       - name: Check build context safety
         run: |
           node --test scripts/docker-secret-exclusions.test.mjs
           node scripts/check-docker-context.mjs
-      - name: Build Linux amd64 image
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker build --pull \
-            --build-arg VERSION="$IMAGE_TAG" \
-            --build-arg SOURCE_REPO="$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            --label "org.opencontainers.image.version=$IMAGE_TAG" \
-            --tag "$IMAGE:$IMAGE_TAG" \
-            --tag "$IMAGE:sha-$GITHUB_SHA" .
-      - name: Verify image before publishing
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(docker run --rm --network none "$IMAGE:$IMAGE_TAG" -version)" = "$IMAGE_TAG"
-          test "$(docker inspect --format '{{.Config.User}}' "$IMAGE:$IMAGE_TAG")" = 'nonroot:nonroot'
-      - name: Publish to GitHub Container Registry
+      - name: Set up QEMU emulation
+        if: ${{ contains(inputs.platforms, 'arm64') }}
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GitHub Container Registry
         shell: bash
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE:sha-$GITHUB_SHA"
-          docker push "$IMAGE:$IMAGE_TAG"
+      - name: Prepare the tag list
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "$IMAGE:$IMAGE_TAG"
+            # A release tag publishes both spellings: v2.7.2 and 2.7.2. The
+            # bare one is what `docker pull forgec2:2.7.2` reads naturally.
+            if [[ "$IMAGE_TAG" =~ ^v[0-9] ]]; then
+              echo "$IMAGE:${IMAGE_TAG#v}"
+            fi
+            echo "$IMAGE:sha-$GITHUB_SHA"
+            if [ "$PUBLISH_LATEST" = "true" ]; then
+              echo "$IMAGE:latest"
+            fi
+          } >> "$GITHUB_OUTPUT"
+      - name: Build and publish the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          pull: true
+          build-args: |
+            VERSION=${{ env.IMAGE_TAG }}
+            SOURCE_REPO=${{ github.repository }}
+          tags: ${{ steps.tags.outputs.list }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}
+      - name: Verify the published image before anyone uses it
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The published reference is a manifest LIST now, so the checks pull the
+          # amd64 leg explicitly and read the list for the platform list.
+          docker pull --platform linux/amd64 "$IMAGE:$IMAGE_TAG"
+          test "$(docker run --rm --network none "$IMAGE:$IMAGE_TAG" -version)" = "$IMAGE_TAG"
+          test "$(docker inspect --format '{{.Config.User}}' "$IMAGE:$IMAGE_TAG")" = 'nonroot:nonroot'
+          manifest="$(docker buildx imagetools inspect "$IMAGE:$IMAGE_TAG")"
+          IFS=',' read -ra WANTED <<< "$PLATFORMS"
+          for p in "${WANTED[@]}"; do
+            p="${p// /}"
+            if ! grep -Eq "Platform:[[:space:]]+$p" <<<"$manifest"; then
+              echo "published manifest does not list $p" >&2
+              echo "$manifest" >&2
+              exit 1
+            fi
+          done
           {
             echo '### Published container'
             echo "- Image: \`$IMAGE:$IMAGE_TAG\`"
             echo "- Commit: \`$IMAGE:sha-$GITHUB_SHA\`"
-            echo '- Platform: linux/amd64'
+            echo "- Platforms: $PLATFORMS"
           } >> "$GITHUB_STEP_SUMMARY"
