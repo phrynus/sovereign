@@ -109,6 +109,9 @@ jobs:
         run: |
           set -euo pipefail
           {
+            # A multi-line output value needs a heredoc: writing bare lines to
+            # GITHUB_OUTPUT makes the runner parse them as key=value pairs.
+            echo 'tags<<TAGS_EOF'
             echo "$IMAGE:$IMAGE_TAG"
             # A release tag publishes both spellings: v2.7.2 and 2.7.2. The
             # bare one is what `docker pull forgec2:2.7.2` reads naturally.
@@ -119,6 +122,7 @@ jobs:
             if [ "$PUBLISH_LATEST" = "true" ]; then
               echo "$IMAGE:latest"
             fi
+            echo 'TAGS_EOF'
           } >> "$GITHUB_OUTPUT"
       - name: Build and publish the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
