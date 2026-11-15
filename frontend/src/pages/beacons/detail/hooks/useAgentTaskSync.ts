@@ -17,10 +17,33 @@ interface TaskUpdateFrame {
   data?: Record<string, unknown>;
 }
 
+/** What one inbound frame means for a single agent's detail page. */
+export type FrameAction = "resync" | "reload" | "task" | "patch" | "ignore";
+
+/**
+ * Classifies a WebSocket frame for one agent detail page.
+ *
+ * `sync` is the reconnect snapshot the server sends on EVERY connect. It is
+ * not agent-scoped, and its whole purpose is convergence: a client that was
+ * disconnected (or closed for falling behind on a reliable event) must refetch
+ * instead of assuming the events it missed were "nothing". Treating it as
+ * ignore is how a lost terminal `task_update` used to leave a task spinning
+ * until the operator reloaded the page by hand.
+ */
+export function frameAction(msg: { type?: string; agent_id?: unknown }, agentId: string): FrameAction {
+  if (msg.type === "sync") return "resync";
+  if (String(msg.agent_id ?? "") !== agentId) return "ignore";
+  if (msg.type === "agent_online" || msg.type === "agent_offline") return "reload";
+  if (msg.type === "task_update") return "task";
+  if (msg.type === "agent_data_update") return "patch";
+  return "ignore";
+}
+
 /**
  * Reconciles the periodic full-detail refresh with live WS events so busy
  * agents do not trigger a full-detail refetch per task_update:
  *
+ * - sync (reconnect) -> immediate throttled full reload
  * - task_update -> merge status/preview into the local task list (no refetch)
  * - agent_online / agent_offline -> throttled full reload
  * - agent_data_update -> merge payload into the local agent record
@@ -38,17 +61,24 @@ export function useAgentTaskSync(
   useEffect(() => {
     if (!agentId) return;
     return subscribe((msg) => {
-      if (String((msg as { agent_id?: unknown }).agent_id ?? "") !== agentId) return;
-      if (msg.type === "agent_online" || msg.type === "agent_offline") {
-        reloadThrottled();
-      } else if (msg.type === "agent_data_update") {
-        const patch = (msg as { data?: Record<string, unknown> }).data;
-        if (!patch) return;
-        setData((prev) =>
-          prev ? { ...prev, agent: { ...(prev.agent || {}), ...patch } } : prev,
-        );
-      } else if (msg.type === "task_update") {
-        setData((prev) => (prev ? applyTaskUpdate(prev, msg as TaskUpdateFrame, seenTaskIdsRef.current) : prev));
+      switch (frameAction(msg, agentId)) {
+        case "resync":
+        case "reload":
+          reloadThrottled();
+          return;
+        case "patch": {
+          const patch = (msg as { data?: Record<string, unknown> }).data;
+          if (!patch) return;
+          setData((prev) =>
+            prev ? { ...prev, agent: { ...(prev.agent || {}), ...patch } } : prev,
+          );
+          return;
+        }
+        case "task":
+          setData((prev) => (prev ? applyTaskUpdate(prev, msg as TaskUpdateFrame, seenTaskIdsRef.current) : prev));
+          return;
+        default:
+          return;
       }
     });
   }, [agentId, subscribe, setData, reloadThrottled]);

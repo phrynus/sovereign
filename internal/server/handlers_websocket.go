@@ -492,11 +492,17 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 
 // WSOperatorSession tracks an operator's WebSocket session.
 type WSOperatorSession struct {
-	Conn      *websocket.Conn
-	UserID    uint
-	Username  string
-	Page      string
-	AgentView string
+	Conn     *websocket.Conn
+	UserID   uint
+	Username string
+	Page     string
+	// TenantID scopes agent-bound events exactly like wsClientConn.tenantID:
+	// 0 is the legacy operator and receives every tenant.
+	TenantID uint
+	// CanViewScreen mirrors wsClientConn.canViewScreen so live screen frames
+	// never reach a read-only custom role through /ws/operator.
+	CanViewScreen bool
+	AgentView     string
 	// lastSeenNano is atomic: the read pump writes it on every frame while
 	// presence scans read it concurrently (P3-10 data race fix).
 	lastSeenNano atomic.Int64
@@ -514,17 +520,31 @@ func (s *WSOperatorSession) lastSeenAt() time.Time {
 	return time.Unix(0, s.lastSeenNano.Load())
 }
 
-// enqueue delivers msg to the session's writer without blocking; a client
-// that falls a full buffer behind is disconnected instead of stalling the hub.
-func (s *WSOperatorSession) enqueue(msg []byte) {
+// enqueue delivers msg to the session's writer without blocking. It reports
+// whether the frame was queued and, separately, whether a reliable frame was
+// shed because the queue was full (the session is closed in that case).
+func (s *WSOperatorSession) enqueue(msg []byte, reliable bool) (queued, shed bool) {
+	if s.send == nil {
+		// Hand-built session with no outbound queue (presence placeholders,
+		// tests): nothing to deliver to.
+		return false, false
+	}
 	select {
 	case s.send <- msg:
+		return true, false
 	case <-s.done:
+		return false, false
 	default:
+		if !reliable {
+			return false, false
+		}
 		// Buffer full: this operator cannot keep up. Drop the connection so
-		// the reader unblocks and cleanup runs.
+		// the reader unblocks and cleanup runs; the reconnect resyncs.
 		s.closeOnce.Do(func() { close(s.done) })
-		s.Conn.Close()
+		if s.Conn != nil {
+			s.Conn.Close()
+		}
+		return false, true
 	}
 }
 
@@ -578,20 +598,16 @@ func (t *operatorSessionTracker) remove(userID uint, s *WSOperatorSession) {
 	}
 }
 
-// BroadcastToOperators queues a message for all connected operator sessions.
-// Non-blocking by design: the per-session writer goroutine performs the
-// socket write, so a wedged client can never stall event producers.
-func (t *operatorSessionTracker) BroadcastToOperators(msg []byte) {
+// snapshot returns the current sessions. Callers filter and enqueue outside
+// the tracker lock so a slow delivery never blocks add/remove/presence.
+func (t *operatorSessionTracker) snapshot() []*WSOperatorSession {
 	t.mu.Lock()
 	sessions := make([]*WSOperatorSession, 0, len(t.sessions))
 	for _, session := range t.sessions {
 		sessions = append(sessions, session)
 	}
 	t.mu.Unlock()
-
-	for _, session := range sessions {
-		session.enqueue(msg)
-	}
+	return sessions
 }
 
 // operatorHeartbeatTimeout is how long since the last ping before an operator
@@ -662,18 +678,19 @@ func (t *operatorSessionTracker) OperatorPresenceSnapshot() []map[string]interfa
 }
 
 // broadcastOperatorEvent dispatches a JSON event to every connected operator
-// dashboard. Events fan out to BOTH the legacy /ws hub and any /ws/operator
+// dashboard. The fan-out covers BOTH the legacy /ws hub and any /ws/operator
 // sessions, so every browser client receives the same stream regardless of
 // which endpoint it dialed. (The beacon wsHub is deliberately NOT used.)
+//
+// Operator events are reliable: losing a credential/listener/build event
+// leaves a stale badge with nothing to correct it. A client whose queue is
+// full is disconnected so it reconnects and resyncs.
 func (s *Server) broadcastOperatorEvent(payload map[string]interface{}) {
 	msg, ok := marshalJSONSafe(payload)
 	if !ok {
 		return
 	}
-	s.broadcastToClients(msg)
-	if s.operatorSessions != nil {
-		s.operatorSessions.BroadcastToOperators(msg)
-	}
+	s.broadcastToClientsReliable(msg)
 }
 
 // broadcastOperatorPresence pushes the current operator presence snapshot to
@@ -730,8 +747,14 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		Conn:     conn,
 		UserID:   claims.UserID,
 		Username: claims.Username,
-		send:     make(chan []byte, 256),
-		done:     make(chan struct{}),
+		// Same identity resolution as the legacy /ws hub: tenant 0 receives
+		// every tenant, and the screen gate mirrors agents.write. Without
+		// these, /ws/operator would either leak other tenants' agent events
+		// or miss the ones it is entitled to.
+		TenantID:      s.tenantIDForUser(claims.Username),
+		CanViewScreen: s.userCanViewScreen(claims.Username),
+		send:          make(chan []byte, 256),
+		done:          make(chan struct{}),
 	}
 	session.touchLastSeen()
 

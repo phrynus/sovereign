@@ -97,6 +97,14 @@ func (s *Server) handleReadyCheck(c *gin.Context) {
 		if spilled := s.auditSpilled.Load(); spilled > 0 {
 			checks["audit_spilled"] = spilled
 		}
+		// A reliable WebSocket frame that met a full client queue costs that
+		// client its socket: it reconnects and resyncs, so nothing is lost —
+		// but a rising count means browsers are falling behind, which the
+		// operator should see before they report "the console froze".
+		if slow := s.wsSlowClientDrops.Load(); slow > 0 {
+			checks["ws_slow_clients"] = fmt.Sprintf("%d dropped for a full send queue", slow)
+			warnings = append(warnings, fmt.Sprintf("%d console socket(s) were closed for a full queue and resynced on reconnect", slow))
+		}
 	}
 
 	// Delivery and action health are warnings, not readiness: a route nobody can reach does not make the process unready,

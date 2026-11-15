@@ -682,7 +682,7 @@ func (s *Server) performHotUpdate(latest string) error {
 		"version": latest,
 	}
 	if msg, ok := marshalJSONSafe(payload); ok {
-		s.broadcastToClients(msg)
+		s.broadcastToClientsReliable(msg)
 	}
 
 	slog.Info("Hot update: restarting into the new build", "version", latest, "script", scriptPath)
@@ -963,7 +963,9 @@ func (s *Server) broadcastUpdateNotification(latest string) {
 		slog.Error("Failed to marshal update notification", "err", err)
 		return
 	}
-	s.broadcastToClients(msg)
+	// Reliable: the update banner is the only in-console signal that a new
+	// release exists.
+	s.broadcastToClientsReliable(msg)
 }
 
 // handleRefreshUpdateCheck forces a fresh update check and returns the result

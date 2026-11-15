@@ -1,10 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { applyTaskUpdate } from "./useAgentTaskSync";
+import { applyTaskUpdate, frameAction } from "./useAgentTaskSync";
 import type { AgentDetailResponse, TaskEntry } from "../components/agent-detail-utils";
 
 function snapshot(tasks: TaskEntry[] = [], stats: Partial<AgentDetailResponse> = {}): AgentDetailResponse {
   return { agent: {}, tasks, total_tasks: tasks.length, pending_tasks: 0, completed_tasks: 0, failed_tasks: 0, ...stats };
 }
+
+describe("frameAction", () => {
+  it("treats the reconnect sync frame as a resync, not as an unrelated agent", () => {
+    // The server sends {"type":"sync"} on every connect, with no agent_id.
+    // Ignoring it (the previous behaviour) meant a client that had been
+    // disconnected for a terminal task event kept its spinner forever.
+    expect(frameAction({ type: "sync" }, "a1")).toBe("resync");
+  });
+
+  it("still ignores another agent's events", () => {
+    expect(frameAction({ type: "task_update", agent_id: "a2" }, "a1")).toBe("ignore");
+    expect(frameAction({ type: "agent_offline", agent_id: "a2" }, "a1")).toBe("ignore");
+  });
+
+  it("classifies this agent's frames", () => {
+    expect(frameAction({ type: "task_update", agent_id: "a1" }, "a1")).toBe("task");
+    expect(frameAction({ type: "agent_online", agent_id: "a1" }, "a1")).toBe("reload");
+    expect(frameAction({ type: "agent_offline", agent_id: "a1" }, "a1")).toBe("reload");
+    expect(frameAction({ type: "agent_data_update", agent_id: "a1" }, "a1")).toBe("patch");
+    expect(frameAction({ type: "screenshot_frame", agent_id: "a1" }, "a1")).toBe("ignore");
+  });
+});
 
 describe("applyTaskUpdate", () => {
   it("inserts a brand-new task at the head with stats bump", () => {

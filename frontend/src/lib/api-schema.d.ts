@@ -6381,7 +6381,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Operator websocket */
+        /**
+         * Operator websocket
+         * @description JSON event stream for the console. Emits agent online/offline, task updates and streamed task output, screenshot frames (only to sessions allowed by the same agents.write gate as the screenshot API), build/credential/listener/automation events and operator presence. Tenant-scoped events reach only sessions of that tenant; tenant 0 is the legacy unscoped operator. The first frame on every connect is a `{"type":"sync"}` snapshot, and a client whose send queue overflows while a reliable event is pending is disconnected instead of silently missing it - clients must refetch state on reconnect rather than assume the stream is complete.
+         */
         get: operations["wsOperator"];
         put?: never;
         post?: never;

@@ -579,6 +579,10 @@ func (s *Server) apiHealth(c *gin.Context) {
 			health["beacon_agents_tracked"] = s.agentRateLimiter.Tracked()
 			health["beacon_agents_refused"] = s.agentRateLimiter.Limited()
 		}
+		// A reliable frame that could not be queued cost that client its
+		// socket; it is counted so "the console missed an event" is measurable
+		// instead of a story.
+		health["ws_slow_clients_dropped"] = s.wsSlowClientDrops.Load()
 	} else {
 		health["audit_queue_depth"] = 0
 		health["audit_dropped"] = int64(0)

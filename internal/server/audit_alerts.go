@@ -238,7 +238,9 @@ func (s *Server) broadcastSystemAlert(title, message, alertType string) {
 		slog.Error("Failed to marshal system alert", "err", err)
 		return
 	}
-	s.broadcastToClients(msg)
+	// Reliable: a security alert the dashboard silently never showed is the
+	// worst possible drop.
+	s.broadcastToClientsReliable(msg)
 }
 
 func (s *Server) checkLoginLockout(ip string) (locked bool, retryAfter int) {

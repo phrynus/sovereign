@@ -205,8 +205,10 @@ func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event
 			msg := s.expandTemplate(params.Message, evt)
 			// Structured marshal: the previous fmt.Sprintf template produced
 			// invalid JSON frames whenever the message contained a quote.
+			// A notification is not persisted anywhere: if the frame is lost it
+			// is gone, so the fan-out must not silently discard it.
 			if frame, ok := marshalJSONSafe(map[string]interface{}{"type": "notification", "message": msg, "source": "automation"}); ok {
-				s.broadcastToClients(frame)
+				s.broadcastToClientsReliable(frame)
 			}
 		}
 	case ActionRunScript:

@@ -216,10 +216,39 @@ func (s *Server) broadcastUserEvent(eventType, username string, session UserSess
 	s.broadcastToClients(msg)
 }
 
+// wsSubscriber is the visibility-relevant identity of one connected operator
+// socket, resolved once at connect time. BOTH operator endpoints (/ws and
+// /ws/operator) expose it, so the fan-out applies ONE set of tenant/screen
+// rules instead of two that can drift apart.
+type wsSubscriber struct {
+	// TenantID 0 is the legacy operator: it sees every tenant, matching
+	// tenantScope semantics.
+	TenantID uint
+	// CanViewScreen mirrors the screenshot APIs' agents.write gate.
+	CanViewScreen bool
+}
+
+func (c *wsClientConn) subscriber() wsSubscriber {
+	return wsSubscriber{TenantID: c.tenantID, CanViewScreen: c.canViewScreen}
+}
+
+func (s *WSOperatorSession) subscriber() wsSubscriber {
+	return wsSubscriber{TenantID: s.TenantID, CanViewScreen: s.CanViewScreen}
+}
+
 // broadcastToClients sends a message to all connected WebSocket clients.
 // Uses buffered channels so the caller never blocks on slow readers.
 func (s *Server) broadcastToClients(message []byte) {
-	s.broadcastToClientsWhere(message, nil)
+	s.broadcastFanout(message, false, nil)
+}
+
+// broadcastToClientsReliable sends a frame the client CANNOT rebuild from
+// polling (a terminal task state, an agent going offline, an alert). If a
+// client's queue is full the socket is closed instead of the frame being
+// dropped, so the browser reconnects and resyncs rather than merging events
+// around a hole it will never notice.
+func (s *Server) broadcastToClientsReliable(message []byte) {
+	s.broadcastFanout(message, true, nil)
 }
 
 // userCanViewScreen reports whether a username may receive live screen frames
@@ -244,7 +273,14 @@ func (s *Server) userCanViewScreen(username string) bool {
 // Previously every agent/task event fanned out to all connected operators,
 // disclosing other tenants' hostnames, IDs and task types over the socket.
 func (s *Server) broadcastToTenant(message []byte, agentID string) {
-	s.broadcastToTenantWhere(message, agentID, nil)
+	s.broadcastToTenantWhere(message, agentID, false, nil)
+}
+
+// broadcastToTenantReliable is broadcastToTenant for a frame the client cannot
+// recover from polling. A client whose queue is full is disconnected (it
+// resyncs on reconnect) instead of silently missing a terminal state.
+func (s *Server) broadcastToTenantReliable(message []byte, agentID string) {
+	s.broadcastToTenantWhere(message, agentID, true, nil)
 }
 
 // broadcastScreenshotToTenant delivers live screen frames only to clients
@@ -253,65 +289,109 @@ func (s *Server) broadcastToTenant(message []byte, agentID string) {
 // agents.read could watch a desktop through /ws even though the screenshot
 // endpoints require the write permission.
 func (s *Server) broadcastScreenshotToTenant(message []byte, agentID string) {
-	s.broadcastToTenantWhere(message, agentID, func(client *wsClientConn) bool {
-		return client.canViewScreen
+	s.broadcastToTenantWhere(message, agentID, false, func(sub wsSubscriber) bool {
+		return sub.CanViewScreen
 	})
 }
 
-// broadcastToTenantWhere is broadcastToTenant with an extra per-client filter
-// (nil keeps every client in the resolved tenant set).
-func (s *Server) broadcastToTenantWhere(message []byte, agentID string, allow func(*wsClientConn) bool) {
+// broadcastToTenantWhere is broadcastToTenant with a reliability flag and an
+// extra per-subscriber filter (nil keeps every subscriber in the resolved
+// tenant set).
+func (s *Server) broadcastToTenantWhere(message []byte, agentID string, reliable bool, allow func(wsSubscriber) bool) {
 	var agent db.Implant
 	if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&agent).Error; err != nil {
 		// Agent row gone (or DB hiccup): limit to legacy clients rather than
 		// dropping (availability) or fanning out (disclosure).
 		slog.Warn("Tenant broadcast: agent lookup failed, limiting to legacy clients", "agent_id", agentID, "error", err)
-		s.broadcastToClientsWhere(message, func(client *wsClientConn) bool {
-			return client.tenantID == 0 && (allow == nil || allow(client))
+		s.broadcastFanout(message, reliable, func(sub wsSubscriber) bool {
+			return sub.TenantID == 0 && (allow == nil || allow(sub))
 		})
 		return
 	}
 	if agent.TenantID == 0 {
-		s.broadcastToClientsWhere(message, allow)
+		s.broadcastFanout(message, reliable, allow)
 		return
 	}
 	tid := agent.TenantID
-	s.broadcastToClientsWhere(message, func(client *wsClientConn) bool {
-		if client.tenantID != 0 && client.tenantID != tid {
+	s.broadcastFanout(message, reliable, func(sub wsSubscriber) bool {
+		if sub.TenantID != 0 && sub.TenantID != tid {
 			return false
 		}
-		return allow == nil || allow(client)
+		return allow == nil || allow(sub)
 	})
 }
 
-// broadcastToClientsWhere is broadcastToClients with a per-client filter
-// (nil keeps everything).
-func (s *Server) broadcastToClientsWhere(message []byte, allow func(*wsClientConn) bool) {
+// shutdownDone is the server's shutdown signal, nil when no context is
+// installed (tests that build a bare Server). A nil channel blocks forever,
+// which is exactly "this process never shuts down" for a select.
+func (s *Server) shutdownDone() <-chan struct{} {
+	if s == nil || s.ctx == nil {
+		return nil
+	}
+	return s.ctx.Done()
+}
+
+// broadcastFanout delivers one frame to every operator socket that the filter
+// admits, across BOTH endpoints (/ws and /ws/operator) and both tenants rules.
+//
+// reliable selects the overflow policy. A droppable frame (live screen frame,
+// output chunk, progress tick) is discarded when a client's queue is full: the
+// next one supersedes it. A reliable frame is not: the client is disconnected
+// so it reconnects and resyncs, because the state it carries (task finished,
+// agent offline) may never be produced again and the UI would spin forever.
+func (s *Server) broadcastFanout(message []byte, reliable bool, allow func(wsSubscriber) bool) {
 	s.wsMutex.RLock()
 	clients := make([]*wsClientConn, 0, len(s.wsClients))
 	for _, client := range s.wsClients {
-		if allow != nil && !allow(client) {
-			continue
+		if allow == nil || allow(client.subscriber()) {
+			clients = append(clients, client)
 		}
-		clients = append(clients, client)
 	}
 	s.wsMutex.RUnlock()
 
 	for _, client := range clients {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Warn("Operator broadcast to closed channel", "user", client.session.Username)
-				}
-			}()
-			select {
-			case <-s.ctx.Done():
-				return
-			case client.ch <- message:
-			default:
-				slog.Debug("WebSocket write channel full, dropping message", "user", client.session.Username)
+		s.deliverToLegacyClient(client, message, reliable)
+	}
+
+	if s.operatorSessions != nil {
+		for _, session := range s.operatorSessions.snapshot() {
+			if allow == nil || allow(session.subscriber()) {
+				s.deliverToOperatorSession(session, message, reliable)
 			}
-		}()
+		}
+	}
+}
+
+// deliverToLegacyClient non-blockingly queues one frame for a /ws client.
+func (s *Server) deliverToLegacyClient(client *wsClientConn, message []byte, reliable bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			// The reader goroutine closed the channel between the snapshot
+			// and this send; the client is already gone.
+			slog.Debug("Operator broadcast to closed channel", "user", client.session.Username)
+		}
+	}()
+	select {
+	case <-s.shutdownDone():
+		return
+	case client.ch <- message:
+	default:
+		if !reliable {
+			slog.Debug("WebSocket write channel full, dropping message", "user", client.session.Username)
+			return
+		}
+		s.wsSlowClientDrops.Add(1)
+		slog.Warn("WebSocket client cannot keep up; closing so it resyncs on reconnect",
+			"user", client.session.Username)
+		client.conn.Close()
+	}
+}
+
+// deliverToOperatorSession non-blockingly queues one frame for a /ws/operator
+// session, with the same overflow policy as the legacy hub.
+func (s *Server) deliverToOperatorSession(session *WSOperatorSession, message []byte, reliable bool) {
+	if _, shed := session.enqueue(message, reliable); shed {
+		s.wsSlowClientDrops.Add(1)
 	}
 }
 
@@ -333,7 +413,9 @@ func (s *Server) broadcastAgentOnline(agent db.Implant, isNew bool) {
 		slog.Error("Failed to marshal agent online notification", "err", err)
 		return
 	}
-	s.broadcastToTenant(notification, agent.ID)
+	// Reliable: a lost "agent online" leaves the fleet view showing the agent
+	// as offline until something else forces a refetch.
+	s.broadcastToTenantReliable(notification, agent.ID)
 }
 
 // broadcastAgentOffline pushes agent offline events to all WebSocket clients.
@@ -357,7 +439,9 @@ func (s *Server) broadcastAgentOffline(agent db.Implant, status string) {
 		slog.Error("Failed to marshal agent offline notification", "err", err)
 		return
 	}
-	s.broadcastToTenant(notification, agent.ID)
+	// Reliable: a lost "agent offline" leaves a ghost entry in the fleet view
+	// (green badge for a host that is gone) until something forces a refetch.
+	s.broadcastToTenantReliable(notification, agent.ID)
 }
 
 // suppressAgentStatusEvent ensures at most one status event per agent every 60 seconds.
@@ -454,7 +538,10 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 		slog.Error("Failed to marshal task update", "err", err)
 		return
 	}
-	s.broadcastToTenant(notification, agentID)
+	// Reliable: this frame is the only signal that a task finished. Dropping it
+	// leaves the operator's spinner (and the live shell stream) waiting forever,
+	// so a full client queue costs that client its socket instead.
+	s.broadcastToTenantReliable(notification, agentID)
 }
 
 // taskForOperator is the final storage-boundary guard for task output. Most DB

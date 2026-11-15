@@ -358,6 +358,7 @@ tells you if you break it — do not delete the guard to make a change pass.**
 | a local failure treated as tampering | a disk error advanced the chain, poisoning the transfer permanently | `TestChainRollbackAfterLocalFailure`, `TestRollbackClearsPoison` |
 | a lookup by id with no tenant or visibility check | bulk history, build jobs, approval prompts | the tenant tests in `bulk_history_tenant_test.go`, `build_job_tenant_test.go`, `approval_expiry_test.go` |
 | a hot path re-doing work per request | profile JSON re-read and re-parsed per beacon; the transform chain re-parsed per decode | `BenchmarkActivePlacements`, `BenchmarkParseWireCached`, `TestActivePlacementsCacheIsUsed` |
+| "the stream is complete" while events vanish | a full client queue dropped `task_update … completed` at debug level, so a spinner never ended; `broadcastToTenant` promised both operator endpoints and wired only `/ws` | `TestReliableFanoutClosesSlowClientInsteadOfDropping`, `TestDroppableFanoutKeepsSlowClientConnected`, `TestTenantFanoutReachesOperatorSessions`, `TestScreenshotFanoutRespectsScreenGateOnOperatorSessions` |
 
 Two habits produced all of these, and both are cheap:
 
