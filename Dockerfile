@@ -8,7 +8,14 @@
 # >=24.15). Vite 7 itself only needs 20.19: require(esm) must be enabled by
 # default, otherwise loading the ESM-only @vitejs/plugin-react fails with
 # ERR_REQUIRE_ESM. The pinned builder image below is newer than the floor.
-FROM node:26.12-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS frontend-builder
+#
+# The builder stages run on $BUILDPLATFORM (the machine doing the build), NOT
+# on the target platform: the console is architecture-independent, and the Go
+# binary is cross-compiled below. That is what makes a linux/arm64 image build
+# without QEMU emulation - the alternative was ~34 minutes of emulated npm and
+# go build for one extra architecture. It needs BuildKit (the default since
+# Docker 23); the classic builder does not understand --platform in FROM.
+FROM --platform=$BUILDPLATFORM node:26.12-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS frontend-builder
 WORKDIR /build/frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -16,7 +23,11 @@ COPY frontend/ .
 RUN npm run build
 
 # Stage 2: Build Go binary with embedded frontend
-FROM golang:1.26.11-alpine@sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26.11-alpine@sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb AS backend-builder
+# TARGETOS/TARGETARCH are the platform the IMAGE is for; the build itself runs
+# on the builder platform, so the binary is cross-compiled rather than emulated.
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
@@ -36,8 +47,8 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 ARG VERSION=dev
 ARG SOURCE_REPO=r0si/forgec2
-RUN CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/forgec2/forgec2/internal/server.ServerVersion=${VERSION} -X github.com/forgec2/forgec2/internal/buildinfo.Repo=${SOURCE_REPO}" -o forgec2-server ./cmd/server
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w -X github.com/forgec2/forgec2/internal/server.ServerVersion=${VERSION} -X github.com/forgec2/forgec2/internal/buildinfo.Repo=${SOURCE_REPO}" -o forgec2-server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
 # Seed /data with nonroot ownership in the builder (which has a shell).
 # NOTE: no RUN in the distroless stage — it has no shell and the build fails.
 # The distroless nonroot user is uid/gid 65532 and does not exist in the

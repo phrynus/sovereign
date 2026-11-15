@@ -48,10 +48,11 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # The arm64 leg builds the frontend and the Go binary under QEMU
-    # emulation, which is minutes-times-slower than native. The budget is for
-    # the emulation, not for the amd64 leg.
-    timeout-minutes: 150
+    # No QEMU here on purpose: the Dockerfile's builder stages run on
+    # $BUILDPLATFORM and cross-compile the Go binary, so the arm64 leg is a
+    # native build (minutes, not the ~34 minutes an emulated npm + go build
+    # took).
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
@@ -89,11 +90,6 @@ jobs:
         run: |
           node --test scripts/docker-secret-exclusions.test.mjs
           node scripts/check-docker-context.mjs
-      - name: Set up QEMU emulation
-        if: ${{ contains(inputs.platforms, 'arm64') }}
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-        with:
-          platforms: arm64
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GitHub Container Registry
