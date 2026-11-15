@@ -297,6 +297,36 @@ and cross-compile the Go binary (`TARGETOS`/`TARGETARCH`) instead of emulating
 the target architecture. The published binary is stripped (`-s -w`, 59.5 MiB)
 and the release fails if it grows past 70 MiB.
 
+## Beacon rate limits
+
+Two budgets guard the beacon path, and they answer different questions:
+
+| Budget | Keyed by | What it stops |
+|---|---|---|
+| address | the source address | an unauthenticated flood from one address |
+| agent | the agent id, once the frame is decrypted | one misbehaving agent spending everyone else's allowance |
+
+The **address budget scales with the number of agents the server has seen
+from that address**. A cloud provider's NAT egress is one address for hundreds
+of implants, and a fixed per-address budget throttles them all together — the
+symptom is a fleet that "went offline" while the server was idle. An address
+with no known agent keeps the base budget, so an unauthenticated flood is still
+cut, and the scale factor is capped (64 agents per address) so one address
+cannot inflate its own budget without bound.
+
+`rate_limit.beacon.limit` / `.window` set both budgets. A refused check-in
+answers **429 with `Retry-After`**; the implant treats that as retryable and
+backs off instead of failing. `/ready` publishes `checks.beacon_agents`
+("N agent(s) tracked, M check-in(s) refused") and warns while M is above zero;
+`/api/v1/health` publishes `beacon_agents_tracked` and `beacon_agents_refused`.
+
+```yaml
+rate_limit:
+  beacon:
+    limit: 120      # per agent, and per address (scaled by the agents there)
+    window: 60      # seconds
+```
+
 ## Monitoring what the server says about itself
 
 `GET /health` is liveness and `GET /ready` is readiness, but `/ready` also carries warnings a monitor should act on. Two of

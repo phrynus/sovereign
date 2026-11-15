@@ -339,6 +339,12 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 	s.maybeAutoAdaptBeacon(agent)
 
 	if len(req.Relayed) > 0 {
+		// A relayed child checks in through its parent's HTTP request, so the
+		// address budget has to count it too: a P2P chain behind one NAT is
+		// still several agents sharing that address.
+		for _, rel := range req.Relayed {
+			s.noteBeaconClient(publicIP, rel.AgentID)
+		}
 		s.processRelayedResults(req.Relayed, req.UUID, now)
 	}
 

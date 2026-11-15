@@ -575,6 +575,10 @@ func (s *Server) apiHealth(c *gin.Context) {
 		health["audit_dropped"] = s.auditDropped.Load()
 		health["audit_spilled"] = s.auditSpilled.Load()
 		health["audit_spill_pending"] = s.auditSpillPending()
+		if s.agentRateLimiter != nil {
+			health["beacon_agents_tracked"] = s.agentRateLimiter.Tracked()
+			health["beacon_agents_refused"] = s.agentRateLimiter.Limited()
+		}
 	} else {
 		health["audit_queue_depth"] = 0
 		health["audit_dropped"] = int64(0)

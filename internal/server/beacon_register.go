@@ -388,6 +388,30 @@ func (s *Server) handleBeacon(c *gin.Context) {
 
 	var respBytes []byte
 	if kind == frameEncrypted {
+		// Two budgets guard the beacon path, and they answer different
+		// questions. The ADDRESS budget is shared by every agent behind one
+		// NAT address, so the server tells the limiter which agents live behind
+		// this address and the budget scales with them - a cloud egress is one
+		// address for hundreds of agents, and a fixed budget would throttle
+		// them all together ("the whole fleet went offline" while the server
+		// was idle). The per-AGENT budget stops one misbehaving agent from
+		// spending the allowance of the others. A refusal is a 429 with
+		// Retry-After: the implant treats it as retryable and backs off.
+		s.noteBeaconClient(publicIP, req.UUID)
+		if !s.agentRateLimiter.Allow(req.UUID) {
+			if s.metrics != nil {
+				s.metrics.BeaconRateLimitedTotal.Inc()
+			}
+			s.configMu.RLock()
+			retryAfter := s.cfg.RateLimit.Beacon.Window
+			s.configMu.RUnlock()
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+			respondError(c, http.StatusTooManyRequests, "beacon rate limit exceeded for this agent")
+			return
+		}
 		resp := s.processBeacon(req, publicIP)
 		// A protocol refusal is answered with the reason: the agent has to
 		// learn that it is too old (or that the server is), otherwise it

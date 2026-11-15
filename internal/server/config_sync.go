@@ -182,6 +182,9 @@ func (s *Server) syncRateLimiters() error {
 	if s.rateLimiter != nil {
 		s.rateLimiter.SetLimits(beaconLimit, time.Duration(beaconWindow)*time.Second)
 	}
+	if s.agentRateLimiter != nil {
+		s.agentRateLimiter.SetLimits(beaconLimit, time.Duration(beaconWindow)*time.Second)
+	}
 	if s.apiRateLimiter != nil {
 		s.apiRateLimiter.SetCapacityRate(apiCapacity, apiRate)
 		s.apiRateLimiter.SetWhitelist(apiWhitelist)

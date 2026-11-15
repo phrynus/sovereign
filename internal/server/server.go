@@ -51,11 +51,15 @@ type Server struct {
 	wsUpgrader        websocket.Upgrader
 	rateLimiter       *middleware.RateLimiter
 	apiRateLimiter    *middleware.APIRateLimiter
-	loginLockout      *loginLockoutTracker
-	socksEngine       *socksRelayEngine
-	cookieProxy       *cookieProxyEngine
-	tunEngine         *tunEngine
-	startTime         time.Time
+	// agentRateLimiter bounds one agent's own check-ins, so an agent that
+	// floods cannot spend the allowance of the other agents behind the same
+	// address.
+	agentRateLimiter *agentRateLimiter
+	loginLockout     *loginLockoutTracker
+	socksEngine      *socksRelayEngine
+	cookieProxy      *cookieProxyEngine
+	tunEngine        *tunEngine
+	startTime        time.Time
 
 	dnsListener *DNSBeaconListener
 	// dnsListenerMu guards the dnsListener pointer: the status poll, the
@@ -577,6 +581,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server { // config-lock: constr
 
 	// Initialize rate limiters with context for graceful shutdown
 	s.rateLimiter = middleware.NewRateLimiter(s.ctx, cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second)
+	s.agentRateLimiter = newAgentRateLimiter(cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second)
 	s.apiRateLimiter = middleware.NewAPIRateLimiter(s.ctx, cfg.RateLimit.API.Capacity, cfg.RateLimit.API.Rate)
 
 	// Start periodic cleanup for login lockout entries

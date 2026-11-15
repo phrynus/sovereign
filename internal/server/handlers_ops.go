@@ -142,6 +142,19 @@ func (s *Server) handleReadyCheck(c *gin.Context) {
 			warnings = append(warnings, fmt.Sprintf("%d automation rule(s) are firing without their actions landing", failingRules))
 		}
 
+		// The per-agent beacon budget: an agent that checks in too fast is
+		// refused on its own. The counters are here so a fleet that "went
+		// offline" can be told apart from a fleet that was throttled.
+		if s.agentRateLimiter != nil {
+			tracked := s.agentRateLimiter.Tracked()
+			limited := s.agentRateLimiter.Limited()
+			checks["beacon_agents"] = fmt.Sprintf("%d agent(s) tracked, %d check-in(s) refused", tracked, limited)
+			if limited > 0 {
+				warnings = append(warnings,
+					fmt.Sprintf("%d beacon check-in(s) were refused by the per-agent rate limit", limited))
+			}
+		}
+
 		// A stalled queue is a beacon that is not polling: the work is accepted and never consumed, which the task list shows
 		// only as rows an operator has to scroll through. Counted here because the probe is the thing that runs when nobody is
 		// watching the console.

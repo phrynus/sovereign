@@ -212,6 +212,12 @@ rate_limit:
     capacity: 100
     rate: 20
   beacon:
+    # Requests per window, per AGENT and per source address. The address
+    # budget is shared by every agent behind one NAT egress, so it scales with
+    # the number of agents the server has seen from that address - a cloud
+    # provider's single egress IP hosting hundreds of agents must not throttle
+    # them as one flood. The per-agent budget is what stops one misbehaving
+    # agent from spending the others' allowance.
     limit: 120
     window: 60
   extc2:

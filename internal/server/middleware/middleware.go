@@ -24,6 +24,12 @@ type RateLimiter struct {
 	limit       int           // requests per window
 	window      time.Duration // time window
 	maxVisitors int           // max entries before eviction
+	// clients maps an address to the distinct clients seen from it, with the
+	// time each was last seen. A shared NAT address hosts many agents, and a
+	// fixed per-address budget throttles them as if they were one flood, so
+	// the budget scales with the number of clients the address actually
+	// serves (see NoteClient).
+	clients map[string]map[string]time.Time
 	// onLimit, when set, runs once per rejected request. The server uses it to
 	// increment the beacon rate-limit metric without this package importing
 	// Prometheus (or the server package).
@@ -31,6 +37,11 @@ type RateLimiter struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 }
+
+// maxClientsPerIP bounds how much one address can inflate its own budget. An
+// address that serves more agents than this is served the base budget plus
+// this many agents' worth, and no more.
+const maxClientsPerIP = 64
 
 type visitor struct {
 	timestamp time.Time
@@ -43,6 +54,7 @@ const defaultMaxVisitors = 100000
 func NewRateLimiter(ctx context.Context, limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		visitors:    make(map[string]*visitor),
+		clients:     make(map[string]map[string]time.Time),
 		limit:       limit,
 		window:      window,
 		maxVisitors: defaultMaxVisitors,
@@ -68,6 +80,17 @@ func NewRateLimiter(ctx context.Context, limit int, window time.Duration) *RateL
 				for ip, v := range rl.visitors {
 					if now.Sub(v.timestamp) > rl.window*2 {
 						delete(rl.visitors, ip)
+						delete(rl.clients, ip)
+					}
+				}
+				for ip, set := range rl.clients {
+					for client, seen := range set {
+						if now.Sub(seen) > rl.window*2 {
+							delete(set, client)
+						}
+					}
+					if len(set) == 0 {
+						delete(rl.clients, ip)
 					}
 				}
 				rl.mu.Unlock()
@@ -105,6 +128,58 @@ func (rl *RateLimiter) SetOnLimit(fn func()) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	rl.onLimit = fn
+}
+
+// NoteClient records that a client (for the beacon path, an agent id) is
+// served from an address.
+//
+// The address budget is shared by everyone behind that address: a cloud
+// provider's NAT egress is one address for hundreds of agents, and a fixed
+// per-address budget throttles them all together - the symptom is a fleet
+// that "goes offline" while the server is idle. Scaling the budget with the
+// number of clients actually seen from the address keeps the flood protection
+// (an address with no known clients still gets the base budget) without
+// punishing the tenants that share an egress.
+//
+// The caller is the server, after it has decrypted a frame and therefore
+// knows the agent id; an unauthenticated request cannot inflate anything.
+func (rl *RateLimiter) NoteClient(ip, client string) {
+	if ip == "" || client == "" {
+		return
+	}
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if rl.clients == nil {
+		rl.clients = make(map[string]map[string]time.Time)
+	}
+	set := rl.clients[ip]
+	if set == nil {
+		set = make(map[string]time.Time)
+		rl.clients[ip] = set
+	}
+	if _, known := set[client]; !known && len(set) >= maxClientsPerIP {
+		return
+	}
+	set[client] = time.Now()
+}
+
+// limitFor returns the budget for an address: the base limit, multiplied by
+// the number of distinct clients seen from it inside the current window.
+func (rl *RateLimiter) limitFor(ip string, now time.Time) int {
+	set := rl.clients[ip]
+	if len(set) == 0 {
+		return rl.limit
+	}
+	live := 0
+	for _, seen := range set {
+		if now.Sub(seen) <= rl.window {
+			live++
+		}
+	}
+	if live < 1 {
+		return rl.limit
+	}
+	return rl.limit * live
 }
 
 // Snapshot returns the live quota for status reporting.
@@ -157,8 +232,10 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 			return
 		}
 
-		// Check limit
-		if v.count >= rl.limit {
+		// Check limit. The budget for this address scales with the number of
+		// distinct clients it serves, so agents behind one NAT are not
+		// throttled as if they were a single flood.
+		if v.count >= rl.limitFor(ip, now) {
 			remaining := rl.window - now.Sub(v.timestamp)
 			retryAfter := int((remaining + time.Second - 1) / time.Second)
 			if retryAfter < 1 {
