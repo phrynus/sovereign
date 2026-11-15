@@ -289,6 +289,14 @@ reports it too). The `linux/amd64` build asserts this in CI and fails the
 release if the tag didn't make it in. Custom `FORGEC2_PORT` is honored by
 both the server and the container healthcheck.
 
+The same tag also publishes the **container**: the release workflow calls
+`container.yml`, which builds a multi-arch image (`linux/amd64` **and**
+`linux/arm64`) and tags it `vX.Y.Z`, `X.Y.Z` and `:latest`. The image build
+takes about three minutes because the builder stages run on the build machine
+and cross-compile the Go binary (`TARGETOS`/`TARGETARCH`) instead of emulating
+the target architecture. The published binary is stripped (`-s -w`, 59.5 MiB)
+and the release fails if it grows past 70 MiB.
+
 ## Monitoring what the server says about itself
 
 `GET /health` is liveness and `GET /ready` is readiness, but `/ready` also carries warnings a monitor should act on. Two of
