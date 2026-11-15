@@ -30,9 +30,14 @@
 ### 拉取容器镜像
 
 使用已发布的 GHCR 镜像，无需本地 Go/Node 工具链或源码构建。
-当前镜像支持 **Linux amd64**（Docker Desktop 请使用 Linux 容器模式）。
+镜像是**多架构 manifest**：同时提供 **linux/amd64**（Intel/AMD）与 **linux/arm64**
+（Graviton、Ampere、树莓派），`docker pull` 会自动选择对应架构。
 
 ```bash
+# 推荐使用发行版标签：v2.7.2 与 2.7.2 都存在，另有 :latest
+docker pull ghcr.io/r0si/forgec2:2.7.2
+
+# 滚动开发构建
 docker pull ghcr.io/r0si/forgec2:edge
 ```
 
@@ -40,12 +45,12 @@ docker pull ghcr.io/r0si/forgec2:edge
 
 Go 版本固定为 **Go 1.26.11**（`go.mod` 的 `go 1.26.0` 是语言版本下限，工具链包含标准库安全补丁），前端需要 **Node 24.15+**。`make build` 会按当前操作系统生成正确的二进制名；`make build-linux`、`make build-linux-arm64`、`make build-windows`、`make build-darwin` 可显式交叉编译。完整说明见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
-已发布镜像目前是 **linux/amd64**；arm64 主机可使用 release 二进制或源码构建，直到发布多架构 manifest。
-
-`edge` 是滚动开发标签，并非稳定发行版。需要可复现部署时，请固定镜像摘要或
-已发布的 `sha-<commit>` 标签，目前没有 `latest` 标签。
+`edge` 是滚动开发标签，并非稳定发行版。每个**发行标签**会以三种形式发布同一镜像：
+`vX.Y.Z`、`X.Y.Z` 与 `:latest`，均为多架构 manifest。需要可复现部署时，请固定镜像
+**摘要**（`docker pull ghcr.io/r0si/forgec2@sha256:…`）或 `sha-<commit>` 标签。
 如果包为私有，请使用有包访问权限的账号执行 `docker login ghcr.io`；
 不要将 Token 直接写在命令或配置文件中。
+可用 `docker buildx imagetools inspect ghcr.io/r0si/forgec2:<tag>` 查看标签实际指向的平台。
 
 启动镜像前，请参考 [config.example.yaml](config.example.yaml) 准备可写的
 `/data/config.yaml`，持久化 `/data` 以保存数据库和密钥，并设置

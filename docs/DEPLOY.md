@@ -80,6 +80,22 @@ unverifiable update fail closed):
 
 ## Option A — Linux, Docker (recommended, SQLite, zero-config)
 
+The published image is a **multi-arch manifest** for `linux/amd64` and `linux/arm64`,
+so the same `docker pull` works on an Intel/AMD host and on Graviton, Ampere or a
+Raspberry Pi. A release publishes it as `vX.Y.Z`, `X.Y.Z` and `:latest`; `edge` is
+the rolling development build.
+
+```bash
+# a release (recommended)
+docker pull ghcr.io/r0si/forgec2:2.7.2
+
+# what does the tag actually contain?
+docker buildx imagetools inspect ghcr.io/r0si/forgec2:2.7.2
+
+# pin for a reproducible deployment
+docker pull ghcr.io/r0si/forgec2@sha256:<digest>
+```
+
 ```bash
 cp config.example.yaml config.yaml
 docker compose up -d --build

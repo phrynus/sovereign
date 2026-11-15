@@ -32,18 +32,25 @@ The public account has an isolated observer role with read-only Agent, listener,
 ### Pull the container image
 
 Use the published GHCR image; no local Go/Node toolchain or source build is required.
-The current image targets **Linux amd64** (use Linux containers on Docker Desktop).
+The image is a **multi-arch manifest**: `linux/amd64` (Intel/AMD) and `linux/arm64`
+(Graviton, Ampere, Raspberry Pi), so `docker pull` picks the right leg on its own.
 
 ```bash
+# a release (recommended): v2.7.2 and 2.7.2 both exist, plus :latest
+docker pull ghcr.io/r0si/forgec2:2.7.2
+
+# the rolling development build
 docker pull ghcr.io/r0si/forgec2:edge
 ```
 
-`edge` is a rolling development tag, not a stable release. For reproducible deployments,
-pin the image digest or a published `sha-<commit>` tag. There is currently no `latest` tag.
+`edge` is a rolling development tag, not a stable release. Every **release tag**
+publishes the same image three ways: `vX.Y.Z`, `X.Y.Z` and `:latest`, each a
+multi-arch manifest. For reproducible deployments, pin the image **digest**
+(`docker pull ghcr.io/r0si/forgec2@sha256:…`) or a `sha-<commit>` tag.
 If the package is private, authenticate with `docker login ghcr.io` using an account
 with package access; never put a token directly in a command or configuration file.
-The published image is **linux/amd64**; arm64 hosts need the release binary or a source
-build (`make build-linux-arm64`) until a multi-arch manifest is published.
+Check what a tag actually resolves to with `docker buildx imagetools inspect
+ghcr.io/r0si/forgec2:<tag>`.
 
 ### Build from source
 
