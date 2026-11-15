@@ -46,6 +46,15 @@ updates:
     groups:
       docker-base:
         patterns: ["*"]
+    ignore:
+      # The builder image's Go version IS the standard library that ships in
+      # the binary, so it must equal go.mod's `toolchain` line
+      # (scripts/check-docker-go-version.mjs enforces it). Dependabot's
+      # golang:1.27.0 bump reintroduced GO-2026-6859 - fixed in 1.26.11 and
+      # 1.27.4, not in 1.27.0-1.27.3 - while every check stayed green because
+      # govulncheck scans the module, not the base image. Move it together with
+      # go.mod in a deliberate toolchain change instead.
+      - dependency-name: "golang"
 
   - package-ecosystem: docker-compose
     directory: /

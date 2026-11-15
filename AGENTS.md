@@ -166,6 +166,13 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   COPY set, follows in-module imports transitively from the production Go files (test files
   and `//go:build ignore` helpers excluded), and fails if the closure needs a top-level
   directory the Dockerfile never copies or `.dockerignore` excludes wholesale.
+- `check:docker-go-version` (`scripts/check-docker-go-version.mjs`) — the builder image's Go
+  version must equal go.mod's `toolchain`. The builder's stdlib is **linked into the shipped
+  binary**, so it is a security input; the grouped `docker-base` Dependabot PR moved it to
+  `golang:1.27.0` and merged green because govulncheck scans the module with the CI toolchain
+  and never looks at the base image. `GO-2026-6859` is fixed in 1.26.11 and 1.27.**4**, so the
+  1.27.0 bump silently reintroduced it. The gate carries a 4-case self-test (`--self-test`) and
+  runs in both task lists; `.github/dependabot.yml` ignores `golang` for the same reason.
 - `check:owner-scope` (`scripts/check-owner-scope.mjs`) — a request handler that touches a
   table **without a tenant column** by id must scope through the owning relationship. Fourteen
   rounds of this audit found the same shape by hand (scripts, BOF blobs, phishing templates and
@@ -457,7 +464,7 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
 
 ## Build caveats
 - `go build ./...` passes (the `data/e2e/` helpers have `//go:build ignore` tags).
-- Go version: **1.26.0** (go.mod) with `toolchain go1.26.11` pinned for the standard-library security patches (net/http, crypto/tls, html/template, net/textproto). The Dockerfile's `golang:1.26.11-alpine` base uses the same 1.26.11 — `GO-2026-6859` (net/http) was fixed in go1.26.11, and the 1.27 line had not yet backported it, so the image base follows the patched 1.26 line. The CI `setup-go` pins now name 1.26.11 as well, so govulncheck scans with the patched standard library (`go install golang.org/x/vuln/cmd/govulncheck@v1.1.4` is compiled by the installed toolchain, and `toolchain go1.26.11` carries the same version into the module); the `ci-go-1.26.11.patch` delivery file is retired.
+- Go version: **1.26.0** (go.mod) with `toolchain go1.26.11` pinned for the standard-library security patches (net/http, crypto/tls, html/template, net/textproto). The Dockerfile's `golang:1.26.11-alpine` builder must equal that toolchain — the builder's stdlib is **linked into the shipped binary**, so the image base is a security decision, not a build detail. `scripts/check-docker-go-version.mjs` enforces the equality (in `check` and `check:pre`) because Dependabot's grouped `docker-base` bump moved it to `golang:1.27.0` and **every job stayed green**: govulncheck scans the module with the CI toolchain, never the base image. `GO-2026-6859` (net/http) is fixed in **go1.26.11 and go1.27.4**; 1.27.0–1.27.3 are affected, so a 1.27 move needs 1.27.4+ and a matching `toolchain` line. The CI `setup-go` pins name 1.26.11 as well, so govulncheck scans with the patched standard library (`go install golang.org/x/vuln/cmd/govulncheck@v1.1.4` is compiled by the installed toolchain, and `toolchain go1.26.11` carries the same version into the module); the `ci-go-1.26.11.patch` delivery file is retired and `.github/dependabot.yml` ignores `golang` so the base-image group cannot undo this.
 - sqlite driver is **`github.com/glebarez/sqlite`** (pure Go, no cgo). Any DB-verification temp program MUST use this driver, NOT `gorm.io/driver/sqlite` (which needs cgo).
 
 ## CSRF Protection (IMPORTANT)

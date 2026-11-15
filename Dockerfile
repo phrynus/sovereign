@@ -23,7 +23,12 @@ COPY frontend/ .
 RUN npm run build
 
 # Stage 2: Build Go binary with embedded frontend
-FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS backend-builder
+# The Go version here must equal go.mod's `toolchain` line: the stdlib is
+# linked into the shipped binary, so the builder is the version that matters
+# for CVEs. scripts/check-docker-go-version.mjs enforces it. GO-2026-6859 is
+# fixed in 1.26.11 and 1.27.**4** - a 1.27.0/1/2/3 builder ships a vulnerable
+# net/http, which is why Dependabot's blind golang:1.27.0 bump is refused.
+FROM --platform=$BUILDPLATFORM golang:1.26.11-alpine@sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb AS backend-builder
 # TARGETOS/TARGETARCH are the platform the IMAGE is for; the build itself runs
 # on the builder platform, so the binary is cross-compiled rather than emulated.
 ARG TARGETOS
