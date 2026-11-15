@@ -134,7 +134,7 @@ jobs:
           build-args: |
             VERSION=${{ env.IMAGE_TAG }}
             SOURCE_REPO=${{ github.repository }}
-          tags: ${{ steps.tags.outputs.list }}
+          tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
