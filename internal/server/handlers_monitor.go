@@ -1169,9 +1169,10 @@ func (s *Server) BroadcastScreenMonitorError(agentID, errorMessage string) {
 }
 
 // handleAgentRemoteInput accepts remote desktop input events and queues a remote_input task.
-// Payload JSON: {"type":"move|click|key","x":0,"y":0,"key":""}
-// Agent-side dispatch: Windows (SendInput-equivalent win32 calls), Linux
-// (xdotool/ydotool), macOS (osascript keystrokes).
+// Payload JSON: {"type":"move|click|click_right|click_middle|wheel|key","x":0,"y":0,
+// "key":"","count":1,"delta":0,"mods":["ctrl"]}
+// Agent-side dispatch: Windows (keybd_event/mouse_event), Linux (xdotool),
+// macOS (System Events keystrokes; pointer injection is not available there).
 func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1196,8 +1197,7 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 	// write path at line speed. pushback is reported as 429, not silently
 	// dropped, so a mis-throttled client can tell.
 	if userID, ok := currentUserID(c); ok {
-		if !s.remoteInputLimiter.allow(strconv.FormatUint(uint64(userID), 10)+":"+strings.ToLower(id),
-			MaxRemoteInputEventsPerWindow, RemoteInputWindow, time.Now()) {
+		if !s.allowRemoteInput(strconv.FormatUint(uint64(userID), 10), id, req.Type) {
 			respondError(c, http.StatusTooManyRequests, "remote input rate limit exceeded")
 			return
 		}

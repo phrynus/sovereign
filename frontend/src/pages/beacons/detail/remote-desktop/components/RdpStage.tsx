@@ -20,6 +20,7 @@ interface RdpStageProps {
   wsLive: boolean;
   screenData: string | null;
   liveError: string;
+  liveInputError?: string;
   nativeWidth: number;
   nativeHeight: number;
   mouseX: number;
@@ -31,15 +32,19 @@ interface RdpStageProps {
   onImageLoad: (w: number, h: number) => void;
   onVideoPlaying: () => void;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onContextMenu: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
   onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseLeave: () => void;
 }
 
 /** Interactive remote canvas: status strip, frame/video, cursor, hints, overlay. */
 export default memo(function RdpStage({
-  t, status, monitoring, live, liveMode, lastUpdate, wsLive, screenData, liveError,
+  t, status, monitoring, live, liveMode, lastUpdate, wsLive, screenData, liveError, liveInputError,
   nativeWidth, nativeHeight, mouseX, mouseY, showCursor,
-  containerRef, imgRef, videoRef, onImageLoad, onVideoPlaying, onClick, onMouseMove, onMouseLeave,
+  containerRef, imgRef, videoRef, onImageLoad, onVideoPlaying,
+  onClick, onContextMenu, onMouseDown, onWheel, onMouseMove, onMouseLeave,
 }: RdpStageProps) {
   const statusConfig = {
     waiting: {
@@ -123,6 +128,9 @@ export default memo(function RdpStage({
         ref={containerRef}
         className="relative bg-card dark:bg-card flex-1 flex items-center justify-center overflow-hidden select-none"
         onClick={onClick}
+        onContextMenu={onContextMenu}
+        onMouseDown={onMouseDown}
+        onWheel={onWheel}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
       >
@@ -207,6 +215,15 @@ export default memo(function RdpStage({
         {status === "error" && liveError && (liveMode || live) && (
           <div className="absolute inset-x-4 bottom-4 rounded-lg bg-destructive/90 px-3 py-2 text-xs text-white shadow-lg">
             {liveError}
+          </div>
+        )}
+
+        {liveInputError && (
+          <div
+            role="status"
+            className="absolute inset-x-4 bottom-16 rounded-lg bg-warning/90 px-3 py-2 text-xs text-foreground shadow-lg pointer-events-none"
+          >
+            {liveInputError}
           </div>
         )}
 

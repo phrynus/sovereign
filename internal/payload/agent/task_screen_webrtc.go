@@ -75,10 +75,13 @@ type webRTCSignal struct {
 }
 
 type webRTCInputEvent struct {
-	Type string `json:"type"`
-	X    int    `json:"x"`
-	Y    int    `json:"y"`
-	Key  string `json:"key"`
+	Type  string   `json:"type"`
+	X     int      `json:"x"`
+	Y     int      `json:"y"`
+	Key   string   `json:"key"`
+	Count int      `json:"count"`
+	Delta int      `json:"delta"`
+	Mods  []string `json:"mods"`
 }
 
 type agentWebRTCSession struct {
@@ -105,6 +108,10 @@ type agentWebRTCSession struct {
 	screenW    int
 	screenH    int
 	screenOK   bool
+
+	// inputErrAt rate-limits "input_rejected" reports; the signaling read loop
+	// is the only writer.
+	inputErrAt time.Time
 }
 
 var (
@@ -423,6 +430,19 @@ func (s *agentWebRTCSession) sendJSON(v any) error {
 	return s.conn.WriteJSON(v)
 }
 
+// reportInputError tells the operator that one input event did not land. It is
+// rate-limited because a rejected key repeats while the operator holds it, and
+// it deliberately does NOT end the session: a key the agent does not know is
+// not a reason to tear down a live desktop.
+func (s *agentWebRTCSession) reportInputError(err error) {
+	now := time.Now()
+	if !s.inputErrAt.IsZero() && now.Sub(s.inputErrAt) < time.Second {
+		return
+	}
+	s.inputErrAt = now
+	_ = s.sendJSON(map[string]any{"type": "input_error", "reason": err.Error()})
+}
+
 // scaleInput maps browser coordinates from the encoded video back to native
 // screen pixels. ffmpeg pads and scales the capture to settings.Width/Height,
 // so forwarding the video coordinates unchanged would target the wrong place
@@ -437,7 +457,9 @@ func (s *agentWebRTCSession) scaleInput(raw []byte) []byte {
 }
 
 // mapWebRTCInput is the testable half of scaleInput. It only rewrites pointer
-// events; keyboard events and malformed input pass through unchanged.
+// events; keyboard events and malformed input pass through unchanged. The
+// event struct carries EVERY field the operator can set, because re-marshalling
+// a struct that omits count/delta/mods silently drops them before injection.
 func mapWebRTCInput(raw []byte, screenX, screenY, screenW, screenH, streamW, streamH int, haveScreen bool) []byte {
 	if !haveScreen || screenW <= 0 || screenH <= 0 || streamW <= 0 || streamH <= 0 {
 		return raw
@@ -447,7 +469,7 @@ func mapWebRTCInput(raw []byte, screenX, screenY, screenW, screenH, streamW, str
 		return raw
 	}
 	switch strings.ToLower(ev.Type) {
-	case "move", "click":
+	case "move", "click", "click_right", "click_middle", "wheel":
 	default:
 		return raw
 	}
@@ -565,7 +587,13 @@ func (s *agentWebRTCSession) readLoop() {
 			_ = s.pc.AddICECandidate(cand)
 		case "input":
 			if len(msg.Event) > 0 {
-				_, _ = remoteInputDispatch(string(s.scaleInput(msg.Event)))
+				// The dispatch result used to be discarded, so an injection that
+				// failed (unknown key, no xdotool, a VOID Win32 call checked as
+				// BOOL) looked exactly like a click that landed. Report it, at
+				// most once a second, without ending the session.
+				if _, err := remoteInputDispatch(string(s.scaleInput(msg.Event))); err != nil {
+					s.reportInputError(err)
+				}
 			}
 		case "stop", "session_end":
 			return

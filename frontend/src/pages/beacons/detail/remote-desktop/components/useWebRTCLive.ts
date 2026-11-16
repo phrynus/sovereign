@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import type { RemoteInputEvent } from "./input-events";
 
 /**
  * Live remote-desktop transport: the browser sends a recvonly H.264 offer over
@@ -89,6 +90,18 @@ export function useWebRTCLive(agentId: string) {
   const [liveWidth, setLiveWidth] = useState(0);
   const [liveHeight, setLiveHeight] = useState(0);
   const [livePreset, setLivePreset] = useState<LivePreset["value"]>("720p");
+  // A rejected input event is not a session failure: show it briefly and keep
+  // the desktop alive, otherwise one unsupported key would tear down a session.
+  const [inputError, setInputError] = useState("");
+  const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteInputError = useCallback((reason: string) => {
+    setInputError(reason);
+    if (inputErrTimerRef.current) clearTimeout(inputErrTimerRef.current);
+    inputErrTimerRef.current = setTimeout(() => {
+      inputErrTimerRef.current = null;
+      setInputError("");
+    }, 4000);
+  }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -187,8 +200,7 @@ export function useWebRTCLive(agentId: string) {
   }, []);
 
   const sendInput = useCallback(
-    (event: { type: "move" | "click"; x: number; y: number } | { type: "key"; key: string }): boolean =>
-      sendSignal({ type: "input", event }),
+    (event: RemoteInputEvent): boolean => sendSignal({ type: "input", event }),
     [sendSignal],
   );
 
@@ -356,6 +368,10 @@ export function useWebRTCLive(agentId: string) {
           case "error":
             fail(message.reason || message.error || t("agents.rdp_live_connection_failed"));
             break;
+          case "input_error":
+          case "input_rejected":
+            noteInputError(message.reason || message.error || t("agents.rdp_input_rejected"));
+            break;
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -374,7 +390,7 @@ export function useWebRTCLive(agentId: string) {
         }
       };
     },
-    [agentId, clearAnswerTimer, fail, sendSignal, stop, t],
+    [agentId, clearAnswerTimer, fail, noteInputError, sendSignal, stop, t],
   );
 
   const markPlaying = useCallback(() => {
@@ -386,6 +402,10 @@ export function useWebRTCLive(agentId: string) {
   useEffect(() => {
     return () => {
       if (activeRef.current) cleanupLocal();
+      if (inputErrTimerRef.current) {
+        clearTimeout(inputErrTimerRef.current);
+        inputErrTimerRef.current = null;
+      }
     };
   }, [cleanupLocal]);
 
@@ -394,6 +414,7 @@ export function useWebRTCLive(agentId: string) {
     cleanupLocal();
     setStatus("idle");
     setError("");
+    setInputError("");
   }, [agentId, cleanupLocal]);
 
   return {
@@ -401,6 +422,7 @@ export function useWebRTCLive(agentId: string) {
     active,
     status,
     error,
+    inputError,
     presets,
     livePreset,
     setLivePreset,

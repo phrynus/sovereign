@@ -997,35 +997,77 @@ func exportVpnCreds() string {
 	return strings.Join(results, "\n")
 }
 
+// remoteInputDispatch injects one operator input event on macOS.
+//
+// The payload is the SAME JSON contract as every other platform: the previous
+// implementation ran `keystroke "<whole payload>"`, which typed the JSON string
+// into the frontmost window instead of pressing the key the operator asked
+// for. Keyboard events are implemented through System Events; pointer
+// injection needs a helper macOS does not ship, so those events answer with an
+// explicit error rather than doing something else.
 func remoteInputDispatch(payload string) (string, error) {
-	// Use osascript to simulate keystrokes on macOS
-	if payload == "" {
-		return "", fmt.Errorf("remote_input: no payload provided")
+	ev, err := parseRemoteInputEvent(payload)
+	if err != nil {
+		return "", err
 	}
+	mods := normalizeRemoteInputMods(ev.Mods)
 
-	// Escape the payload for AppleScript
-	escaped := strings.ReplaceAll(payload, "\"", "\\\"")
-	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
-	script := fmt.Sprintf(
-		`tell application "System Events"
-			keystroke "%s"
-		end tell`, escaped)
+	switch ev.Type {
+	case "move", "click", "click_right", "click_middle", "wheel":
+		return "", fmt.Errorf("remote_input: pointer injection is not available on macOS (keyboard control works; use a VNC-class tool for the pointer)")
+	case "key":
+		script, ok := darwinKeyScript(ev.Key, mods)
+		if !ok {
+			return "", fmt.Errorf("remote_input: unknown key: %s", ev.Key)
+		}
+		if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("remote_input: osascript failed: %v (%s)", err, strings.TrimSpace(string(out)))
+		}
+		return fmt.Sprintf("remote_input: key %s injected (mods=%v)", ev.Key, mods), nil
+	default:
+		return "", fmt.Errorf("remote_input: unknown type: %s", ev.Type)
+	}
+}
 
-	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err == nil {
-		return fmt.Sprintf("remote_input: sent via osascript keystroke: %s", payload), nil
-	} else {
-		// Try with clipboard as fallback
-		script2 := fmt.Sprintf(
-			`tell application "System Events"
-				set the clipboard to "%s"
-				keystroke "v" using command down
-			end tell`, escaped)
-		if out2, err := exec.Command("osascript", "-e", script2).CombinedOutput(); err == nil {
-			return fmt.Sprintf("remote_input: sent via osascript paste: %s", payload), nil
-		} else {
-			return "", fmt.Errorf("remote_input: osascript failed: %v\n%s", err, string(out)+string(out2))
+// darwinKeyScript builds the System Events script for one key press, with the
+// modifiers held for the duration of the keystroke.
+func darwinKeyScript(key string, mods []string) (string, bool) {
+	appleMods := make([]string, 0, len(mods))
+	for _, mod := range mods {
+		switch mod {
+		case "ctrl":
+			appleMods = append(appleMods, "control down")
+		case "alt":
+			appleMods = append(appleMods, "option down")
+		case "shift":
+			appleMods = append(appleMods, "shift down")
+		case "meta":
+			appleMods = append(appleMods, "command down")
 		}
 	}
+	using := ""
+	if len(appleMods) > 0 {
+		using = " using {" + strings.Join(appleMods, ", ") + "}"
+	}
+
+	keyCodes := map[string]int{
+		"enter": 36, "return": 36, "tab": 48, "space": 49, "backspace": 51,
+		"escape": 53, "esc": 53, "delete": 117, "forwarddelete": 117,
+		"left": 123, "right": 124, "down": 125, "up": 126,
+		"home": 115, "end": 119, "pageup": 116, "pagedown": 121,
+		"f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97,
+		"f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103, "f12": 111,
+	}
+	lower := strings.ToLower(strings.TrimSpace(key))
+	if code, ok := keyCodes[lower]; ok {
+		return fmt.Sprintf(`tell application "System Events" to key code %d%s`, code, using), true
+	}
+	if len([]rune(key)) == 1 {
+		escaped := strings.ReplaceAll(key, `\`, `\\`)
+		escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+		return fmt.Sprintf(`tell application "System Events" to keystroke "%s"%s`, escaped, using), true
+	}
+	return "", false
 }
 
 func applyPersistence(method string, args string) string {

@@ -826,6 +826,7 @@ export const enAgents: Record<string, string> = {
   "agents.rdp_connection": "Connection",
   "agents.rdp_disconnected": "Disconnected",
   "agents.rdp_enter_fullscreen": "Enter fullscreen",
+  "agents.rdp_input_rejected": "The agent rejected an input event (see the beacon's task log)",
   "agents.rdp_error": "Error",
   "agents.rdp_exit_fullscreen": "Exit fullscreen",
   "agents.rdp_experimental_desc": "Choose snapshot streaming (JPEG frames plus remote_input tasks) or live WebRTC (H.264 at 720p30, optionally 1080p30). Live mode needs the optional WebRTC agent module, ffmpeg on the target, and webrtc.enabled on the server. Input injection quality varies by beacon version and OS.",

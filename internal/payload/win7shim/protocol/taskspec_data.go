@@ -179,7 +179,7 @@ func init() {
 		{Type: TaskTypeVPNCreds, Name: "VPN Credentials", Description: "Extract VPN credentials", Category: "credential-access"},
 		{Type: TaskTypeWifiCreds, Name: "WiFi Credentials", Description: "Extract WiFi credentials", Category: "credential-access"},
 		{Type: TaskTypePrivescCheck, Name: "PrivEsc Check", Description: "Recon check for escalation vectors — not a guaranteed elevation", Category: "privilege-escalation"},
-		{Type: TaskTypeRemoteInput, Name: "Remote Input", Description: "Send mouse/keyboard input remotely", Category: "collection"},
+		{Type: TaskTypeRemoteInput, Name: "Remote Input", Description: "Send mouse/keyboard input remotely: move, left/right/middle click (1-3 clicks), wheel, and key presses with ctrl/alt/shift/meta held", Category: "collection"},
 		{Type: TaskTypeUACBypass, Name: "UAC Bypass", Description: "Bypass UAC", Category: "privilege-escalation"},
 		{Type: TaskTypeAMSIByPass, Name: "AMSI Bypass", Description: "Bypass AMSI", Category: "defense-evasion"},
 		{Type: TaskTypeETWByPass, Name: "ETW Bypass", Description: "Bypass ETW", Category: "defense-evasion"},

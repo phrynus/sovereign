@@ -146,6 +146,43 @@ func TestMapWebRTCInputPassesThroughKeyAndUnknownScreen(t *testing.T) {
 	}
 }
 
+// TestMapWebRTCInputKeepsExtendedFields proves the coordinate mapper does not
+// strip what it does not scale: it re-marshals the event, so a field missing
+// from its struct disappears before injection (a right click would arrive as a
+// left click, a wheel without its delta, a combo without its modifiers).
+func TestMapWebRTCInputKeepsExtendedFields(t *testing.T) {
+	raw := []byte(`{"type":"click_right","x":640,"y":360,"count":2,"mods":["ctrl","shift"]}`)
+	got := mapWebRTCInput(raw, 0, 0, 1920, 1080, 1280, 720, true)
+	var ev webRTCInputEvent
+	if err := json.Unmarshal(got, &ev); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if ev.Type != "click_right" || ev.Count != 2 || len(ev.Mods) != 2 || ev.Mods[0] != "ctrl" {
+		t.Fatalf("extended fields lost: %+v", ev)
+	}
+	if ev.X != 960 || ev.Y != 540 {
+		t.Fatalf("right click mapped to (%d,%d), want (960,540)", ev.X, ev.Y)
+	}
+
+	// The wheel is a pointer event too: scrolling at a scaled position must
+	// target the same place a click there would.
+	raw = []byte(`{"type":"wheel","x":640,"y":360,"delta":-3}`)
+	got = mapWebRTCInput(raw, 0, 0, 1920, 1080, 1280, 720, true)
+	if err := json.Unmarshal(got, &ev); err != nil {
+		t.Fatalf("decode wheel: %v", err)
+	}
+	if ev.Delta != -3 || ev.X != 960 || ev.Y != 540 {
+		t.Fatalf("wheel = (%d,%d) delta %d, want (960,540) delta -3", ev.X, ev.Y, ev.Delta)
+	}
+
+	// Key events are not pointer events: they pass through byte for byte,
+	// modifiers included.
+	key := []byte(`{"type":"key","key":"c","mods":["ctrl"]}`)
+	if got := mapWebRTCInput(key, 0, 0, 1920, 1080, 1280, 720, true); string(got) != string(key) {
+		t.Fatalf("key combo changed: %s", got)
+	}
+}
+
 func TestCappedBuffer(t *testing.T) {
 	buf := &cappedBuffer{max: 5}
 	if n, err := buf.Write([]byte("abcdefgh")); n != 8 || err != nil {

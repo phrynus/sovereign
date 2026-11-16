@@ -114,7 +114,7 @@
 | `keylogger_stop` | Keylogger Stop | no | — | — | Stop keylogging |
 | `mic` | Microphone Capture | no | — | command:string | Record audio from the default microphone |
 | `read` | Read File | no | — | command:string* | Read a file from the agent |
-| `remote_input` | Remote Input | no | — | — | Send mouse/keyboard input remotely |
+| `remote_input` | Remote Input | no | — | — | Send mouse/keyboard input remotely: move, left/right/middle click (1-3 clicks), wheel, and key presses with ctrl/alt/shift/meta held |
 | `screen_trigger_start` | Screen Trigger Start | no | — | command:string* | Watch the foreground window title and screenshot when it matches. Cooldown per title. |
 | `screen_trigger_stop` | Screen Trigger Stop | no | — | — | Stop foreground-window screenshot trigger |
 | `screenshot` | Screenshot | no | — | — | Capture screen |

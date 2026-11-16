@@ -969,10 +969,11 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			event := *msg.Event
 			if err := event.normalize(); err != nil {
+				sess.sendToOperator(gin.H{"type": "input_rejected", "error": err.Error()})
 				continue
 			}
-			if !s.remoteInputLimiter.allow("webrtc:"+strconv.FormatUint(uint64(uid), 10)+":"+strings.ToLower(sess.AgentID),
-				MaxRemoteInputEventsPerWindow, RemoteInputWindow, time.Now()) {
+			if !s.allowRemoteInput(strconv.FormatUint(uint64(uid), 10), sess.AgentID, event.Type) {
+				sess.sendToOperator(gin.H{"type": "input_rejected", "error": "input rate limit exceeded"})
 				continue
 			}
 			payload, err := json.Marshal(event)
@@ -1071,10 +1072,12 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 		case "state":
 			// Agent state is advisory; forward the display/status text.
 			sess.sendRawToOperator(raw)
-		case "error":
+		case "error", "input_error":
 			// Forward the truncated frame, not the raw one: the cap used to be
 			// applied to a value that was then discarded, so an agent could
-			// relay an error reason up to the whole read limit.
+			// relay an error reason up to the whole read limit. input_error is
+			// an injection that did not land, NOT a session failure - the
+			// console shows it without tearing the desktop down.
 			if len(msg.Reason) > 512 {
 				msg.Reason = msg.Reason[:512]
 				clipped, marshalErr := json.Marshal(msg)

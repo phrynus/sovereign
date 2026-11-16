@@ -10,6 +10,16 @@ import { logger } from "@/lib/logger";
 import { nowTime } from "@/lib/utils";
 import { implantBlocksDest } from "@/lib/implant-version";
 import { useWebRTCLive } from "./useWebRTCLive";
+import {
+  MAX_WHEEL_NOTCHES,
+  clickCount,
+  keyFromEvent,
+  modsFromEvent,
+  wheelNotches,
+  type RemoteKeyEvent,
+  type RemoteModifier,
+  type RemotePointerEvent,
+} from "./input-events";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -347,16 +357,81 @@ export function useRemoteDesktop(agentId: string) {
   const handleClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!sessionActive || !id) return;
     const { x, y } = getRelativeCoords(e);
+    const mods = modsFromEvent(e);
+    const count = clickCount(e.detail);
     if (liveActive) {
-      sendLiveInput({ type: "click", x, y });
+      sendLiveInput({ type: "click", x, y, count, ...(mods.length ? { mods } : {}) });
       return;
     }
     try {
-      await api.postJson(paths.agents.remoteInput(id), { type: "click", x, y });
+      await api.postJson(paths.agents.remoteInput(id), { type: "click", x, y, count, ...(mods.length ? { mods } : {}) });
     } catch (err) {
       toastError(err, "agents.rdp_capture_failed");
     }
   }, [sessionActive, liveActive, sendLiveInput, id, getRelativeCoords, toastError]);
+
+  // Right click and middle click are separate wire types: an agent build that
+  // predates them refuses the event instead of silently left-clicking.
+  const sendPointerAction = useCallback((event: RemotePointerEvent) => {
+    if (!sessionActive || !id) return;
+    if (liveActive) {
+      sendLiveInput(event);
+      return;
+    }
+    api.postJson(paths.agents.remoteInput(id), event).catch(() => {});
+  }, [sessionActive, liveActive, sendLiveInput, id]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!sessionActive) return;
+    // Always suppress the browser menu: a right click on the canvas is meant
+    // for the remote host, not for the console.
+    e.preventDefault();
+    const { x, y } = getRelativeCoords(e);
+    const mods = modsFromEvent(e);
+    sendPointerAction({ type: "click_right", x, y, count: 1, ...(mods.length ? { mods } : {}) });
+  }, [sessionActive, getRelativeCoords, sendPointerAction]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 1) return;
+    // Middle click: suppress the browser's autoscroll before forwarding.
+    e.preventDefault();
+    const { x, y } = getRelativeCoords(e);
+    const mods = modsFromEvent(e);
+    sendPointerAction({ type: "click_middle", x, y, count: 1, ...(mods.length ? { mods } : {}) });
+  }, [getRelativeCoords, sendPointerAction]);
+
+  // Wheel events arrive in bursts; accumulate them and send at most one event
+  // per animation frame so a fast scroll becomes a few notches, not thirty.
+  const wheelAccumRef = useRef(0);
+  const wheelRafRef = useRef<number | null>(null);
+  const wheelPosRef = useRef({ x: 0, y: 0 });
+
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (!sessionActive) return;
+    e.preventDefault();
+    const { x, y } = coordsFromClient(e.clientX, e.clientY);
+    wheelPosRef.current = { x, y };
+    wheelAccumRef.current += wheelNotches(e.deltaY, e.deltaMode);
+    if (wheelRafRef.current !== null) return;
+    wheelRafRef.current = requestAnimationFrame(() => {
+      wheelRafRef.current = null;
+      const delta = wheelAccumRef.current;
+      wheelAccumRef.current = 0;
+      if (delta === 0) return;
+      // One frame can accumulate more than the server accepts; send it in
+      // bounded chunks so none is rejected.
+      let remaining = delta;
+      while (remaining !== 0) {
+        const step = Math.max(-MAX_WHEEL_NOTCHES, Math.min(MAX_WHEEL_NOTCHES, remaining));
+        remaining -= step;
+        sendPointerAction({ type: "wheel", ...wheelPosRef.current, delta: step });
+      }
+    });
+  }, [sessionActive, coordsFromClient, sendPointerAction]);
+
+  useEffect(() => () => {
+    if (wheelRafRef.current !== null) cancelAnimationFrame(wheelRafRef.current);
+  }, []);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -401,43 +476,30 @@ export function useRemoteDesktop(agentId: string) {
 
   useEffect(() => {
     if (!sessionActive || !id) return;
-    const sendKey = (key: string) => {
+    const sendKey = (key: string, mods: RemoteModifier[]) => {
+      const event: RemoteKeyEvent = { type: "key", key, ...(mods.length ? { mods } : {}) };
       if (liveActive) {
-        sendLiveInput({ type: "key", key });
+        sendLiveInput(event);
         return;
       }
-      api.postJson(paths.agents.remoteInput(id), { type: "key", key }).catch(() => {});
+      api.postJson(paths.agents.remoteInput(id), event).catch(() => {});
     };
     const handler = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement
+        e.target instanceof HTMLSelectElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
         return;
       }
-      const modifierKeys = ["Shift", "Control", "Alt", "Meta", "CapsLock"];
-      if (modifierKeys.includes(e.key)) {
-        const keyMap: Record<string, string> = { Shift: "shift", Control: "ctrl", Alt: "alt", Meta: "meta", CapsLock: "capslock" };
-        sendKey(keyMap[e.key] || e.key);
-        return;
-      }
-      if (e.ctrlKey || e.metaKey) return;
-      const keyMap: Record<string, string> = {
-        " ": "space",
-        Escape: "esc",
-        Enter: "enter",
-        Tab: "tab",
-        Backspace: "backspace",
-        Delete: "delete",
-        ArrowUp: "up",
-        ArrowDown: "down",
-        ArrowLeft: "left",
-        ArrowRight: "right",
-      };
-      const key = keyMap[e.key] || e.key;
+      const key = keyFromEvent(e);
+      // null covers bare modifiers (they are held around the next key), dead
+      // keys, IME composition and keys the agent has no name for.
+      if (key === null) return;
+      // The console's own Escape shortcut must still work.
       if (e.key !== "Escape") e.preventDefault();
-      sendKey(key);
+      sendKey(key, modsFromEvent(e));
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -502,11 +564,11 @@ export function useRemoteDesktop(agentId: string) {
     versionBlocked,
     imgRef, containerRef,
     startMonitoring, stopMonitoring, handleStart, handleStop,
-    handleClick, handleMouseMove, hideCursor,
+    handleClick, handleMouseMove, handleContextMenu, handleMouseDown, handleWheel, hideCursor,
     toggleFullscreen,
     setNativeWidth, setNativeHeight,
     mode, setMode,
     liveActive, liveStatus, liveError, livePresets, livePreset, setLivePreset,
-    liveWidth, liveHeight, liveVideoRef, markLivePlaying,
+    liveWidth, liveHeight, liveVideoRef, markLivePlaying, liveInputError: live.inputError,
   };
 }

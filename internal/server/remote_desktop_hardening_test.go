@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -95,34 +96,65 @@ func TestRDHubEnforcesCaps(t *testing.T) {
 
 func TestRemoteInputNormalize(t *testing.T) {
 	valid := []struct {
+		name string
 		in   remoteInputRequest
 		want remoteInputRequest
 	}{
-		{remoteInputRequest{Type: "MOVE", X: 10, Y: -20}, remoteInputRequest{Type: "move", X: 10, Y: -20}},
-		{remoteInputRequest{Type: "click", X: 0, Y: 0}, remoteInputRequest{Type: "click"}},
-		{remoteInputRequest{Type: " Key ", Key: "ENTER"}, remoteInputRequest{Type: "key", Key: "enter"}},
+		{"move", remoteInputRequest{Type: "MOVE", X: 10, Y: -20}, remoteInputRequest{Type: "move", X: 10, Y: -20}},
+		{"click", remoteInputRequest{Type: "click", X: 0, Y: 0}, remoteInputRequest{Type: "click", Count: 1}},
+		{"key", remoteInputRequest{Type: " Key ", Key: "ENTER"}, remoteInputRequest{Type: "key", Key: "enter"}},
+		// Right/middle clicks and the wheel are separate types: the agent
+		// switches on the type, so an old build refuses instead of guessing.
+		{"right click", remoteInputRequest{Type: "click_right", X: 4, Y: 5}, remoteInputRequest{Type: "click_right", X: 4, Y: 5, Count: 1}},
+		{"double middle click", remoteInputRequest{Type: "click_middle", X: 4, Y: 5, Count: 2},
+			remoteInputRequest{Type: "click_middle", X: 4, Y: 5, Count: 2}},
+		{"wheel", remoteInputRequest{Type: "wheel", X: 7, Y: 8, Delta: -3},
+			remoteInputRequest{Type: "wheel", X: 7, Y: 8, Delta: -3}},
+		// Modifiers are canonicalised and deduplicated so the agent does not
+		// have to guess at "CTRL"/"ctrl"/"Ctrl".
+		{"combo", remoteInputRequest{Type: "key", Key: "C", Mods: []string{"CTRL", "ctrl", " Shift "}},
+			remoteInputRequest{Type: "key", Key: "c", Mods: []string{"ctrl", "shift"}}},
+		{"shift click", remoteInputRequest{Type: "click", X: 1, Y: 2, Mods: []string{"shift"}},
+			remoteInputRequest{Type: "click", X: 1, Y: 2, Count: 1, Mods: []string{"shift"}}},
+		// Fields that do not belong to the type are cleared, not forwarded.
+		{"move drops key", remoteInputRequest{Type: "move", Key: "a", Count: 3, Delta: 2, Mods: []string{"ctrl"}},
+			remoteInputRequest{Type: "move"}},
+		{"wheel drops mods", remoteInputRequest{Type: "wheel", Delta: 1, Mods: []string{"ctrl"}, Key: "a"},
+			remoteInputRequest{Type: "wheel", Delta: 1}},
 	}
 	for _, tc := range valid {
 		req := tc.in
 		if err := req.normalize(); err != nil {
-			t.Fatalf("normalize(%+v): %v", tc.in, err)
+			t.Fatalf("%s: normalize(%+v): %v", tc.name, tc.in, err)
 		}
-		if req != tc.want {
-			t.Fatalf("normalize(%+v) = %+v, want %+v", tc.in, req, tc.want)
+		if !reflect.DeepEqual(req, tc.want) {
+			t.Fatalf("%s: normalize(%+v) = %+v, want %+v", tc.name, tc.in, req, tc.want)
 		}
 	}
 
-	invalid := []remoteInputRequest{
-		{Type: ""},
-		{Type: "exec"},
-		{Type: "move", X: MaxRemoteInputCoord + 1},
-		{Type: "move", Y: -(MaxRemoteInputCoord + 1)},
-		{Type: "key", Key: ""},
-		{Type: "key", Key: strings.Repeat("k", MaxRemoteInputKeyLen+1)},
+	invalid := []struct {
+		name string
+		req  remoteInputRequest
+	}{
+		{"empty", remoteInputRequest{Type: ""}},
+		{"unknown type", remoteInputRequest{Type: "exec"}},
+		{"move x", remoteInputRequest{Type: "move", X: MaxRemoteInputCoord + 1}},
+		{"move y", remoteInputRequest{Type: "move", Y: -(MaxRemoteInputCoord + 1)}},
+		{"click x", remoteInputRequest{Type: "click_right", X: MaxRemoteInputCoord + 1}},
+		{"key empty", remoteInputRequest{Type: "key", Key: ""}},
+		{"key long", remoteInputRequest{Type: "key", Key: strings.Repeat("k", MaxRemoteInputKeyLen+1)}},
+		{"click count high", remoteInputRequest{Type: "click", Count: MaxRemoteInputClickCount + 1}},
+		{"click count negative", remoteInputRequest{Type: "click", Count: -1}},
+		{"wheel zero", remoteInputRequest{Type: "wheel", Delta: 0}},
+		{"wheel high", remoteInputRequest{Type: "wheel", Delta: MaxRemoteInputWheelDelta + 1}},
+		{"wheel low", remoteInputRequest{Type: "wheel", Delta: -(MaxRemoteInputWheelDelta + 1)}},
+		{"unknown mod", remoteInputRequest{Type: "key", Key: "a", Mods: []string{"hyper"}}},
+		{"too many mods", remoteInputRequest{Type: "key", Key: "a", Mods: []string{"ctrl", "alt", "shift", "meta", "ctrl"}}},
 	}
-	for _, req := range invalid {
+	for _, tc := range invalid {
+		req := tc.req
 		if err := req.normalize(); err == nil {
-			t.Fatalf("normalize(%+v) accepted invalid event", req)
+			t.Fatalf("%s: normalize(%+v) accepted invalid event", tc.name, tc.req)
 		}
 	}
 }
@@ -140,6 +172,38 @@ func TestRemoteInputRequestFromMap(t *testing.T) {
 	}
 	if _, err := remoteInputRequestFromMap("move", nil); err == nil {
 		t.Fatal("nil data accepted")
+	}
+
+	// The extended fields travel over the websocket relay as untyped JSON.
+	req, err = remoteInputRequestFromMap("key", map[string]interface{}{
+		"mods": []interface{}{"CTRL", "shift"},
+		"key":  "C",
+	})
+	if err != nil {
+		t.Fatalf("fromMap combo: %v", err)
+	}
+	if err := req.normalize(); err != nil {
+		t.Fatalf("normalize combo: %v", err)
+	}
+	if req.Key != "c" || !reflect.DeepEqual(req.Mods, []string{"ctrl", "shift"}) {
+		t.Fatalf("combo = %+v, want key c with ctrl+shift", req)
+	}
+	req, err = remoteInputRequestFromMap("wheel", map[string]interface{}{"x": float64(3), "y": float64(4), "delta": float64(-2)})
+	if err != nil || req.Delta != -2 {
+		t.Fatalf("fromMap wheel: req=%+v err=%v", req, err)
+	}
+	req, err = remoteInputRequestFromMap("click", map[string]interface{}{"count": float64(2)})
+	if err != nil || req.Count != 2 {
+		t.Fatalf("fromMap click count: req=%+v err=%v", req, err)
+	}
+	if _, err := remoteInputRequestFromMap("move", map[string]interface{}{"delta": 1.5}); err == nil {
+		t.Fatal("fractional delta accepted")
+	}
+	if _, err := remoteInputRequestFromMap("key", map[string]interface{}{"mods": "ctrl"}); err == nil {
+		t.Fatal("non-array mods accepted")
+	}
+	if _, err := remoteInputRequestFromMap("key", map[string]interface{}{"mods": []interface{}{float64(1)}}); err == nil {
+		t.Fatal("non-string modifier accepted")
 	}
 }
 
@@ -223,29 +287,77 @@ func TestHandleAgentRemoteInputRejectsInvalidEvents(t *testing.T) {
 	}
 }
 
+// TestRemoteInputBudgetsAreSplit proves the two counters are independent:
+// actions keep the small budget that bounds task/audit writes, cursor moves
+// keep their own larger one, and a drag cannot starve the keystrokes typed
+// during it (the single counter used to drop them with no feedback).
+func TestRemoteInputBudgetsAreSplit(t *testing.T) {
+	srv := newTestFileServer(t, newContractDB(t))
+	const agentID = "agent-budget"
+	const op = "1"
+
+	for i := 0; i < MaxRemotePointerEventsPerWindow; i++ {
+		if !srv.allowRemoteInput(op, agentID, "move") {
+			t.Fatalf("move %d refused inside the pointer budget", i+1)
+		}
+	}
+	if srv.allowRemoteInput(op, agentID, "move") {
+		t.Fatal("move past the pointer budget was accepted")
+	}
+	if !srv.allowRemoteInput(op, agentID, "click") {
+		t.Fatal("a click was refused because the pointer budget was spent: the budgets are not independent")
+	}
+	for i := 1; i < MaxRemoteInputEventsPerWindow; i++ {
+		if !srv.allowRemoteInput(op, agentID, "key") {
+			t.Fatalf("action %d refused inside the action budget", i+1)
+		}
+	}
+	if srv.allowRemoteInput(op, agentID, "key") {
+		t.Fatal("action past the action budget was accepted")
+	}
+	if !srv.allowRemoteInput("2", agentID, "key") {
+		t.Fatal("another operator was throttled by the first operator's traffic")
+	}
+	if !srv.allowRemoteInput(op, "agent-budget-2", "key") {
+		t.Fatal("another agent was throttled by the first agent's traffic")
+	}
+}
+
 // TestHandleAgentRemoteInputRateLimit proves the per-(operator,agent) window
-// caps accepted events (and therefore task + audit writes).
+// caps accepted ACTIONS at the API boundary (and therefore task + audit
+// writes). Pending tasks are completed between calls so the per-agent queue
+// cap, which is a different limit, cannot mask the rate limit under test.
 func TestHandleAgentRemoteInputRateLimit(t *testing.T) {
 	ginSetTestMode(t)
 	database := newContractDB(t)
 	srv := newTestFileServer(t, database)
 	agent := seedImplant(t, database)
+	drainQueue := func() {
+		database.Model(&db.Task{}).Where("agent_id = ?", agent.ID).Update("status", "completed")
+	}
 
-	body := `{"type":"move","x":1,"y":2}`
+	body := `{"type":"click","x":1,"y":2}`
 	for i := 0; i < MaxRemoteInputEventsPerWindow; i++ {
 		w, c := newRemoteInputContext(agent.ID, body)
 		srv.handleAgentRemoteInput(c)
 		if w.Code != http.StatusOK {
-			t.Fatalf("event %d: status=%d body=%s", i, w.Code, w.Body.String())
+			t.Fatalf("action %d: status=%d body=%s", i, w.Code, w.Body.String())
 		}
+		drainQueue()
 	}
 	w, c := newRemoteInputContext(agent.ID, body)
 	srv.handleAgentRemoteInput(c)
 	if w.Code != http.StatusTooManyRequests {
-		t.Fatalf("over-budget event: status=%d, want 429 (body=%s)", w.Code, w.Body.String())
+		t.Fatalf("over-budget action: status=%d, want 429 (body=%s)", w.Code, w.Body.String())
 	}
 
-	// A different agent has its own window.
+	// A move is a different class, so the spent action budget does not refuse
+	// it, and a different agent has its own window.
+	w, c = newRemoteInputContext(agent.ID, `{"type":"move","x":3,"y":4}`)
+	srv.handleAgentRemoteInput(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("move after the action budget was spent: status=%d body=%s", w.Code, w.Body.String())
+	}
 	other := seedImplant(t, database)
 	w, c = newRemoteInputContext(other.ID, body)
 	srv.handleAgentRemoteInput(c)

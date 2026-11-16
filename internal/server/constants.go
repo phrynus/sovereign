@@ -64,17 +64,28 @@ const (
 	PublicDownloadRate = 60 // max public payload/stage downloads per IP per window
 	LoginRequestRate   = 10 // max login POSTs per IP per window (lockout handles failures)
 
-	// Remote desktop input bounds. The agent-side dispatcher understands
-	// move/click/key only, and coordinates are injected straight into
-	// SetCursorPos/keybd_event without validation agent-side — so the API
-	// boundary is the only place that can reject garbage.
-	MaxRemoteInputCoord  = 32767 // reject |x|/|y| beyond this
-	MaxRemoteInputKeyLen = 32    // reject longer key names
-	// MaxRemoteInputEventsPerWindow throttles accepted input events per
-	// (operator, agent): every event becomes a task row plus an audit row,
-	// so an unbounded stream is a write-amplification primitive.
+	// Remote desktop input bounds. The agent-side dispatcher injects
+	// coordinates and keys straight into the OS, so the API boundary is the
+	// only place that can reject garbage.
+	MaxRemoteInputCoord      = 32767 // reject |x|/|y| beyond this
+	MaxRemoteInputKeyLen     = 32    // reject longer key names
+	MaxRemoteInputClickCount = 3     // single, double, triple click
+	// MaxRemoteInputWheelDelta bounds one scroll event in notches. One notch
+	// is 120 WHEEL_DELTA units; a burst of wheel events is coalesced by the
+	// console, so a single event never needs to be huge.
+	MaxRemoteInputWheelDelta = 10
+	MaxRemoteInputMods       = 4
+	// MaxRemoteInputEventsPerWindow throttles ACTIONS (clicks, wheel, keys)
+	// per (operator, agent): every one changes state on the target, and the
+	// HTTP path turns each into a task row plus an audit row, so an unbounded
+	// stream is a write-amplification primitive.
 	MaxRemoteInputEventsPerWindow = 40
-	RemoteInputWindow             = 1 * time.Second
+	// MaxRemotePointerEventsPerWindow throttles cursor MOVES separately. A
+	// move only relocates the pointer, and sharing one counter meant a drag
+	// could spend the whole budget and the keystrokes typed during it were
+	// silently dropped.
+	MaxRemotePointerEventsPerWindow = 120
+	RemoteInputWindow               = 1 * time.Second
 	// Screen monitor stream command bounds (interval/quality validated in the
 	// handler as well): width is spliced into the agent's CSV command, so an
 	// arbitrary string there was parameter injection.

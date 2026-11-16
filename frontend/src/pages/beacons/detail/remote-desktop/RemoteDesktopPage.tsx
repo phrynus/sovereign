@@ -60,6 +60,7 @@ export default function RemoteDesktopPage() {
             wsLive={rdp.wsLive}
             screenData={rdp.screenData}
             liveError={rdp.liveError}
+            liveInputError={rdp.liveInputError}
             nativeWidth={rdp.nativeWidth}
             nativeHeight={rdp.nativeHeight}
             mouseX={rdp.mouseX}
@@ -71,6 +72,9 @@ export default function RemoteDesktopPage() {
             onImageLoad={(w, h) => { rdp.setNativeWidth(w); rdp.setNativeHeight(h); }}
             onVideoPlaying={rdp.markLivePlaying}
             onClick={(e) => void rdp.handleClick(e)}
+            onContextMenu={rdp.handleContextMenu}
+            onMouseDown={rdp.handleMouseDown}
+            onWheel={rdp.handleWheel}
             onMouseMove={rdp.handleMouseMove}
             onMouseLeave={rdp.hideCursor}
           />

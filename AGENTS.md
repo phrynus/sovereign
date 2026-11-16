@@ -366,6 +366,7 @@ tells you if you break it — do not delete the guard to make a change pass.**
 | a lookup by id with no tenant or visibility check | bulk history, build jobs, approval prompts | the tenant tests in `bulk_history_tenant_test.go`, `build_job_tenant_test.go`, `approval_expiry_test.go` |
 | a hot path re-doing work per request | profile JSON re-read and re-parsed per beacon; the transform chain re-parsed per decode | `BenchmarkActivePlacements`, `BenchmarkParseWireCached`, `TestActivePlacementsCacheIsUsed` |
 | "the stream is complete" while events vanish | a full client queue dropped `task_update … completed` at debug level, so a spinner never ended; `broadcastToTenant` promised both operator endpoints and wired only `/ws` | `TestReliableFanoutClosesSlowClientInsteadOfDropping`, `TestDroppableFanoutKeepsSlowClientConnected`, `TestTenantFanoutReachesOperatorSessions`, `TestScreenshotFanoutRespectsScreenGateOnOperatorSessions` |
+| an API call whose "failure" check can never pass | `mouse_event`/`keybd_event` are Win32 `VOID`, but the dispatcher treated their always-zero return as a `BOOL`, so every remote click and keystroke reported failure *after* injecting; the WebRTC path swallowed the error and looked "connected" while ignoring input. Linux/macOS had the mirror-image bug: they typed the JSON contract into the target | `TestRemoteInputVoidCallsAreNotChecked` (reads the source), `TestRemoteInputKeyToVK`, `TestRemoteInputBudgetsAreSplit`, `TestMapWebRTCInputKeepsExtendedFields` |
 
 Two habits produced all of these, and both are cheap:
 
