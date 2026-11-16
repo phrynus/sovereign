@@ -52,6 +52,9 @@ const (
 	MaxWebRTCClipboardBytes = 64 * 1024
 	// MaxWebRTCAudioDevice bounds the capture-device selector (per mode).
 	MaxWebRTCAudioDevice = 15
+	// MaxWebRTCTilesFrameBytes bounds one region tile frame relayed to the
+	// browser (the agent budgets its own payload below this).
+	MaxWebRTCTilesFrameBytes = 400 * 1024
 	// MaxClipboardHistory is the bounded ring the agent keeps; the list frame
 	// carries previews only, so its size stays a few KiB.
 	MaxClipboardHistory = 20
@@ -100,6 +103,9 @@ type webrtcStartOptions struct {
 	// among the devices of that mode.
 	AudioMode   string `json:"audio_mode,omitempty"`
 	AudioDevice int    `json:"audio_device,omitempty"`
+	// Region streams change-only 64 px tiles over the signaling socket instead
+	// of H.264 video: bandwidth tracks the changed area, not the frame size.
+	Region bool `json:"region,omitempty"`
 }
 
 // webrtcIceServer mirrors the browser RTCIceServer shape and Pion's
@@ -690,6 +696,7 @@ type webrtcStartRequest struct {
 	Audio        bool   `json:"audio"`
 	AudioMode    string `json:"audio_mode"`
 	AudioDevice  int    `json:"audio_device"`
+	Region       bool   `json:"region"`
 }
 
 func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
@@ -704,6 +711,7 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 		Audio:        req.Audio,
 		AudioMode:    strings.ToLower(strings.TrimSpace(req.AudioMode)),
 		AudioDevice:  req.AudioDevice,
+		Region:       req.Region,
 	}
 	if opts.AudioMode != "" && opts.AudioMode != "mic" && opts.AudioMode != "speaker" {
 		return opts, errors.New("audio_mode must be mic or speaker")
@@ -1003,6 +1011,13 @@ func (s *Server) allowAudioToggle(operatorID, agentID string) bool {
 func (s *Server) allowClipboardHistory(operatorID, agentID string) bool {
 	key := operatorID + ":" + strings.ToLower(agentID) + ":cliph"
 	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
+}
+
+// allowRegionToggle throttles region-mode switches: each one changes the
+// capture pipeline on the target.
+func (s *Server) allowRegionToggle(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":region"
+	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
 }
 
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
@@ -1370,6 +1385,27 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			s.LogAuditRecord(c, "remote_audio", "agent", sess.AgentID,
 				fmt.Sprintf("live audio capture %s (mode=%s)", state, mode), true, nil)
+		case "region":
+			// Live switch to change-only tiles (or back to H.264).
+			if msg.Enabled == nil {
+				sess.sendToOperator(gin.H{"type": "region", "enabled": false, "reason": "enabled is required"})
+				continue
+			}
+			if !s.allowRegionToggle(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "region", "enabled": false, "reason": "region toggle rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "region", "enabled": *msg.Enabled})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
 		case "control":
 			switch strings.ToLower(strings.TrimSpace(msg.Action)) {
 			case "take":
@@ -1528,6 +1564,20 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 		case "audio":
 			// Audio on/off confirmation and failure reason (advisory, bounded).
 			if len(raw) > 1024 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "region":
+			// Region-mode confirmation (advisory, tiny frame).
+			if len(raw) > 512 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "tiles":
+			// Change-only tile frame. The agent budgets the payload; the relay
+			// still refuses anything past the signaling limit so a compromised
+			// agent cannot force a huge frame through the operator socket.
+			if len(raw) > MaxWebRTCTilesFrameBytes {
 				continue
 			}
 			sess.sendRawToOperator(raw)

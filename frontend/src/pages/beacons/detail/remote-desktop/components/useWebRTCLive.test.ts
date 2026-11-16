@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIVE_PRESETS, buildOperatorWsUrl, getLivePreset, parseDisplayState } from "./useWebRTCLive";
+import { LIVE_PRESETS, buildOperatorWsUrl, getLivePreset, parseDisplayState, parseTileFrame } from "./useWebRTCLive";
 
 describe("WebRTC live helpers", () => {
   it("builds the authenticated operator signaling URL for both schemes", () => {
@@ -61,5 +61,62 @@ describe("parseDisplayState", () => {
     expect(parsed?.displays).toHaveLength(1);
     expect(parsed?.displays[0]?.index).toBe(2);
     expect(parsed?.selected).toBe(0);
+  });
+});
+
+describe("parseTileFrame", () => {
+  it("keeps the geometry and payload of a change-only frame", () => {
+    const frame = parseTileFrame({
+      type: "tiles",
+      width: 1280,
+      height: 720,
+      tile: 64,
+      full: false,
+      tiles: [
+        { x: 64, y: 64, w: 64, h: 64, data: "AAAA" },
+        { x: 128, y: 64, w: 64, h: 64, data: "BBBB" },
+      ],
+    });
+    expect(frame).not.toBeNull();
+    expect(frame?.width).toBe(1280);
+    expect(frame?.height).toBe(720);
+    expect(frame?.tile).toBe(64);
+    expect(frame?.full).toBe(false);
+    expect(frame?.tiles).toHaveLength(2);
+    expect(frame?.tiles[1]).toMatchObject({ x: 128, y: 64, w: 64, h: 64 });
+  });
+
+  it("marks a full-frame repaint and defaults the tile size", () => {
+    const frame = parseTileFrame({
+      type: "tiles",
+      width: 800,
+      height: 600,
+      full: true,
+      tiles: [{ x: 0, y: 0, w: 800, h: 600, data: "AAAA" }],
+    });
+    expect(frame?.full).toBe(true);
+    expect(frame?.tile).toBe(64);
+  });
+
+  it("drops tiles without geometry or payload rather than drawing garbage", () => {
+    const frame = parseTileFrame({
+      type: "tiles",
+      width: 1280,
+      height: 720,
+      tiles: [
+        { x: 0, y: 0, w: 0, h: 64, data: "AAAA" },
+        { x: 0, y: 0, w: 64, h: 64, data: "" },
+        { x: "no", y: 0, w: 64, h: 64, data: "AAAA" },
+        { x: 64, y: 0, w: 64, h: 64, data: "BBBB" },
+      ],
+    });
+    expect(frame?.tiles).toHaveLength(1);
+    expect(frame?.tiles[0]?.x).toBe(64);
+  });
+
+  it("ignores a frame that is not tiles or has no usable tile at all", () => {
+    expect(parseTileFrame({ type: "state", state: "connected" })).toBeNull();
+    expect(parseTileFrame({ type: "tiles", width: 0, height: 720, tiles: [] })).toBeNull();
+    expect(parseTileFrame({ type: "tiles", width: 1280, height: 720, tiles: [] })).toBeNull();
   });
 });

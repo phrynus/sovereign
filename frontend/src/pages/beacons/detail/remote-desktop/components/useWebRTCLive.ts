@@ -85,6 +85,56 @@ export interface ClipboardHistoryItem {
   at: string;
 }
 
+/** One changed 64 px block of a region-mode frame (JPEG, base64). */
+export interface RegionTile {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  data: string;
+}
+
+/** A region-mode frame: only the blocks that changed since the last frame. */
+export interface TileFrame {
+  width: number;
+  height: number;
+  tile: number;
+  full: boolean;
+  tiles: RegionTile[];
+}
+
+/**
+ * Normalizes a `tiles` signal. Tiles without geometry or payload are dropped,
+ * and a frame with no usable tile is ignored rather than clearing the canvas.
+ */
+export function parseTileFrame(message: SignalMessage): TileFrame | null {
+  if (message.type !== "tiles") return null;
+  const width = Number(message.width);
+  const height = Number(message.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  const rawTiles = Array.isArray(message.tiles) ? message.tiles : [];
+  const tiles: RegionTile[] = [];
+  for (const item of rawTiles) {
+    if (!item || typeof item !== "object") continue;
+    const tile = item as RegionTile;
+    const x = Number(tile.x);
+    const y = Number(tile.y);
+    const w = Number(tile.w);
+    const h = Number(tile.h);
+    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
+    if (typeof tile.data !== "string" || tile.data === "") continue;
+    tiles.push({ x, y, w, h, data: tile.data });
+  }
+  if (tiles.length === 0) return null;
+  return {
+    width,
+    height,
+    tile: Number(message.tile) > 0 ? Number(message.tile) : 64,
+    full: message.full === true,
+    tiles,
+  };
+}
+
 interface SignalMessage {
   type?: string;
   sdp?: string;
@@ -104,6 +154,11 @@ interface SignalMessage {
   you?: boolean;
   items?: unknown[];
   total?: number;
+  tiles?: unknown[];
+  width?: number;
+  height?: number;
+  tile?: number;
+  full?: boolean;
 }
 
 /**
@@ -184,6 +239,12 @@ export function useWebRTCLive(agentId: string) {
   const [audioError, setAudioError] = useState("");
   const [audioMode, setAudioMode] = useState<"mic" | "speaker">("mic");
   const [audioDevice, setAudioDevice] = useState(0);
+  // Region mode replaces H.264 video with change-only tiles drawn on a canvas:
+  // bandwidth tracks the changed area instead of the frame size, and no media
+  // plane is used at all (useful on TCP-only or ffmpeg-less targets).
+  const [regionOn, setRegionOn] = useState(false);
+  const [tileFrame, setTileFrame] = useState<TileFrame | null>(null);
+  const [regionError, setRegionError] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,6 +258,9 @@ export function useWebRTCLive(agentId: string) {
   }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Region mode draws tiles into this canvas instead of a <video>; input
+  // mapping uses its pixel dimensions (like videoWidth/videoHeight).
+  const regionCanvasRef = useRef<HTMLCanvasElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const activeRef = useRef(false);
@@ -372,6 +436,13 @@ export function useWebRTCLive(agentId: string) {
     if (audioOn) sendSignal({ type: "audio", enabled: true, mode, device });
   }, [sendSignal, audioOn]);
 
+  const toggleRegion = useCallback((enabled: boolean) => {
+    setRegionError("");
+    setRegionOn(enabled);
+    if (enabled) setTileFrame(null);
+    sendSignal({ type: "region", enabled });
+  }, [sendSignal]);
+
   // Keep the audio element's volume/mute in sync with the controls.
   useEffect(() => {
     const el = audioRef.current;
@@ -429,7 +500,7 @@ export function useWebRTCLive(agentId: string) {
   }, [sendSignal]);
 
   const start = useCallback(
-    async (presetValue: string, display = 0, differentialMode = false, audioEnabled = false) => {
+    async (presetValue: string, display = 0, differentialMode = false, audioEnabled = false, regionMode = false) => {
       if (!agentId) return;
       if (typeof RTCPeerConnection === "undefined" || typeof WebSocket === "undefined") {
         fail(t("agents.rdp_live_unsupported"));
@@ -445,6 +516,9 @@ export function useWebRTCLive(agentId: string) {
       setSelectedDisplay(display);
       setDifferential(differentialMode);
       setAudioOn(audioEnabled);
+      setRegionOn(regionMode);
+      setTileFrame(null);
+      setRegionError("");
       setError("");
       setStatus("connecting");
 
@@ -461,6 +535,7 @@ export function useWebRTCLive(agentId: string) {
           audio: audioEnabled,
           audio_mode: audioMode,
           audio_device: audioDevice,
+          region: regionMode,
         });
       } catch (err) {
         setStatus("error");
@@ -657,6 +732,20 @@ export function useWebRTCLive(agentId: string) {
             if (typeof message.enabled === "boolean") setAudioOn(message.enabled);
             setAudioError(typeof message.reason === "string" ? message.reason : "");
             break;
+          case "region":
+            if (typeof message.enabled === "boolean") setRegionOn(message.enabled);
+            setRegionError(typeof message.reason === "string" ? message.reason : "");
+            break;
+          case "tiles": {
+            const frame = parseTileFrame(message);
+            if (!frame) break;
+            setTileFrame(frame);
+            // The agent confirms region mode with its first frame; a session
+            // that was started in this mode should show "connected" even though
+            // no media track ever connects.
+            setStatus("connected");
+            break;
+          }
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -707,6 +796,9 @@ export function useWebRTCLive(agentId: string) {
     setKeysOn(false);
     setKeysFeed("");
     setControl(null);
+    setRegionOn(false);
+    setTileFrame(null);
+    setRegionError("");
   }, [agentId, cleanupLocal]);
 
   return {
@@ -743,6 +835,11 @@ export function useWebRTCLive(agentId: string) {
     audioMode,
     audioDevice,
     selectAudioSource,
+    regionOn,
+    regionError,
+    tileFrame,
+    toggleRegion,
+    regionCanvasRef,
     setAudioMuted,
     setAudioVolume,
     displays,

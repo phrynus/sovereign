@@ -666,6 +666,148 @@ func TestRDWebRTCClipboardHistoryRelay(t *testing.T) {
 	}
 }
 
+// TestRDWebRTCRegionRelay drives the change-only tile mode: the start option
+// reaches the task payload, the live toggle reaches the agent, a tiles frame
+// reaches the operator, and an oversized one is dropped.
+func TestRDWebRTCRegionRelay(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	s.cfg.WebRTC.Enabled = true
+	s.cfg.WebRTC.TurnAddr = "127.0.0.1:0"
+	s.cfg.WebRTC.PublicIP = "127.0.0.1"
+	forgecrypto.InitLootEncryption(testStorageKeyHex)
+	agent := db.Implant{ID: "rd-region", TenantID: 1, Hostname: "region", Status: "online", LastSeen: time.Now()}
+	if err := s.db.Create(&agent).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	engine := gin.New()
+	engine.POST("/api/agents/:id/webrtc/start", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleWebRTCStart(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/rd-region/webrtc/start",
+		strings.NewReader(`{"width":1280,"height":720,"fps":30,"region":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start = %d: %s", w.Code, w.Body.String())
+	}
+	t.Cleanup(func() {
+		if sess := s.webRTCHub().byAgentSession("rd-region"); sess != nil {
+			sess.end("test")
+		}
+	})
+
+	var task db.Task
+	if err := s.db.Where("agent_id = ? AND type = ?", "rd-region", "screen_webrtc_start").First(&task).Error; err != nil {
+		t.Fatalf("load start task: %v", err)
+	}
+	var payload struct {
+		Settings struct {
+			Region bool `json:"region"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal([]byte(task.Data), &payload); err != nil {
+		t.Fatalf("task data: %v", err)
+	}
+	if !payload.Settings.Region {
+		t.Fatal("region flag did not survive into the agent payload")
+	}
+
+	sess := s.webRTCHub().byAgentSession("rd-region")
+	token := ""
+	// The start response carries the session id; the token is only in the task
+	// payload, so read it from there for the agent dial.
+	var startData struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal([]byte(task.Data), &startData); err != nil {
+		t.Fatalf("task token: %v", err)
+	}
+	token = startData.Token
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-region", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"region","enabled":false}`)
+	if off := readJSON(agentPeer, "region", 3*time.Second); off["enabled"] != false {
+		t.Fatalf("region toggle = %+v", off)
+	}
+
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"tiles","width":128,"height":64,"tile":64,"full":false,"tiles":[{"x":0,"y":0,"w":64,"h":64,"data":"AAAA"}]}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	frame := readJSON(conn, "tiles", 3*time.Second)
+	if frame["width"] != float64(128) || frame["full"] != false {
+		t.Fatalf("tiles frame = %+v", frame)
+	}
+
+	huge := fmt.Sprintf(`{"type":"tiles","width":128,"height":64,"tiles":[{"x":0,"y":0,"w":64,"h":64,"data":%q}]}`,
+		strings.Repeat("A", MaxWebRTCTilesFrameBytes))
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(huge)); err != nil {
+		t.Fatalf("agent write huge: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	if _, raw, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("an oversized tile frame was relayed: %d bytes", len(raw))
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).

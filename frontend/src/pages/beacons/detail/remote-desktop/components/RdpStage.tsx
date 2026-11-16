@@ -7,6 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Clock, Keyboard, Mouse, TriangleAlert, Users, Zap } from "lucide-react";
 import { safeImageSrc } from "@/lib/safeUrl";
 import type { RdpStatus } from "./useRemoteDesktop";
+import RegionCanvas from "./RegionCanvas";
+import type { TileFrame } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -29,6 +31,10 @@ interface RdpStageProps {
   containerRef: RefObject<HTMLDivElement | null>;
   imgRef: RefObject<HTMLImageElement | null>;
   videoRef: RefObject<HTMLVideoElement | null>;
+  regionCanvasRef: RefObject<HTMLCanvasElement | null>;
+  regionOn: boolean;
+  regionError: string;
+  tileFrame: TileFrame | null;
   onImageLoad: (w: number, h: number) => void;
   onVideoPlaying: () => void;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -43,7 +49,7 @@ interface RdpStageProps {
 export default memo(function RdpStage({
   t, status, monitoring, live, liveMode, lastUpdate, wsLive, screenData, liveError, liveInputError,
   nativeWidth, nativeHeight, mouseX, mouseY, showCursor,
-  containerRef, imgRef, videoRef, onImageLoad, onVideoPlaying,
+  containerRef, imgRef, videoRef, regionCanvasRef, regionOn, regionError, tileFrame, onImageLoad, onVideoPlaying,
   onClick, onContextMenu, onMouseDown, onWheel, onMouseMove, onMouseLeave,
 }: RdpStageProps) {
   const statusConfig = {
@@ -136,14 +142,28 @@ export default memo(function RdpStage({
       >
         {live ? (
           <>
-            <video
-              ref={videoRef}
-              className="max-w-full max-h-full object-contain bg-black"
-              autoPlay
-              playsInline
-              muted
-              onPlaying={onVideoPlaying}
-            />
+            {regionOn ? (
+              <RegionCanvas
+                frame={tileFrame}
+                canvasRef={regionCanvasRef}
+                label={t("nav.beacon_rdp")}
+                waitingLabel={t("agents.rdp_region_waiting")}
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                className="max-w-full max-h-full object-contain bg-black"
+                autoPlay
+                playsInline
+                muted
+                onPlaying={onVideoPlaying}
+              />
+            )}
+            {regionOn && regionError && (
+              <div className="absolute inset-x-4 bottom-16 rounded-lg bg-destructive/90 px-3 py-2 text-xs text-white shadow-lg">
+                {regionError}
+              </div>
+            )}
             {monitoring && status !== "error" && (
               <div className="absolute bottom-3 left-3 flex items-center gap-2 text-xs-sm text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
                 <Mouse className="size-4" />

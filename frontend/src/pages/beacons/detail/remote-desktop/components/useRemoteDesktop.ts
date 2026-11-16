@@ -39,6 +39,33 @@ const INTERVAL_BY_RES: Record<string, number> = {
 };
 
 /**
+ * Maps a client point inside a media element that KEEPS the source aspect
+ * ratio back to source pixels. Letterbox clicks clamp to the nearest edge
+ * instead of producing coordinates outside the remote screen, and the same
+ * math serves the <video> (H.264) and the region-mode <canvas>.
+ */
+export function mapContainedPoint(
+  clientX: number,
+  clientY: number,
+  rect: { left: number; top: number; width: number; height: number },
+  sourceW: number,
+  sourceH: number,
+): { x: number; y: number } {
+  if (sourceW <= 0 || sourceH <= 0) return { x: 0, y: 0 };
+  const scale = Math.min(rect.width / sourceW, rect.height / sourceH) || 1;
+  const renderW = sourceW * scale;
+  const renderH = sourceH * scale;
+  const offsetX = (rect.width - renderW) / 2;
+  const offsetY = (rect.height - renderH) / 2;
+  const x = Math.round((clientX - rect.left - offsetX) / scale);
+  const y = Math.round((clientY - rect.top - offsetY) / scale);
+  return {
+    x: Math.min(Math.max(x, 0), sourceW - 1),
+    y: Math.min(Math.max(y, 0), sourceH - 1),
+  };
+}
+
+/**
  * Remote-desktop session state: screenshot-stream capture, start/stop,
  * mouse/keyboard remote input, fullscreen, and version gating.
  * Experimental: screenshot stream + remote_input tasks, not a full RDP stack.
@@ -95,6 +122,11 @@ export function useRemoteDesktop(agentId: string) {
     audioMode: liveAudioMode,
     audioDevice: liveAudioDevice,
     selectAudioSource: liveSelectAudioSource,
+    regionOn: liveRegionOn,
+    regionError: liveRegionError,
+    tileFrame: liveTileFrame,
+    toggleRegion: liveToggleRegion,
+    regionCanvasRef: liveRegionCanvasRef,
     setAudioMuted: liveSetAudioMuted,
     setAudioVolume: liveSetAudioVolume,
     presets: livePresets,
@@ -347,25 +379,21 @@ export function useRemoteDesktop(agentId: string) {
 
   const coordsFromClient = useCallback((clientX: number, clientY: number) => {
     if (liveActive) {
+      if (liveRegionOn) {
+        const canvas = liveRegionCanvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
+        const sourceW = canvas.width || liveTileFrame?.width || liveWidth || 1280;
+        const sourceH = canvas.height || liveTileFrame?.height || liveHeight || 720;
+        return mapContainedPoint(clientX, clientY, canvas.getBoundingClientRect(), sourceW, sourceH);
+      }
       const video = liveVideoRef.current;
       if (!video) return { x: 0, y: 0 };
       const sourceW = video.videoWidth || liveWidth || 1280;
       const sourceH = video.videoHeight || liveHeight || 720;
-      const rect = video.getBoundingClientRect();
       // The <video> keeps the source aspect ratio inside a larger stage, so
       // map through the contained rectangle and clamp clicks on the black
       // bars instead of sending coordinates outside the remote screen.
-      const scale = Math.min(rect.width / sourceW, rect.height / sourceH) || 1;
-      const renderW = sourceW * scale;
-      const renderH = sourceH * scale;
-      const offsetX = (rect.width - renderW) / 2;
-      const offsetY = (rect.height - renderH) / 2;
-      const x = Math.round((clientX - rect.left - offsetX) / scale);
-      const y = Math.round((clientY - rect.top - offsetY) / scale);
-      return {
-        x: Math.min(Math.max(x, 0), sourceW - 1),
-        y: Math.min(Math.max(y, 0), sourceH - 1),
-      };
+      return mapContainedPoint(clientX, clientY, video.getBoundingClientRect(), sourceW, sourceH);
     }
     const img = imgRef.current;
     if (!img) return { x: 0, y: 0 };
@@ -375,7 +403,7 @@ export function useRemoteDesktop(agentId: string) {
     const x = Math.round((clientX - rect.left) * scaleX);
     const y = Math.round((clientY - rect.top) * scaleY);
     return { x, y };
-  }, [liveActive, liveVideoRef, liveWidth, liveHeight, nativeWidth, nativeHeight]);
+  }, [liveActive, liveRegionOn, liveRegionCanvasRef, liveTileFrame, liveVideoRef, liveWidth, liveHeight, nativeWidth, nativeHeight]);
 
   const getRelativeCoords = useCallback((e: React.MouseEvent<HTMLDivElement | HTMLImageElement>) => {
     // Read synchronously: the throttled move sender below must not touch a
@@ -566,11 +594,11 @@ export function useRemoteDesktop(agentId: string) {
       return;
     }
     try {
-      await startLive(livePreset, selectedDisplay, liveDifferential, liveAudioOn);
+      await startLive(livePreset, selectedDisplay, liveDifferential, liveAudioOn, liveRegionOn);
     } catch (e) {
       toastError(e, "agents.rdp_live_start_failed");
     }
-  }, [id, versionBlocked, startLive, livePreset, selectedDisplay, liveDifferential, liveAudioOn, t, toastError]);
+  }, [id, versionBlocked, startLive, livePreset, selectedDisplay, liveDifferential, liveAudioOn, liveRegionOn, t, toastError]);
 
   const handleStart = useCallback(() => {
     if (mode === "live") {
@@ -616,6 +644,8 @@ export function useRemoteDesktop(agentId: string) {
     audioOn: liveAudioOn, audioMuted: liveAudioMuted, audioVolume: liveAudioVolume,
     audioError: liveAudioError, audioRef: liveAudioRef, toggleAudio: liveToggleAudio,
     audioMode: liveAudioMode, audioDevice: liveAudioDevice, selectAudioSource: liveSelectAudioSource,
+    regionOn: liveRegionOn, regionError: liveRegionError, tileFrame: liveTileFrame, toggleRegion: liveToggleRegion,
+    regionCanvasRef: liveRegionCanvasRef,
     setAudioMuted: liveSetAudioMuted, setAudioVolume: liveSetAudioVolume,
   };
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useRemoteDesktop } from "./useRemoteDesktop";
+import { mapContainedPoint, useRemoteDesktop } from "./useRemoteDesktop";
 import { api } from "@/lib/api";
 
 type WSMessage = Record<string, unknown>;
@@ -168,5 +168,35 @@ describe("useRemoteDesktop hardening", () => {
     });
 
     expect(toastMock.error).toHaveBeenCalledWith("input rejected");
+  });
+});
+
+describe("mapContainedPoint", () => {
+  // A 1280x720 source rendered into a 1000x1000 stage: 1000x562.5 with 218.75
+  // px bars above and below.
+  const stage = { left: 0, top: 0, width: 1000, height: 1000 };
+
+  it("maps the center of a letterboxed video to the center of the source", () => {
+    expect(mapContainedPoint(500, 500, stage, 1280, 720)).toEqual({ x: 640, y: 360 });
+  });
+
+  it("clamps a click on the black bars to the nearest source edge", () => {
+    // 10 px from the top is inside the letterbox bar.
+    expect(mapContainedPoint(500, 10, stage, 1280, 720).y).toBe(0);
+    expect(mapContainedPoint(500, 990, stage, 1280, 720).y).toBe(719);
+    // The left/right bars are absent here, so x still maps across the width.
+    expect(mapContainedPoint(10, 500, stage, 1280, 720).x).toBe(13);
+  });
+
+  it("offsets by the element position and never exceeds the source", () => {
+    const offset = { left: 100, top: 50, width: 1000, height: 1000 };
+    expect(mapContainedPoint(600, 550, offset, 1280, 720)).toEqual({ x: 640, y: 360 });
+    const far = mapContainedPoint(5000, 5000, offset, 1280, 720);
+    expect(far.x).toBe(1279);
+    expect(far.y).toBe(719);
+  });
+
+  it("returns the origin for a zero-sized source instead of dividing by zero", () => {
+    expect(mapContainedPoint(10, 10, stage, 0, 0)).toEqual({ x: 0, y: 0 });
   });
 });
