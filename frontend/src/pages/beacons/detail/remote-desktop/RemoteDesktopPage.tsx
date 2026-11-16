@@ -13,6 +13,8 @@ import RdpToolbar from "./components/RdpToolbar";
 import RdpStage from "./components/RdpStage";
 import RdpStatusCards from "./components/RdpStatusCards";
 import RdpClipboard from "./components/RdpClipboard";
+import RdpMessage from "./components/RdpMessage";
+import RdpKeys from "./components/RdpKeys";
 
 export default function RemoteDesktopPage() {
   const { t } = useI18n();
@@ -94,6 +96,8 @@ export default function RemoteDesktopPage() {
                 onPasteLocal={() => void rdp.pasteLocalClipboard()}
                 onSendText={rdp.pushClipboard}
               />
+              <RdpMessage t={t} status={rdp.messageStatus} onSend={rdp.sendMessage} />
+              <RdpKeys t={t} enabled={rdp.keysOn} feed={rdp.keysFeed} onToggle={rdp.toggleKeys} />
             </div>
           )}
         </div>

@@ -73,6 +73,11 @@ export function useRemoteDesktop(agentId: string) {
     pushClipboard: livePushClipboard,
     pasteLocalClipboard: livePasteLocalClipboard,
     copyClipboardToLocal: liveCopyClipboardToLocal,
+    messageStatus: liveMessageStatus,
+    sendMessage: liveSendMessage,
+    keysOn: liveKeysOn,
+    keysFeed: liveKeysFeed,
+    toggleKeys: liveToggleKeys,
     presets: livePresets,
     livePreset,
     setLivePreset,
@@ -583,5 +588,7 @@ export function useRemoteDesktop(agentId: string) {
     clipboard: liveClipboard, clipboardError: liveClipboardError,
     requestClipboard: liveRequestClipboard, pushClipboard: livePushClipboard,
     pasteLocalClipboard: livePasteLocalClipboard, copyClipboardToLocal: liveCopyClipboardToLocal,
+    messageStatus: liveMessageStatus, sendMessage: liveSendMessage,
+    keysOn: liveKeysOn, keysFeed: liveKeysFeed, toggleKeys: liveToggleKeys,
   };
 }

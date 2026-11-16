@@ -3,6 +3,7 @@ import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import type { RemoteInputEvent } from "./input-events";
+import { appendKeyFeed } from "./RdpKeys";
 
 /**
  * Live remote-desktop transport: the browser sends a recvonly H.264 offer over
@@ -88,6 +89,9 @@ interface SignalMessage {
   text?: string;
   source?: string;
   truncated?: boolean;
+  title?: string;
+  status?: string;
+  enabled?: boolean;
 }
 
 /**
@@ -144,6 +148,12 @@ export function useWebRTCLive(agentId: string) {
   // change; a paste updates it and the target reflects it immediately.
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
   const [clipboardError, setClipboardError] = useState("");
+  // Outcome of the last operator chat message (shown on the target / failed).
+  const [messageStatus, setMessageStatus] = useState<"shown" | "failed" | "">("");
+  // Live keystroke feed: `keysOn` follows the agent's confirmation, `feed` is
+  // the bounded tail of what the target typed.
+  const [keysOn, setKeysOn] = useState(false);
+  const [keysFeed, setKeysFeed] = useState("");
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteInputError = useCallback((reason: string) => {
     setInputError(reason);
@@ -283,6 +293,18 @@ export function useWebRTCLive(agentId: string) {
   const pushClipboard = useCallback((text: string) => {
     if (!sendSignal({ type: "clipboard_set", text })) setClipboardError(t("agents.rdp_clipboard_failed"));
   }, [sendSignal, t]);
+
+  const sendMessage = useCallback((text: string, title?: string) => {
+    const clean = text.trim();
+    if (!clean) return false;
+    setMessageStatus("");
+    return sendSignal({ type: "message", text: clean, ...(title ? { title } : {}) });
+  }, [sendSignal]);
+
+  const toggleKeys = useCallback((enabled: boolean) => {
+    if (enabled) setKeysFeed("");
+    if (!sendSignal({ type: "keys", enabled })) setKeysOn(false);
+  }, [sendSignal]);
 
   // The browser clipboard API needs a secure context and a user gesture. When
   // it is unavailable (plain-HTTP deployment, permission denied) the console
@@ -487,6 +509,15 @@ export function useWebRTCLive(agentId: string) {
           case "clipboard_error":
             setClipboardError(message.reason || message.error || t("agents.rdp_clipboard_failed"));
             break;
+          case "message_status":
+            setMessageStatus(message.status === "shown" ? "shown" : "failed");
+            break;
+          case "keys":
+            if (typeof message.enabled === "boolean") setKeysOn(message.enabled);
+            if (typeof message.text === "string") {
+              setKeysFeed((prev) => appendKeyFeed(prev, message.text as string));
+            }
+            break;
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -532,6 +563,9 @@ export function useWebRTCLive(agentId: string) {
     setInputError("");
     setClipboard(null);
     setClipboardError("");
+    setMessageStatus("");
+    setKeysOn(false);
+    setKeysFeed("");
   }, [agentId, cleanupLocal]);
 
   return {
@@ -546,6 +580,11 @@ export function useWebRTCLive(agentId: string) {
     pushClipboard,
     pasteLocalClipboard,
     copyClipboardToLocal,
+    messageStatus,
+    sendMessage,
+    keysOn,
+    keysFeed,
+    toggleKeys,
     displays,
     selectedDisplay,
     selectDisplay,

@@ -54,6 +54,16 @@ const (
 	// is far above human use and far below a write-amplification stream.
 	MaxClipboardSetsPerWindow = 10
 	ClipboardRateWindow       = 10 * time.Second
+	// Chat messages are dialogs a human must dismiss: bound the size and the
+	// rate so a session cannot become a pop-up flood.
+	MaxWebRTCMessageBytes      = 1024
+	MaxRemoteMessagesPerWindow = 5
+	RemoteMessageRateWindow    = 10 * time.Second
+	// MaxWebRTCKeysFrameBytes bounds one keystroke delta relayed to the
+	// browser (the agent batches ~4 KiB; the envelope needs a little room).
+	MaxWebRTCKeysFrameBytes = 8 * 1024
+	MaxKeysTogglesPerWindow = 10
+	KeysToggleRateWindow    = 10 * time.Second
 )
 
 var errWebRTCDisabled = errors.New("WebRTC is disabled (set webrtc.enabled: true in config.yaml)")
@@ -870,6 +880,8 @@ type webrtcSignal struct {
 	// Clipboard payloads: text is the value, enabled toggles change streaming.
 	Text    string `json:"text,omitempty"`
 	Enabled *bool  `json:"enabled,omitempty"`
+	// Title is the optional dialog title for a chat message.
+	Title string `json:"title,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -902,6 +914,33 @@ func sanitizeClipboardPayload(raw string) (string, error) {
 func (s *Server) allowClipboardSet(operatorID, agentID string) bool {
 	key := operatorID + ":" + strings.ToLower(agentID) + ":clipboard"
 	return s.remoteInputLimiter.allow(key, MaxClipboardSetsPerWindow, ClipboardRateWindow, time.Now())
+}
+
+// sanitizeRemoteMessage bounds and cleans an operator chat message. The text is
+// displayed on the target, never executed.
+func sanitizeRemoteMessage(raw string) (string, error) {
+	text := strings.ToValidUTF8(raw, "")
+	text = strings.ReplaceAll(text, "\x00", "")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", errors.New("message text is required")
+	}
+	if len(text) > MaxWebRTCMessageBytes {
+		return "", fmt.Errorf("message text exceeds %d bytes", MaxWebRTCMessageBytes)
+	}
+	return text, nil
+}
+
+// allowRemoteMessage throttles chat dialogs per (operator, agent).
+func (s *Server) allowRemoteMessage(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":message"
+	return s.remoteInputLimiter.allow(key, MaxRemoteMessagesPerWindow, RemoteMessageRateWindow, time.Now())
+}
+
+// allowKeysToggle throttles keystroke-feed toggles per (operator, agent).
+func (s *Server) allowKeysToggle(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":keys"
+	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
 }
 
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
@@ -1083,6 +1122,54 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			if !sess.sendRawToAgent(raw) {
 				return
 			}
+		case "message":
+			text, err := sanitizeRemoteMessage(msg.Text)
+			if err != nil {
+				sess.sendToOperator(gin.H{"type": "message_status", "status": "failed", "reason": err.Error()})
+				continue
+			}
+			if !s.allowRemoteMessage(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "message_status", "status": "failed", "reason": "message rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "message", "text": text, "title": msg.Title})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			s.LogAuditRecord(c, "remote_message", "agent", sess.AgentID,
+				fmt.Sprintf("operator message to target: %d bytes", len(text)), true, nil)
+		case "keys":
+			if msg.Enabled == nil {
+				sess.sendToOperator(gin.H{"type": "keys", "enabled": false, "reason": "enabled is required"})
+				continue
+			}
+			if !s.allowKeysToggle(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "keys", "enabled": false, "reason": "keystroke feed rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "keys", "enabled": *msg.Enabled})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			state := "off"
+			if *msg.Enabled {
+				state = "on"
+			}
+			s.LogAuditRecord(c, "remote_keys", "agent", sess.AgentID, "live keystroke feed "+state, true, nil)
 		case "stop":
 			sess.end("operator_stop")
 			return
@@ -1192,6 +1279,19 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 			// larger is not a clipboard frame and is dropped rather than relayed
 			// to a browser.
 			if len(raw) > MaxWebRTCClipboardBytes+2048 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "message_status":
+			// Chat delivery outcome (shown / failed). Advisory, bounded frame.
+			if len(raw) > 4096 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "keys":
+			// Live keystroke delta. The agent batches ~4 KiB; a larger frame is
+			// not keystrokes and is dropped rather than relayed.
+			if len(raw) > MaxWebRTCKeysFrameBytes {
 				continue
 			}
 			sess.sendRawToOperator(raw)

@@ -57,6 +57,24 @@ func (s *agentWebRTCSession) publishClipboard(force bool) {
 	})
 }
 
+// deliverMessage validates and shows an operator chat message, then reports
+// the outcome. The report is what makes the feature trustworthy: without it an
+// operator cannot tell "the target dismissed it" from "the dialog never
+// appeared".
+func (s *agentWebRTCSession) deliverMessage(title, text string) {
+	cleaned, err := sanitizeRemoteMessage(text)
+	if err != nil {
+		_ = s.sendJSON(map[string]any{"type": "message_status", "status": "failed", "reason": err.Error()})
+		return
+	}
+	title = sanitizeRemoteMessageTitle(title)
+	if err := showRemoteMessage(title, cleaned); err != nil {
+		_ = s.sendJSON(map[string]any{"type": "message_status", "status": "failed", "reason": err.Error()})
+		return
+	}
+	_ = s.sendJSON(map[string]any{"type": "message_status", "status": "shown", "bytes": len(cleaned)})
+}
+
 // applyClipboardSet writes operator text into the target clipboard, remembers
 // its hash (so the watcher does not echo the operator's own paste back), and
 // confirms with the value the target now holds.

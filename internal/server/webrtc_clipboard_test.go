@@ -14,6 +14,212 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// TestRDWebRTCMessageRelay drives the operator chat path: the message reaches
+// the agent bounded and sanitized, an oversized one is refused without being
+// forwarded, the dialog rate limit bites, and the agent's delivery report
+// comes back to the operator.
+func TestRDWebRTCMessageRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-msg", TenantID: 1, Hostname: "msg", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-msg", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-msg", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"message","title":"Notice","text":"please check the ticket"}`)
+	frame := readJSON(agentPeer, "message", 3*time.Second)
+	if frame["text"] != "please check the ticket" || frame["title"] != "Notice" {
+		t.Fatalf("relayed message = %+v", frame)
+	}
+
+	// The agent reports the dialog outcome; the operator sees it.
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"message_status","status":"shown"}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	status := readJSON(conn, "message_status", 3*time.Second)
+	if status["status"] != "shown" {
+		t.Fatalf("message status = %+v", status)
+	}
+
+	// Oversized text is refused before the agent sees a dialog.
+	big := strings.Repeat("a", MaxWebRTCMessageBytes+1)
+	send(fmt.Sprintf(`{"type":"message","text":%q}`, big))
+	rejected := readJSON(conn, "message_status", 3*time.Second)
+	if !strings.Contains(fmt.Sprint(rejected["reason"]), "exceeds") {
+		t.Fatalf("oversize refusal = %+v", rejected)
+	}
+	// Fill the rest of the window, then the next dialog is refused.
+	for i := 1; i < MaxRemoteMessagesPerWindow; i++ {
+		send(`{"type":"message","text":"ok"}`)
+	}
+	send(`{"type":"message","text":"one too many"}`)
+	limited := readJSON(conn, "message_status", 3*time.Second)
+	if !strings.Contains(fmt.Sprint(limited["reason"]), "rate limit") {
+		t.Fatalf("rate-limit refusal = %+v", limited)
+	}
+}
+
+// TestRDWebRTCKeyFeedRelay drives the live keystroke channel: the toggle
+// reaches the agent, a keystroke delta reaches the operator, an oversized frame
+// is dropped rather than relayed, and disabling reaches the agent.
+func TestRDWebRTCKeyFeedRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-keys", TenantID: 1, Hostname: "keys", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-keys", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-keys", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"keys","enabled":true}`)
+	on := readJSON(agentPeer, "keys", 3*time.Second)
+	if on["enabled"] != true {
+		t.Fatalf("enable frame = %+v", on)
+	}
+
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(`{"type":"keys","text":"whoami\r"}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	delta := readJSON(conn, "keys", 3*time.Second)
+	if delta["text"] != "whoami\r" {
+		t.Fatalf("keystroke delta = %+v", delta)
+	}
+
+	// A frame beyond the keystroke bound is not relayed.
+	huge := fmt.Sprintf(`{"type":"keys","text":%q}`, strings.Repeat("k", MaxWebRTCKeysFrameBytes))
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(huge)); err != nil {
+		t.Fatalf("agent write huge: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	if _, raw, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("an oversized keystroke frame was relayed: %d bytes", len(raw))
+	}
+
+	send(`{"type":"keys","enabled":false}`)
+	off := readJSON(agentPeer, "keys", 3*time.Second)
+	if off["enabled"] != false {
+		t.Fatalf("disable frame = %+v", off)
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).

