@@ -18,7 +18,7 @@ database, one HTTP listener, and **no** beacon transport.
 
 | layer | detail |
 |---|---|
-| backend | container `forgec2-demo` from the published image — **canonical pin `sha256:5d965b8b…`** (the multi-arch `edge` build of `7c530ec03`; the manifest lists **linux/amd64 and linux/arm64** and the demo runs the amd64 leg). The mirror currently answers 502 for that digest, so the host runs the identical image loaded from GHCR under the local tag `control`; `verify-image.sh` proves the two are the same content. `network_mode: host`, `read_only`, `working_dir: /data`, binds `127.0.0.1:18000` only |
+| backend | container `forgec2-demo` from the published image — **canonical pin `sha256:4716ff3b…`** (the multi-arch `edge` build of `46f07465b`; the manifest lists **linux/amd64 and linux/arm64** and the demo runs the amd64 leg). The mirror currently answers 502 for that digest, so the host runs the identical image loaded from GHCR under the local tag `differential`; `verify-image.sh` proves the two are the same content. `network_mode: host`, `read_only`, `working_dir: /data`, binds `127.0.0.1:18000` only |
 | database | PostgreSQL 18 on the host (`127.0.0.1:5432`, role `forgec2`, db `forgec2`) |
 | edge | standalone nginx (`deploy/demo/nginx.conf`) listening on `0.0.0.0:8000`, proxying everything to the backend |
 | state | `/opt/forgec2-demo/container-data` (uid/gid 65532), config mounted read-only from `/opt/forgec2-demo/compose/config.yaml` |
@@ -75,7 +75,7 @@ Requirements specific to this host and documented rather than hidden:
 
 - **GHCR is not reachable directly.** The image is pulled through a read-only
   mirror serving the identical manifest (`ghcr.nju.edu.cn/r0si/forgec2`, pulled
-  by digest `sha256:5d965b8b…`). Set `FORGEC2_IMAGE` to the mirror, tag or
+  by digest `sha256:4716ff3b…`). Set `FORGEC2_IMAGE` to the mirror, tag or
   digest, in `.env`. When the mirror rejects a new digest with 502, pull it
   from GHCR on a reachable host, `docker load` the saved image, and point the
   demo at the local tag until the mirror catches up - the pin stays checkable
@@ -164,7 +164,7 @@ therefore be *proved* to be the canonical one:
 ```bash
 bash deploy/demo/verify-image.sh
 # OK: ghcr.nju.edu.cn/r0si/forgec2:ratelimit is content-identical to the
-# canonical manifest sha256:5d965b8b4b878dcde7e298151919d6da21559b70eb4891f1d7ca622ed33aae8f
+# canonical manifest sha256:4716ff3bb12b9012a4faf259f5b4a6d74fdecddddb0353c5b9f7bae12be0e062
 ```
 
 A backup is only real once it has been restored somewhere. `restore-drill.sh`restores the newest dump into a scratch database on the same cluster and
