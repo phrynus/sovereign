@@ -85,6 +85,14 @@ export interface ClipboardHistoryItem {
   at: string;
 }
 
+/** What the live video track shows. Camera mode is view-only. */
+export type VideoSource = "screen" | "webcam";
+
+/** Remote input targets a desktop, so only screen capture accepts it. */
+export function sourceAllowsInput(source: VideoSource): boolean {
+  return source === "screen";
+}
+
 /** One selectable capture device, as enumerated by the agent. */
 export interface AudioDeviceInfo {
   index: number;
@@ -255,6 +263,8 @@ export function useWebRTCLive(agentId: string) {
   // Region mode replaces H.264 video with change-only tiles drawn on a canvas:
   // bandwidth tracks the changed area instead of the frame size, and no media
   // plane is used at all (useful on TCP-only or ffmpeg-less targets).
+  // screen = the desktop (interactive); webcam = the target camera (view-only).
+  const [videoSource, setVideoSource] = useState<VideoSource>("screen");
   const [regionOn, setRegionOn] = useState(false);
   const [tileFrame, setTileFrame] = useState<TileFrame | null>(null);
   const [regionError, setRegionError] = useState("");
@@ -520,7 +530,7 @@ export function useWebRTCLive(agentId: string) {
   }, [sendSignal]);
 
   const start = useCallback(
-    async (presetValue: string, display = 0, differentialMode = false, audioEnabled = false, regionMode = false) => {
+    async (presetValue: string, display = 0, differentialMode = false, audioEnabled = false, regionMode = false, source: VideoSource = "screen") => {
       if (!agentId) return;
       if (typeof RTCPeerConnection === "undefined" || typeof WebSocket === "undefined") {
         fail(t("agents.rdp_live_unsupported"));
@@ -536,6 +546,7 @@ export function useWebRTCLive(agentId: string) {
       setSelectedDisplay(display);
       setDifferential(differentialMode);
       setAudioOn(audioEnabled);
+      setVideoSource(source);
       setRegionOn(regionMode);
       setTileFrame(null);
       setRegionError("");
@@ -556,6 +567,7 @@ export function useWebRTCLive(agentId: string) {
           audio_mode: audioMode,
           audio_device: audioDevice,
           region: regionMode,
+          source,
         });
       } catch (err) {
         setStatus("error");
@@ -884,6 +896,8 @@ export function useWebRTCLive(agentId: string) {
     audioDevices,
     requestAudioDevices,
     selectAudioSource,
+    videoSource,
+    setVideoSource,
     regionOn,
     regionError,
     tileFrame,

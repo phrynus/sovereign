@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { logger } from "@/lib/logger";
 import { nowTime } from "@/lib/utils";
 import { implantBlocksDest } from "@/lib/implant-version";
-import { useWebRTCLive } from "./useWebRTCLive";
+import { sourceAllowsInput, useWebRTCLive } from "./useWebRTCLive";
 import {
   MAX_WHEEL_NOTCHES,
   clickCount,
@@ -125,6 +125,8 @@ export function useRemoteDesktop(agentId: string) {
     audioDevices: liveAudioDevices,
     requestAudioDevices: liveRequestAudioDevices,
     selectAudioSource: liveSelectAudioSource,
+    videoSource: liveVideoSource,
+    setVideoSource: liveSetVideoSource,
     regionOn: liveRegionOn,
     regionError: liveRegionError,
     tileFrame: liveTileFrame,
@@ -205,6 +207,8 @@ export function useRemoteDesktop(agentId: string) {
   const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
   const versionBlocked = implantBlocksDest(agentVersion, "experimental");
   const sessionActive = monitoring || liveActive;
+  // A camera view has no desktop to click or type into.
+  const inputEnabled = sessionActive && sourceAllowsInput(liveVideoSource);
   const displayStatus: RdpStatus = liveActive
     ? liveStatus === "connected"
       ? "connected"
@@ -419,7 +423,7 @@ export function useRemoteDesktop(agentId: string) {
   const moveInflightRef = useRef(false);
 
   const handleClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!sessionActive || !id) return;
+    if (!inputEnabled || !id) return;
     const { x, y } = getRelativeCoords(e);
     const mods = modsFromEvent(e);
     const count = clickCount(e.detail);
@@ -432,28 +436,28 @@ export function useRemoteDesktop(agentId: string) {
     } catch (err) {
       toastError(err, "agents.rdp_capture_failed");
     }
-  }, [sessionActive, liveActive, sendLiveInput, id, getRelativeCoords, toastError]);
+  }, [inputEnabled, liveActive, sendLiveInput, id, getRelativeCoords, toastError]);
 
   // Right click and middle click are separate wire types: an agent build that
   // predates them refuses the event instead of silently left-clicking.
   const sendPointerAction = useCallback((event: RemotePointerEvent) => {
-    if (!sessionActive || !id) return;
+    if (!inputEnabled || !id) return;
     if (liveActive) {
       sendLiveInput(event);
       return;
     }
     api.postJson(paths.agents.remoteInput(id), event).catch(() => {});
-  }, [sessionActive, liveActive, sendLiveInput, id]);
+  }, [inputEnabled, liveActive, sendLiveInput, id]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!sessionActive) return;
+    if (!inputEnabled) return;
     // Always suppress the browser menu: a right click on the canvas is meant
     // for the remote host, not for the console.
     e.preventDefault();
     const { x, y } = getRelativeCoords(e);
     const mods = modsFromEvent(e);
     sendPointerAction({ type: "click_right", x, y, count: 1, ...(mods.length ? { mods } : {}) });
-  }, [sessionActive, getRelativeCoords, sendPointerAction]);
+  }, [inputEnabled, getRelativeCoords, sendPointerAction]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 1) return;
@@ -471,7 +475,7 @@ export function useRemoteDesktop(agentId: string) {
   const wheelPosRef = useRef({ x: 0, y: 0 });
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (!sessionActive) return;
+    if (!inputEnabled) return;
     e.preventDefault();
     const { x, y } = coordsFromClient(e.clientX, e.clientY);
     wheelPosRef.current = { x, y };
@@ -491,7 +495,7 @@ export function useRemoteDesktop(agentId: string) {
         sendPointerAction({ type: "wheel", ...wheelPosRef.current, delta: step });
       }
     });
-  }, [sessionActive, coordsFromClient, sendPointerAction]);
+  }, [inputEnabled, coordsFromClient, sendPointerAction]);
 
   useEffect(() => () => {
     if (wheelRafRef.current !== null) cancelAnimationFrame(wheelRafRef.current);
@@ -499,7 +503,7 @@ export function useRemoteDesktop(agentId: string) {
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!sessionActive || !id) return;
+      if (!inputEnabled || !id) return;
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         // Throttle cursor re-renders to once per animation frame instead
@@ -533,13 +537,13 @@ export function useRemoteDesktop(agentId: string) {
           .finally(() => { moveInflightRef.current = false; });
       }, 50);
     },
-    [sessionActive, liveActive, sendLiveInput, id, coordsFromClient],
+    [inputEnabled, liveActive, sendLiveInput, id, coordsFromClient],
   );
 
   const hideCursor = useCallback(() => setShowCursor(false), []);
 
   useEffect(() => {
-    if (!sessionActive || !id) return;
+    if (!inputEnabled || !id) return;
     const sendKey = (key: string, mods: RemoteModifier[]) => {
       const event: RemoteKeyEvent = { type: "key", key, ...(mods.length ? { mods } : {}) };
       if (liveActive) {
@@ -567,7 +571,7 @@ export function useRemoteDesktop(agentId: string) {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [sessionActive, liveActive, sendLiveInput, id]);
+  }, [inputEnabled, liveActive, sendLiveInput, id]);
 
   const toggleFullscreen = useCallback(async () => {
     if (!containerRef.current) return;
@@ -597,11 +601,11 @@ export function useRemoteDesktop(agentId: string) {
       return;
     }
     try {
-      await startLive(livePreset, selectedDisplay, liveDifferential, liveAudioOn, liveRegionOn);
+      await startLive(livePreset, selectedDisplay, liveDifferential, liveAudioOn, liveRegionOn, liveVideoSource);
     } catch (e) {
       toastError(e, "agents.rdp_live_start_failed");
     }
-  }, [id, versionBlocked, startLive, livePreset, selectedDisplay, liveDifferential, liveAudioOn, liveRegionOn, t, toastError]);
+  }, [id, versionBlocked, startLive, livePreset, selectedDisplay, liveDifferential, liveAudioOn, liveRegionOn, liveVideoSource, t, toastError]);
 
   const handleStart = useCallback(() => {
     if (mode === "live") {
@@ -622,7 +626,7 @@ export function useRemoteDesktop(agentId: string) {
   return {
     t: t as TKey,
     RESOLUTIONS, pollInterval,
-    monitoring, sessionActive, status: displayStatus, rawStatus: status, screenData, resolution, setResolution,
+    monitoring, sessionActive, inputEnabled, status: displayStatus, rawStatus: status, screenData, resolution, setResolution,
     isFullscreen, lastUpdate, wsLive,
     mouseX, mouseY, showCursor, nativeWidth, nativeHeight,
     versionBlocked,
@@ -647,6 +651,8 @@ export function useRemoteDesktop(agentId: string) {
     audioOn: liveAudioOn, audioMuted: liveAudioMuted, audioVolume: liveAudioVolume,
     audioError: liveAudioError, audioRef: liveAudioRef, toggleAudio: liveToggleAudio,
     audioMode: liveAudioMode, audioDevice: liveAudioDevice, audioSource: liveAudioSource, audioDevices: liveAudioDevices, requestAudioDevices: liveRequestAudioDevices, selectAudioSource: liveSelectAudioSource,
+    videoSource: liveVideoSource,
+    setVideoSource: liveSetVideoSource,
     regionOn: liveRegionOn, regionError: liveRegionError, tileFrame: liveTileFrame, toggleRegion: liveToggleRegion,
     regionCanvasRef: liveRegionCanvasRef,
     setAudioMuted: liveSetAudioMuted, setAudioVolume: liveSetAudioVolume,

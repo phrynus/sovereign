@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIVE_PRESETS, buildOperatorWsUrl, getLivePreset, parseDisplayState, parseTileFrame } from "./useWebRTCLive";
+import { LIVE_PRESETS, buildOperatorWsUrl, getLivePreset, parseDisplayState, parseTileFrame, sourceAllowsInput } from "./useWebRTCLive";
 
 describe("WebRTC live helpers", () => {
   it("builds the authenticated operator signaling URL for both schemes", () => {
@@ -24,6 +24,13 @@ describe("WebRTC live helpers", () => {
   it("falls back to 720p for an unknown preset", () => {
     expect(getLivePreset("4k").value).toBe("720p");
     expect(getLivePreset("1080p").value).toBe("1080p");
+  });
+});
+
+describe("sourceAllowsInput", () => {
+  it("allows input only for screen capture", () => {
+    expect(sourceAllowsInput("screen")).toBe(true);
+    expect(sourceAllowsInput("webcam")).toBe(false);
   });
 });
 

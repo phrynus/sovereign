@@ -13632,6 +13632,22 @@ paths:
                     and is refused with an actionable error when none exists.
                     The console asks the agent for `audio_devices` (a signal, not
                     an HTTP route) to render the names.
+                source:
+                  type: string
+                  enum: [screen, webcam]
+                  description: >
+                    What the video track shows. screen (default) is the desktop
+                    and accepts remote input; webcam is the target camera
+                    (dshow video device on Windows, /dev/videoN on Linux,
+                    AVFoundation video index on macOS) and is view-only: the
+                    server refuses input with "remote input is disabled in
+                    camera mode" instead of moving a cursor on a desktop the
+                    operator cannot see. Tile/region mode is screen-only.
+                webcam_device:
+                  type: integer
+                  minimum: 0
+                  maximum: 7
+                  description: Index among the platform's camera devices (0 = first).
                 region:
                   type: boolean
                   description: >

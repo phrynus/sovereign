@@ -34,6 +34,7 @@ interface RdpStageProps {
   regionCanvasRef: RefObject<HTMLCanvasElement | null>;
   regionOn: boolean;
   regionError: string;
+  cameraView: boolean;
   tileFrame: TileFrame | null;
   onImageLoad: (w: number, h: number) => void;
   onVideoPlaying: () => void;
@@ -49,7 +50,7 @@ interface RdpStageProps {
 export default memo(function RdpStage({
   t, status, monitoring, live, liveMode, lastUpdate, wsLive, screenData, liveError, liveInputError,
   nativeWidth, nativeHeight, mouseX, mouseY, showCursor,
-  containerRef, imgRef, videoRef, regionCanvasRef, regionOn, regionError, tileFrame, onImageLoad, onVideoPlaying,
+  containerRef, imgRef, videoRef, regionCanvasRef, regionOn, regionError, cameraView, tileFrame, onImageLoad, onVideoPlaying,
   onClick, onContextMenu, onMouseDown, onWheel, onMouseMove, onMouseLeave,
 }: RdpStageProps) {
   const statusConfig = {
@@ -158,6 +159,12 @@ export default memo(function RdpStage({
                 muted
                 onPlaying={onVideoPlaying}
               />
+            )}
+            {cameraView && (
+              <div className="absolute bottom-3 left-3 flex items-center gap-2 text-xs-sm text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
+                <Mouse className="size-4" />
+                {t("agents.rdp_camera_view_only")}
+              </div>
             )}
             {regionOn && regionError && (
               <div className="absolute inset-x-4 bottom-16 rounded-lg bg-destructive/90 px-3 py-2 text-xs text-white shadow-lg">

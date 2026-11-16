@@ -7,7 +7,7 @@ import { WorkspaceToolbar } from "@/components/ui/workspace-toolbar";
 import { Compass, Expand, Gauge, LayoutGrid, Maximize2, Monitor, Play, Square, Users } from "lucide-react";
 import { isExperimentalDesktop } from "../../components/session-quality";
 import type { ResolutionOption } from "./useRemoteDesktop";
-import type { DisplayInfo, LivePreset } from "./useWebRTCLive";
+import type { DisplayInfo, LivePreset, VideoSource } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -22,6 +22,8 @@ interface RdpToolbarProps {
   mode: "snapshot" | "live";
   setMode: (mode: "snapshot" | "live") => void;
   livePresets: Array<LivePreset & { label: string }>;
+  videoSource: VideoSource;
+  onSelectVideoSource: (source: VideoSource) => void;
   livePreset: LivePreset["value"];
   setLivePreset: (preset: LivePreset["value"]) => void;
   displays: DisplayInfo[];
@@ -42,7 +44,7 @@ interface RdpToolbarProps {
 /** Remote-desktop header: title, transport, resolution, fullscreen, start/stop. */
 export default memo(function RdpToolbar({
   t, agentId, nativeWidth, nativeHeight, resolutions, resolution, setResolution,
-  mode, setMode, livePresets, livePreset, setLivePreset,
+  mode, setMode, livePresets, livePreset, setLivePreset, videoSource, onSelectVideoSource,
   displays, selectedDisplay, onSelectDisplay,
   differential, onToggleDifferential, regionOn, onToggleRegion,
   active, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
@@ -117,6 +119,21 @@ export default memo(function RdpToolbar({
           )}
           {mode === "live" && (
             <Select
+              value={videoSource}
+              onValueChange={(v) => onSelectVideoSource(v === "webcam" ? "webcam" : "screen")}
+              disabled={active}
+            >
+              <SelectTrigger className="w-[150px]" aria-label={t("agents.rdp_source")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="screen">{t("agents.rdp_source_screen")}</SelectItem>
+                <SelectItem value="webcam">{t("agents.rdp_source_webcam")}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {mode === "live" && videoSource === "screen" && (
+            <Select
               value={String(selectedDisplay)}
               onValueChange={(v) => {
                 const index = Number(v);
@@ -157,7 +174,7 @@ export default memo(function RdpToolbar({
               {t("agents.rdp_differential")}
             </Button>
           )}
-          {mode === "live" && (
+          {mode === "live" && videoSource === "screen" && (
             <Button
               variant={regionOn ? "default" : "outline"}
               size="sm"

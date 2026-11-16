@@ -99,6 +99,7 @@ var agentModuleCatalog = []AgentModule{
 			"task_screen_webrtc_clipboard.go",
 			"task_screen_webrtc_keys.go",
 			"task_screen_webrtc_audio.go",
+			"task_screen_webrtc_webcam.go",
 			"task_screen_webrtc_region.go",
 		},
 	},

@@ -213,6 +213,9 @@ func (s *agentWebRTCSession) startRegionPipeline() error {
 	if s.ctx.Err() != nil {
 		return fmt.Errorf("session is already closed")
 	}
+	if s.settingsSnapshot().Source == VideoSourceWebcam {
+		return fmt.Errorf("tile mode is available for screen capture only")
+	}
 	s.regionMu.Lock()
 	if s.regionOn {
 		s.regionMu.Unlock()

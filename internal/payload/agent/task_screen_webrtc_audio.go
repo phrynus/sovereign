@@ -195,10 +195,9 @@ func selectAudioDevice(devices []string, mode string, index int) (string, error)
 	return candidates[index], nil
 }
 
-// avAudioDevice is one AVFoundation audio input as ffmpeg numbers it. The
-// index is the number inside ":N" — audio devices have their own numbering,
-// independent of video devices.
-type avAudioDevice struct {
+// avDevice is one AVFoundation device as ffmpeg numbers it. Audio and video
+// have separate index spaces, so the same struct serves both sections.
+type avDevice struct {
 	Index int    `json:"index"`
 	Name  string `json:"name"`
 }
@@ -226,26 +225,31 @@ func isDarwinLoopbackDevice(name string) bool {
 	return false
 }
 
-// parseAVFoundationAudioDevices extracts the audio half of
+// parseAVFoundationSection extracts one half of
 // `ffmpeg -f avfoundation -list_devices true -i ""`. ffmpeg prints a video
 // section and then an audio section; each device line looks like
 //
 //	[AVFoundation indev @ 0x7f...] [1] BlackHole 2ch
 //
 // so the device index is the LAST bracketed number on the line.
-func parseAVFoundationAudioDevices(output string) []avAudioDevice {
-	var devices []avAudioDevice
-	inAudio := false
+func parseAVFoundationSection(section, output string) []avDevice {
+	var devices []avDevice
+	header := "AVFoundation " + section + " devices:"
+	other := "AVFoundation video devices:"
+	if section == "video" {
+		other = "AVFoundation audio devices:"
+	}
+	inSection := false
 	for _, line := range strings.Split(output, "\n") {
 		switch {
-		case strings.Contains(line, "AVFoundation audio devices:"):
-			inAudio = true
+		case strings.Contains(line, header):
+			inSection = true
 			continue
-		case strings.Contains(line, "AVFoundation video devices:"):
-			inAudio = false
+		case strings.Contains(line, other):
+			inSection = false
 			continue
 		}
-		if !inAudio {
+		if !inSection {
 			continue
 		}
 		open := strings.LastIndex(line, "[")
@@ -261,15 +265,25 @@ func parseAVFoundationAudioDevices(output string) []avAudioDevice {
 		if name == "" {
 			continue
 		}
-		devices = append(devices, avAudioDevice{Index: index, Name: name})
+		devices = append(devices, avDevice{Index: index, Name: name})
 	}
 	return devices
+}
+
+// parseAVFoundationAudioDevices is the audio half of the AVFoundation list.
+func parseAVFoundationAudioDevices(output string) []avDevice {
+	return parseAVFoundationSection("audio", output)
+}
+
+// parseAVFoundationVideoDevices is the video half (camera) of the list.
+func parseAVFoundationVideoDevices(output string) []avDevice {
+	return parseAVFoundationSection("video", output)
 }
 
 // listAVFoundationDevices asks ffmpeg for the installed AVFoundation devices.
 // ffmpeg exits non-zero for -list_devices by design, so the output is parsed
 // regardless of the exit status.
-func listAVFoundationDevices(ffmpeg string) ([]avAudioDevice, error) {
+func listAVFoundationDevices(ffmpeg string) ([]avDevice, error) {
 	out, _ := exec.Command(ffmpeg,
 		"-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", "").CombinedOutput()
 	devices := parseAVFoundationAudioDevices(string(out))
@@ -294,12 +308,12 @@ func listAVFoundationDevices(ffmpeg string) ([]avAudioDevice, error) {
 //   - "mic" uses real capture devices, falling back to AVFoundation input 0
 //     when the list is empty;
 //   - an out-of-range index names how many devices that mode offers.
-func selectAVFoundationDevice(devices []avAudioDevice, mode string, index int) (avAudioDevice, error) {
+func selectAVFoundationDevice(devices []avDevice, mode string, index int) (avDevice, error) {
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	if mode == "" {
 		mode = AudioModeMic
 	}
-	var candidates []avAudioDevice
+	var candidates []avDevice
 	switch mode {
 	case AudioModeSpeaker:
 		for _, device := range devices {
@@ -308,7 +322,7 @@ func selectAVFoundationDevice(devices []avAudioDevice, mode string, index int) (
 			}
 		}
 		if len(candidates) == 0 {
-			return avAudioDevice{}, fmt.Errorf("no macOS loopback audio device found: install BlackHole (or another virtual audio device) and route the system output to it, or capture the microphone instead")
+			return avDevice{}, fmt.Errorf("no macOS loopback audio device found: install BlackHole (or another virtual audio device) and route the system output to it, or capture the microphone instead")
 		}
 	case AudioModeMic:
 		for _, device := range devices {
@@ -317,13 +331,13 @@ func selectAVFoundationDevice(devices []avAudioDevice, mode string, index int) (
 			}
 		}
 		if len(candidates) == 0 {
-			candidates = []avAudioDevice{{Index: 0, Name: "default"}}
+			candidates = []avDevice{{Index: 0, Name: "default"}}
 		}
 	default:
-		return avAudioDevice{}, fmt.Errorf("audio mode must be mic or speaker")
+		return avDevice{}, fmt.Errorf("audio mode must be mic or speaker")
 	}
 	if index < 0 || index >= len(candidates) {
-		return avAudioDevice{}, fmt.Errorf("audio device %d is not available (%d %s device(s) found)", index, len(candidates), mode)
+		return avDevice{}, fmt.Errorf("audio device %d is not available (%d %s device(s) found)", index, len(candidates), mode)
 	}
 	return candidates[index], nil
 }

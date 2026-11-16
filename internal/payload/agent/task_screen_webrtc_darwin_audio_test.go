@@ -21,13 +21,13 @@ func TestParseAVFoundationAudioDevices(t *testing.T) {
 	if len(devices) != 3 {
 		t.Fatalf("devices = %+v, want 3 audio devices", devices)
 	}
-	if devices[0] != (avAudioDevice{Index: 0, Name: "MacBook Pro Microphone"}) {
+	if devices[0] != (avDevice{Index: 0, Name: "MacBook Pro Microphone"}) {
 		t.Fatalf("first device = %+v", devices[0])
 	}
-	if devices[1] != (avAudioDevice{Index: 1, Name: "BlackHole 2ch"}) {
+	if devices[1] != (avDevice{Index: 1, Name: "BlackHole 2ch"}) {
 		t.Fatalf("second device = %+v", devices[1])
 	}
-	if devices[2] != (avAudioDevice{Index: 2, Name: "Aggregate Device"}) {
+	if devices[2] != (avDevice{Index: 2, Name: "Aggregate Device"}) {
 		t.Fatalf("third device = %+v", devices[2])
 	}
 
@@ -69,14 +69,14 @@ func TestIsDarwinLoopbackDevice(t *testing.T) {
 // input and falls back to device 0; indices are AVFoundation indices, not list
 // positions.
 func TestSelectAVFoundationDevice(t *testing.T) {
-	devices := []avAudioDevice{
+	devices := []avDevice{
 		{Index: 0, Name: "MacBook Pro Microphone"},
 		{Index: 1, Name: "BlackHole 2ch"},
 		{Index: 2, Name: "Aggregate Device"},
 	}
 
 	speaker, err := selectAVFoundationDevice(devices, "speaker", 0)
-	if err != nil || speaker != (avAudioDevice{Index: 1, Name: "BlackHole 2ch"}) {
+	if err != nil || speaker != (avDevice{Index: 1, Name: "BlackHole 2ch"}) {
 		t.Fatalf("speaker[0] = %+v err=%v", speaker, err)
 	}
 	if _, err := selectAVFoundationDevice(devices, "speaker", 1); err == nil ||
@@ -85,13 +85,13 @@ func TestSelectAVFoundationDevice(t *testing.T) {
 	}
 
 	mic, err := selectAVFoundationDevice(devices, "mic", 0)
-	if err != nil || mic != (avAudioDevice{Index: 0, Name: "MacBook Pro Microphone"}) {
+	if err != nil || mic != (avDevice{Index: 0, Name: "MacBook Pro Microphone"}) {
 		t.Fatalf("mic[0] = %+v err=%v", mic, err)
 	}
 	// The second microphone candidate is the Aggregate Device (index 2): the
 	// returned index is the AVFoundation index, not the candidate position.
 	second, err := selectAVFoundationDevice(devices, "mic", 1)
-	if err != nil || second != (avAudioDevice{Index: 2, Name: "Aggregate Device"}) {
+	if err != nil || second != (avDevice{Index: 2, Name: "Aggregate Device"}) {
 		t.Fatalf("mic[1] = %+v err=%v", second, err)
 	}
 	if _, err := selectAVFoundationDevice(devices, "mic", 2); err == nil {
@@ -99,7 +99,7 @@ func TestSelectAVFoundationDevice(t *testing.T) {
 	}
 
 	// Microphone-only host: speaker is refused with an actionable message.
-	if _, err := selectAVFoundationDevice([]avAudioDevice{{Index: 0, Name: "MacBook Pro Microphone"}}, "speaker", 0); err == nil ||
+	if _, err := selectAVFoundationDevice([]avDevice{{Index: 0, Name: "MacBook Pro Microphone"}}, "speaker", 0); err == nil ||
 		!strings.Contains(err.Error(), "BlackHole") {
 		t.Fatalf("speaker without BlackHole = %v", err)
 	}

@@ -76,6 +76,12 @@ type webRTCSettings struct {
 	// Region switches the capture to change-only tiles over the signaling
 	// socket: only changed 64 px blocks are encoded and sent.
 	Region bool `json:"region,omitempty"`
+	// Source selects what the video track shows: "screen" (default) or
+	// "webcam". A camera view is not interactive (input injection targets the
+	// desktop, not the camera), so the server refuses input in that mode.
+	Source string `json:"source,omitempty"`
+	// WebcamDevice selects the camera among the platform's video devices.
+	WebcamDevice int `json:"webcam_device,omitempty"`
 }
 
 type webRTCAgentStartData struct {
@@ -255,6 +261,16 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 		return fmt.Errorf("unsupported bitrate %d", settings.BitrateKbps)
 	}
 	settings.Encoder = normalizeAgentEncoder(settings.Encoder)
+	settings.Source = strings.ToLower(strings.TrimSpace(settings.Source))
+	if settings.Source == "" {
+		settings.Source = VideoSourceScreen
+	}
+	if settings.Source != VideoSourceScreen && settings.Source != VideoSourceWebcam {
+		return fmt.Errorf("source must be screen or webcam")
+	}
+	if settings.WebcamDevice < 0 || settings.WebcamDevice > MaxWebcamDevice {
+		return fmt.Errorf("unsupported camera index %d", settings.WebcamDevice)
+	}
 	if settings.Display < 0 || settings.Display > MaxDisplayIndex {
 		return fmt.Errorf("unsupported display index %d (0 = all displays)", settings.Display)
 	}
@@ -262,14 +278,18 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 
 	// Resolve the requested display BEFORE connecting: a monitor index that
 	// does not exist must fail the task with a reason the operator can act on,
-	// not start a stream of the wrong screen.
-	capture, hasCapture := resolveCaptureRect(settings.Display)
-	if !hasCapture {
-		if settings.Display > 0 {
-			return fmt.Errorf("display %d is not available (this host reports %d display(s))",
-				settings.Display, len(nativeScreenRects()))
+	// not start a stream of the wrong screen. A camera session has no screen
+	// geometry to resolve.
+	capture, hasCapture := screenRect{}, false
+	if settings.Source == VideoSourceScreen {
+		capture, hasCapture = resolveCaptureRect(settings.Display)
+		if !hasCapture {
+			if settings.Display > 0 {
+				return fmt.Errorf("display %d is not available (this host reports %d display(s))",
+					settings.Display, len(nativeScreenRects()))
+			}
+			return fmt.Errorf("screen geometry is unavailable; cannot choose a capture region")
 		}
-		return fmt.Errorf("screen geometry is unavailable; cannot choose a capture region")
 	}
 
 	ffmpeg := findFFmpegBinary()
@@ -285,7 +305,7 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 		ctx:       ctx,
 		cancel:    cancel,
 		capture:   capture,
-		captureOK: true,
+		captureOK: hasCapture,
 		// Live clipboard is on by default: the operator opened a remote-control
 		// page, and the first frame shows what the target already holds.
 		clipWatch: true,
@@ -481,6 +501,10 @@ func (s *agentWebRTCSession) captureSnapshot() (screenRect, bool) {
 // mapper immediately scales against the new rectangle. A rejected index is
 // reported the same way as a rejected key: visible, non-fatal.
 func (s *agentWebRTCSession) switchDisplay(display int) {
+	if s.settingsSnapshot().Source == VideoSourceWebcam {
+		_ = s.sendJSON(map[string]any{"type": "input_error", "reason": "display switching is not available in camera mode"})
+		return
+	}
 	rects := nativeScreenRects()
 	capture, ok := selectScreenRect(rects, screenRectFromNative(), hasNativeScreenRect(), display)
 	if !ok {
@@ -950,15 +974,30 @@ func (s *agentWebRTCSession) startRTPPipeline() error {
 		_ = conn.Close()
 		return fmt.Errorf("WebRTC session is already closed")
 	}
-	capture, hasCapture := s.captureSnapshot()
-	if !hasCapture {
-		_ = conn.Close()
-		return fmt.Errorf("screen geometry is unavailable")
-	}
-	args, err := buildScreenFFmpegArgs(s.settingsSnapshot(), conn.LocalAddr().(*net.UDPAddr).Port, capture, hasCapture)
-	if err != nil {
-		_ = conn.Close()
-		return err
+	settings := s.settingsSnapshot()
+	var args []string
+	if settings.Source == VideoSourceWebcam {
+		camera, camErr := s.webcamDeviceFor(settings.WebcamDevice)
+		if camErr != nil {
+			_ = conn.Close()
+			return camErr
+		}
+		args, err = buildWebcamFFmpegArgsFor(runtime.GOOS, settings, conn.LocalAddr().(*net.UDPAddr).Port, camera)
+		if err != nil {
+			_ = conn.Close()
+			return err
+		}
+	} else {
+		capture, hasCapture := s.captureSnapshot()
+		if !hasCapture {
+			_ = conn.Close()
+			return fmt.Errorf("screen geometry is unavailable")
+		}
+		args, err = buildScreenFFmpegArgs(settings, conn.LocalAddr().(*net.UDPAddr).Port, capture, hasCapture)
+		if err != nil {
+			_ = conn.Close()
+			return err
+		}
 	}
 	cmd := exec.CommandContext(s.ctx, s.ffmpeg, args...)
 	applyHideWindow(cmd)
@@ -1085,6 +1124,20 @@ func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int, capture screenR
 		return nil, fmt.Errorf("unsupported platform %s", runtime.GOOS)
 	}
 
+	args = append(args, videoOutputArgs(settings)...)
+	args = append(args,
+		"-an",
+		"-f", "rtp",
+		"-pkt_size", "1200",
+		fmt.Sprintf("rtp://127.0.0.1:%d", rtpPort),
+	)
+	return args, nil
+}
+
+// videoOutputArgs is the shared tail of every video pipeline: scaling into the
+// requested frame, the optional change-only filter, the encoder and rate
+// control. Screen and camera differ only in how the input is captured.
+func videoOutputArgs(settings webRTCSettings) []string {
 	level := "3.1"
 	if settings.Width*settings.Height > 1280*720 {
 		level = "4.0"
@@ -1102,7 +1155,7 @@ func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int, capture screenR
 		fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", settings.Width, settings.Height),
 		fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", settings.Width, settings.Height),
 		"format=yuv420p")
-	args = append(args, "-vf", strings.Join(filters, ","))
+	args := []string{"-vf", strings.Join(filters, ",")}
 	if settings.Differential {
 		args = append(args, "-fps_mode", "vfr")
 	}
@@ -1115,12 +1168,8 @@ func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int, capture screenR
 		"-b:v", fmt.Sprintf("%dk", settings.BitrateKbps),
 		"-maxrate", fmt.Sprintf("%dk", settings.BitrateKbps),
 		"-bufsize", fmt.Sprintf("%dk", settings.BitrateKbps*2),
-		"-an",
-		"-f", "rtp",
-		"-pkt_size", "1200",
-		fmt.Sprintf("rtp://127.0.0.1:%d", rtpPort),
 	)
-	return args, nil
+	return args
 }
 
 func encoderFFmpegArgs(encoder, level string) []string {

@@ -52,6 +52,8 @@ const (
 	MaxWebRTCClipboardBytes = 64 * 1024
 	// MaxWebRTCAudioDevice bounds the capture-device selector (per mode).
 	MaxWebRTCAudioDevice = 15
+	// MaxWebRTCWebcamDevice bounds the camera selector.
+	MaxWebRTCWebcamDevice = 7
 	// MaxWebRTCTilesFrameBytes bounds one region tile frame relayed to the
 	// browser (the agent budgets its own payload below this).
 	MaxWebRTCTilesFrameBytes = 400 * 1024
@@ -108,6 +110,11 @@ type webrtcStartOptions struct {
 	// Region streams change-only 64 px tiles over the signaling socket instead
 	// of H.264 video: bandwidth tracks the changed area, not the frame size.
 	Region bool `json:"region,omitempty"`
+	// Source selects what the video track shows: screen (default) or webcam.
+	// Camera mode is view-only: input injection targets a desktop, not a lens.
+	Source string `json:"source,omitempty"`
+	// WebcamDevice selects the camera among the platform's video devices.
+	WebcamDevice int `json:"webcam_device,omitempty"`
 }
 
 // webrtcIceServer mirrors the browser RTCIceServer shape and Pion's
@@ -699,6 +706,8 @@ type webrtcStartRequest struct {
 	AudioMode    string `json:"audio_mode"`
 	AudioDevice  int    `json:"audio_device"`
 	Region       bool   `json:"region"`
+	Source       string `json:"source"`
+	WebcamDevice int    `json:"webcam_device"`
 }
 
 func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
@@ -714,12 +723,26 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 		AudioMode:    strings.ToLower(strings.TrimSpace(req.AudioMode)),
 		AudioDevice:  req.AudioDevice,
 		Region:       req.Region,
+		Source:       strings.ToLower(strings.TrimSpace(req.Source)),
+		WebcamDevice: req.WebcamDevice,
 	}
 	if opts.AudioMode != "" && opts.AudioMode != "mic" && opts.AudioMode != "speaker" {
 		return opts, errors.New("audio_mode must be mic or speaker")
 	}
 	if opts.AudioDevice < 0 || opts.AudioDevice > MaxWebRTCAudioDevice {
 		return opts, fmt.Errorf("audio_device must be 0-%d", MaxWebRTCAudioDevice)
+	}
+	if opts.Source == "" {
+		opts.Source = "screen"
+	}
+	if opts.Source != "screen" && opts.Source != "webcam" {
+		return opts, errors.New("source must be screen or webcam")
+	}
+	if opts.WebcamDevice < 0 || opts.WebcamDevice > MaxWebRTCWebcamDevice {
+		return opts, fmt.Errorf("webcam_device must be 0-%d", MaxWebRTCWebcamDevice)
+	}
+	if opts.Source == "webcam" && opts.Region {
+		return opts, errors.New("region mode is available for screen capture only")
 	}
 	if opts.Display < 0 || opts.Display > MaxWebRTCDisplayIndex {
 		return opts, fmt.Errorf("display must be 0 (all displays) to %d", MaxWebRTCDisplayIndex)
@@ -1149,6 +1172,12 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			event := *msg.Event
 			if err := event.normalize(); err != nil {
 				sess.sendToOperator(gin.H{"type": "input_rejected", "error": err.Error()})
+				continue
+			}
+			// A camera view has no desktop to click: injecting would move the
+			// mouse on a screen the operator cannot see.
+			if sess.Settings.Source == "webcam" {
+				sess.sendToOperator(gin.H{"type": "input_rejected", "error": "remote input is disabled in camera mode"})
 				continue
 			}
 			// Exclusive control: only the lease holder may inject. The lease is

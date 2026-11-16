@@ -44,6 +44,8 @@ export default function RemoteDesktopPage() {
         displays={rdp.displays}
         selectedDisplay={rdp.selectedDisplay}
         onSelectDisplay={rdp.selectDisplay}
+        videoSource={rdp.videoSource}
+        onSelectVideoSource={rdp.setVideoSource}
         differential={rdp.differential}
         onToggleDifferential={rdp.toggleDifferential}
         regionOn={rdp.regionOn}
@@ -64,7 +66,7 @@ export default function RemoteDesktopPage() {
           <RdpStage
             t={t}
             status={rdp.status}
-            monitoring={rdp.sessionActive}
+            monitoring={rdp.inputEnabled}
             live={rdp.liveActive}
             liveMode={rdp.mode === "live"}
             lastUpdate={rdp.lastUpdate}
@@ -82,6 +84,7 @@ export default function RemoteDesktopPage() {
             videoRef={rdp.liveVideoRef}
             regionCanvasRef={rdp.regionCanvasRef}
             regionOn={rdp.regionOn}
+            cameraView={rdp.videoSource === "webcam"}
             regionError={rdp.regionError}
             tileFrame={rdp.tileFrame}
             onImageLoad={(w, h) => { rdp.setNativeWidth(w); rdp.setNativeHeight(h); }}
