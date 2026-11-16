@@ -21,6 +21,8 @@ interface RdpAudioProps {
   error: string;
   mode: "mic" | "speaker";
   device: number;
+  /** The capture source the agent resolved (dshow device / PulseAudio source). */
+  source: string;
   audioRef: RefObject<HTMLAudioElement | null>;
   onToggle: (enabled: boolean) => void;
   onSource: (mode: "mic" | "speaker", device: number) => void;
@@ -34,7 +36,7 @@ interface RdpAudioProps {
  * unmutes. Volume is clamped before it reaches the element.
  */
 export default memo(function RdpAudio({
-  t, enabled, muted, volume, error, mode, device, audioRef, onToggle, onSource, onMute, onVolume,
+  t, enabled, muted, volume, error, mode, device, source, audioRef, onToggle, onSource, onMute, onVolume,
 }: RdpAudioProps) {
   return (
     <Card className="mt-3 rounded-lg px-3 py-2 shadow-sm">
@@ -94,6 +96,11 @@ export default memo(function RdpAudio({
               title={t("agents.rdp_audio_volume")}
             />
           </>
+        )}
+        {enabled && source && (
+          <span className="max-w-56 truncate font-mono text-micro-sm text-muted-foreground" title={source}>
+            {source}
+          </span>
         )}
         {!enabled && <span className="text-micro-sm text-muted-foreground">{t("agents.rdp_audio_hint")}</span>}
         {error ? (

@@ -46,6 +46,54 @@ func TestBuildAudioFFmpegArgs(t *testing.T) {
 // TestParseDShowAudioDevices pins the ffmpeg -list_devices parsing: only
 // quoted "(audio)" names are devices, and the "@device..." alias line must not
 // be mistaken for one.
+// TestBuildAudioFFmpegArgsForPlatforms exercises every input path on any host,
+// which the runtime-switched test cannot do: Linux must use a named
+// PulseAudio source (a .monitor source is how speaker capture is selected) and
+// fall back to "default" only when no source was chosen.
+func TestBuildAudioFFmpegArgsForPlatforms(t *testing.T) {
+	monitor := "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"
+
+	linux, err := buildAudioFFmpegArgsFor("linux", 41000, monitor)
+	if err != nil {
+		t.Fatalf("linux build: %v", err)
+	}
+	joined := strings.Join(linux, " ")
+	if !strings.Contains(joined, "-f pulse -i "+monitor) {
+		t.Fatalf("linux monitor source missing: %s", joined)
+	}
+	if strings.Contains(joined, "-i default") {
+		t.Fatalf("an explicit monitor source was replaced by default: %s", joined)
+	}
+
+	linuxDefault, err := buildAudioFFmpegArgsFor("linux", 41000, "  ")
+	if err != nil {
+		t.Fatalf("linux default build: %v", err)
+	}
+	if !strings.Contains(strings.Join(linuxDefault, " "), "-f pulse -i default") {
+		t.Fatalf("linux default source missing: %v", linuxDefault)
+	}
+
+	windows, err := buildAudioFFmpegArgsFor("windows", 41000, "Microphone (Realtek)")
+	if err != nil || !strings.Contains(strings.Join(windows, " "), `-f dshow -i audio=Microphone (Realtek)`) {
+		t.Fatalf("windows build = %v err=%v", windows, err)
+	}
+	if _, err := buildAudioFFmpegArgsFor("windows", 41000, ""); err == nil {
+		t.Fatal("an empty dshow device was accepted")
+	}
+
+	darwin, err := buildAudioFFmpegArgsFor("darwin", 41000, "")
+	if err != nil || !strings.Contains(strings.Join(darwin, " "), "-f avfoundation -i :0") {
+		t.Fatalf("darwin build = %v err=%v", darwin, err)
+	}
+
+	if _, err := buildAudioFFmpegArgsFor("plan9", 41000, ""); err == nil {
+		t.Fatal("an unsupported platform was accepted")
+	}
+	if _, err := buildAudioFFmpegArgsFor("linux", 0, ""); err == nil {
+		t.Fatal("invalid port must fail")
+	}
+}
+
 func TestParseDShowAudioDevices(t *testing.T) {
 	const sample = `[dshow @ 000001] "ASUS FHD webcam" (video)
 [dshow @ 000001]   Alternative name "@device_pnp_\\?\usb#vid_3277"

@@ -53,8 +53,19 @@
 
 ## 未做但值得排期的
 
-- **Linux/macOS 的扬声器回环**：Windows 已支持（枚举 `virtual-audio-capturer`/立体声混音）；
-  Linux 需要枚举 PulseAudio 的 `.monitor` source，macOS 需要 BlackHole，目前返回明确错误。
+- **macOS 的扬声器回环**：Windows（`virtual-audio-capturer`/立体声混音）与 Linux
+  （PulseAudio `.monitor`）已支持；macOS 需要 BlackHole 之类的虚拟声卡，目前返回明确错误。
+
+## Linux 扬声器回环（2026-11-16）
+
+Windows 的 dshow 与 Linux 的 PulseAudio 走同一个策略函数：`speaker` 只接受回环设备，
+没有回环设备时明确报错而不是"录房间"。
+
+- 枚举：`pactl list short sources`，取第二列（source 名）；**只有 `.monitor` 结尾的 source 算回环**。
+- 选择：`speaker` 在 monitor 列表里按 `audio_device` 索引；`mic` 在非 monitor 列表里选，
+  列表为空（没有 pactl）时回退到 PulseAudio 的 `default`。
+- 采集：`ffmpeg -f pulse -i <source>`，而不是固定 `-i default`。
+- 回报：Agent 的 `audio` 确认帧带 `source`，操作员能看到实际录的是哪个 monitor。
 
 ## 实时音频的实测（2026-11-16）
 

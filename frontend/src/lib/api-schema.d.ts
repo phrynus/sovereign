@@ -28342,11 +28342,11 @@ export interface operations {
                     /** @description Stream the target's microphone as Opus (48 kHz mono, 20 ms frames) on the same peer connection. The audio m-line is always negotiated; this flag starts the capture. Measured: 2 s of real capture delivered 100 RTP packets / 6,720 bytes (about 27 kbps). */
                     audio?: boolean;
                     /**
-                     * @description mic (default) captures a real microphone; speaker captures what the machine plays and requires a loopback device (virtual-audio-capturer / Stereo Mix); without one the agent answers an explicit error instead of recording the room.
+                     * @description mic (default) captures a real microphone; speaker captures what the machine plays and requires a loopback device: virtual-audio-capturer / Stereo Mix on Windows, a PulseAudio ".monitor" source on Linux. Without one the agent answers an explicit error instead of recording the room. macOS has no enumerable loopback yet and returns an error for speaker.
                      * @enum {string}
                      */
                     audio_mode?: "mic" | "speaker";
-                    /** @description Index among the devices of the selected mode (0 = first). */
+                    /** @description Index among the devices of the selected mode (0 = first). On Linux the index selects among PulseAudio sources: for speaker only ".monitor" sources are offered, and mic index 0 is the first real source (PulseAudio "default" when the list is unavailable). */
                     audio_device?: number;
                     /** @description Stream change-only 64 px tiles over the operator socket instead of H.264 video. Only changed blocks are encoded, so bandwidth tracks the changed area; measured on synthetic 1280x720 content, a 120x40 moving box cost 4 tiles (~4.2 KB/tick, ~41 KiB/s at 10 fps) versus a full frame (~20.7 KB/tick, ~202 KiB/s), and a static screen sends nothing after the first frame. Uses no media plane, so it works on TCP-only or ffmpeg-less targets. */
                     region?: boolean;

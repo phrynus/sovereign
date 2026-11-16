@@ -119,6 +119,7 @@ export default function RemoteDesktopPage() {
                 error={rdp.audioError}
                 mode={rdp.audioMode}
                 device={rdp.audioDevice}
+                source={rdp.audioSource}
                 audioRef={rdp.audioRef}
                 onToggle={rdp.toggleAudio}
                 onSource={rdp.selectAudioSource}

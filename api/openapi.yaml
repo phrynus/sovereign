@@ -13612,14 +13612,22 @@ paths:
                   enum: [mic, speaker]
                   description: >
                     mic (default) captures a real microphone; speaker captures
-                    what the machine plays and requires a loopback device
-                    (virtual-audio-capturer / Stereo Mix); without one the agent
-                    answers an explicit error instead of recording the room.
+                    what the machine plays and requires a loopback device:
+                    virtual-audio-capturer / Stereo Mix on Windows, a
+                    PulseAudio ".monitor" source on Linux. Without one the
+                    agent answers an explicit error instead of recording the
+                    room. macOS has no enumerable loopback yet and returns an
+                    error for speaker.
                 audio_device:
                   type: integer
                   minimum: 0
                   maximum: 15
-                  description: Index among the devices of the selected mode (0 = first).
+                  description: >
+                    Index among the devices of the selected mode (0 = first).
+                    On Linux the index selects among PulseAudio sources: for
+                    speaker only ".monitor" sources are offered, and mic index
+                    0 is the first real source (PulseAudio "default" when the
+                    list is unavailable).
                 region:
                   type: boolean
                   description: >

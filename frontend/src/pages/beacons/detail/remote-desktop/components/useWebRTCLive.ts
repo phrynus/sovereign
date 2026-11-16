@@ -239,6 +239,9 @@ export function useWebRTCLive(agentId: string) {
   const [audioError, setAudioError] = useState("");
   const [audioMode, setAudioMode] = useState<"mic" | "speaker">("mic");
   const [audioDevice, setAudioDevice] = useState(0);
+  // The capture source the agent actually resolved (a dshow device or a
+  // PulseAudio source name), so "speaker" is verifiable and not just a flag.
+  const [audioSource, setAudioSource] = useState("");
   // Region mode replaces H.264 video with change-only tiles drawn on a canvas:
   // bandwidth tracks the changed area instead of the frame size, and no media
   // plane is used at all (useful on TCP-only or ffmpeg-less targets).
@@ -731,6 +734,8 @@ export function useWebRTCLive(agentId: string) {
           case "audio":
             if (typeof message.enabled === "boolean") setAudioOn(message.enabled);
             setAudioError(typeof message.reason === "string" ? message.reason : "");
+            if (typeof message.source === "string" && message.source) setAudioSource(message.source);
+            if (message.enabled === false) setAudioSource("");
             break;
           case "region":
             if (typeof message.enabled === "boolean") setRegionOn(message.enabled);
@@ -796,6 +801,7 @@ export function useWebRTCLive(agentId: string) {
     setKeysOn(false);
     setKeysFeed("");
     setControl(null);
+    setAudioSource("");
     setRegionOn(false);
     setTileFrame(null);
     setRegionError("");
@@ -834,6 +840,7 @@ export function useWebRTCLive(agentId: string) {
     toggleAudio,
     audioMode,
     audioDevice,
+    audioSource,
     selectAudioSource,
     regionOn,
     regionError,

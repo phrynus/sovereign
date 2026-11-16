@@ -24,11 +24,19 @@ const (
 // encoder settings are fixed so the browser's Opus decoder (48 kHz mono,
 // 20 ms frames) is always satisfied.
 func buildAudioFFmpegArgs(rtpPort int, device string) ([]string, error) {
+	return buildAudioFFmpegArgsFor(runtime.GOOS, rtpPort, device)
+}
+
+// buildAudioFFmpegArgsFor is buildAudioFFmpegArgs with the platform injected,
+// so every input path is testable on any host. On Linux `device` is a
+// PulseAudio SOURCE name: a ".monitor" source captures what the machine plays,
+// an empty name means the default source.
+func buildAudioFFmpegArgsFor(goos string, rtpPort int, device string) ([]string, error) {
 	if rtpPort <= 0 || rtpPort > 65535 {
 		return nil, fmt.Errorf("invalid RTP port")
 	}
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
-	switch runtime.GOOS {
+	switch goos {
 	case "windows":
 		device = strings.TrimSpace(device)
 		if device == "" {
@@ -38,12 +46,17 @@ func buildAudioFFmpegArgs(rtpPort int, device string) ([]string, error) {
 		args = append(args, "-f", "dshow", "-i", "audio="+device)
 	case "linux":
 		// PulseAudio is the default on desktop distributions; ALSA-only hosts
-		// answer an explicit error instead of silence.
-		args = append(args, "-f", "pulse", "-i", "default")
+		// answer an explicit error instead of silence. A named source is how a
+		// monitor (loopback) capture is selected.
+		source := strings.TrimSpace(device)
+		if source == "" {
+			source = "default"
+		}
+		args = append(args, "-f", "pulse", "-i", source)
 	case "darwin":
 		args = append(args, "-f", "avfoundation", "-i", ":0")
 	default:
-		return nil, fmt.Errorf("unsupported platform %s", runtime.GOOS)
+		return nil, fmt.Errorf("unsupported platform %s", goos)
 	}
 	args = append(args,
 		"-c:a", "libopus",
@@ -169,6 +182,98 @@ func selectAudioDevice(devices []string, mode string, index int) (string, error)
 	return candidates[index], nil
 }
 
+// parsePactlSources extracts source NAMES from `pactl list short sources`.
+// The format is tab-separated: index, name, driver, sample spec, state (and
+// optionally more columns). A line without at least two columns is not a
+// source and is skipped rather than becoming a device called "0".
+func parsePactlSources(output string) []string {
+	var sources []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			// Some builds separate columns with spaces instead of tabs; accept
+			// "index name ..." only when the first field is numeric.
+			fields = strings.Fields(line)
+			if len(fields) < 2 {
+				continue
+			}
+		}
+		name := strings.TrimSpace(fields[1])
+		if name == "" {
+			continue
+		}
+		sources = append(sources, name)
+	}
+	return sources
+}
+
+// isPulseMonitorSource reports whether a PulseAudio source captures a sink's
+// output (what the machine plays) rather than a microphone. PulseAudio names
+// monitor sources with a ".monitor" suffix.
+func isPulseMonitorSource(name string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(name)), ".monitor")
+}
+
+// listPulseSources asks pactl for the available sources. A missing pactl is an
+// error the caller may tolerate for microphone capture (PulseAudio's default
+// source works without enumeration) but never for speaker capture.
+func listPulseSources() ([]string, error) {
+	if _, err := exec.LookPath("pactl"); err != nil {
+		return nil, fmt.Errorf("pactl not found (install pulseaudio-utils to list monitor sources)")
+	}
+	out, err := exec.Command("pactl", "list", "short", "sources").Output()
+	if err != nil {
+		return nil, fmt.Errorf("pactl list short sources: %w", err)
+	}
+	return parsePactlSources(string(out)), nil
+}
+
+// selectPulseSource picks the PulseAudio source for a mode and index:
+//
+//   - "speaker" (loopback) only accepts ".monitor" sources, and fails with an
+//     actionable message when the host exposes none, instead of recording the
+//     room under a "speaker" label;
+//   - "mic" uses real capture sources, falling back to PulseAudio's "default"
+//     source when the list is empty (a host without pactl still captures);
+//   - an out-of-range index names how many sources that mode offers.
+func selectPulseSource(sources []string, mode string, index int) (string, error) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = AudioModeMic
+	}
+	var candidates []string
+	switch mode {
+	case AudioModeSpeaker:
+		for _, source := range sources {
+			if isPulseMonitorSource(source) {
+				candidates = append(candidates, source)
+			}
+		}
+		if len(candidates) == 0 {
+			return "", fmt.Errorf("no PulseAudio monitor source found: run \"pactl list short sources\" (a loaded sink exposes a .monitor source)")
+		}
+	case AudioModeMic:
+		for _, source := range sources {
+			if !isPulseMonitorSource(source) {
+				candidates = append(candidates, source)
+			}
+		}
+		if len(candidates) == 0 {
+			candidates = []string{"default"}
+		}
+	default:
+		return "", fmt.Errorf("audio mode must be mic or speaker")
+	}
+	if index < 0 || index >= len(candidates) {
+		return "", fmt.Errorf("audio device %d is not available (%d %s device(s) found)", index, len(candidates), mode)
+	}
+	return candidates[index], nil
+}
+
 // startAudioPipeline starts the capture→Opus→RTP process and pipes it into the
 // existing audio track. The track is added to the peer connection whether or not
 // audio is enabled, so toggling it later needs no renegotiation.
@@ -187,19 +292,35 @@ func (s *agentWebRTCSession) startAudioPipeline() error {
 	s.audioMu.Unlock()
 
 	settings := s.settingsSnapshot()
+	mode := strings.ToLower(strings.TrimSpace(settings.AudioMode))
+	if mode == "" {
+		mode = AudioModeMic
+	}
 	device := ""
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		devices := listDShowAudioDevices(s.ffmpeg)
-		selected, err := selectAudioDevice(devices, settings.AudioMode, settings.AudioDevice)
+		selected, err := selectAudioDevice(devices, mode, settings.AudioDevice)
 		if err != nil {
 			return err
 		}
 		device = selected
-	} else if strings.EqualFold(settings.AudioMode, AudioModeSpeaker) {
-		// PulseAudio's ".monitor" source and macOS BlackHole exist, but neither
-		// is enumerable without extra tooling; refuse rather than record the
-		// room under a "speaker" label.
-		return fmt.Errorf("speaker loopback capture is not supported on this platform yet")
+	case "linux":
+		sources, listErr := listPulseSources()
+		if listErr != nil && mode == AudioModeSpeaker {
+			// Without enumeration a speaker capture would silently record the
+			// room, which is exactly what the mode exists to avoid.
+			return listErr
+		}
+		selected, err := selectPulseSource(sources, mode, settings.AudioDevice)
+		if err != nil {
+			return err
+		}
+		device = selected
+	case "darwin":
+		if mode == AudioModeSpeaker {
+			return fmt.Errorf("speaker loopback capture is not supported on macOS yet: install BlackHole and select it as a microphone, or capture the microphone instead")
+		}
 	}
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {
@@ -222,6 +343,7 @@ func (s *agentWebRTCSession) startAudioPipeline() error {
 	s.audioMu.Lock()
 	s.audioCmd = cmd
 	s.audioConn = conn
+	s.audioSource = device
 	gen := s.audioGen
 	s.audioMu.Unlock()
 
@@ -262,7 +384,7 @@ func (s *agentWebRTCSession) startAudioPipeline() error {
 		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "reason": reason})
 	}()
 
-	_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true})
+	_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true, "mode": mode, "device": settings.AudioDevice, "source": device})
 	return nil
 }
 
@@ -274,6 +396,7 @@ func (s *agentWebRTCSession) stopAudio() {
 	conn := s.audioConn
 	s.audioCmd = nil
 	s.audioConn = nil
+	s.audioSource = ""
 	s.audioMu.Unlock()
 	if conn != nil {
 		_ = conn.Close()
@@ -281,6 +404,14 @@ func (s *agentWebRTCSession) stopAudio() {
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 	}
+}
+
+// audioSourceSnapshot reports the source name the running capture resolved to
+// (a dshow device, a PulseAudio source, or "" on platforms without a selector).
+func (s *agentWebRTCSession) audioSourceSnapshot() string {
+	s.audioMu.Lock()
+	defer s.audioMu.Unlock()
+	return s.audioSource
 }
 
 // setAudio enables, disables or reconfigures live audio. Video keeps running in
@@ -311,8 +442,9 @@ func (s *agentWebRTCSession) setAudio(enabled bool, mode string, device *int) {
 		return
 	}
 	if !changed {
-		// Already running with this mode/device: just confirm.
-		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true, "mode": curMode, "device": curDevice})
+		// Already running with this mode/device: just confirm, naming the source
+		// that is actually being captured.
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true, "mode": curMode, "device": curDevice, "source": s.audioSourceSnapshot()})
 		return
 	}
 	s.stopAudio()

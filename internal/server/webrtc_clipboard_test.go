@@ -520,10 +520,13 @@ func TestRDWebRTCAudioToggle(t *testing.T) {
 	if on["enabled"] != true || on["mode"] != "speaker" || on["device"] != float64(1) {
 		t.Fatalf("audio toggle = %+v", on)
 	}
-	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(`{"type":"audio","enabled":true,"mode":"speaker","device":1}`)); err != nil {
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(`{"type":"audio","enabled":true,"mode":"speaker","device":1,"source":"alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"}`)); err != nil {
 		t.Fatalf("agent write: %v", err)
 	}
-	if confirmed := readJSON(conn, "audio", 3*time.Second); confirmed["enabled"] != true {
+	if confirmed := readJSON(conn, "audio", 3*time.Second); confirmed["enabled"] != true ||
+		confirmed["source"] != "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor" {
+		// The resolved PulseAudio source must reach the operator: "speaker" on
+		// Linux means a specific .monitor source, not just a mode flag.
 		t.Fatalf("confirmation = %+v", confirmed)
 	}
 	send(`{"type":"audio"}`)

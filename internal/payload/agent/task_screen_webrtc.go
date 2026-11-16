@@ -159,12 +159,14 @@ type agentWebRTCSession struct {
 	clipLastHash string
 
 	// Live audio: the Opus track is always negotiated so enabling audio later
-	// needs no renegotiation; audioCmd is the capture process, when running.
-	audioMu    sync.Mutex
-	audioTrack *webrtc.TrackLocalStaticRTP
-	audioCmd   *exec.Cmd
-	audioConn  *net.UDPConn
-	audioGen   int
+	// needs no renegotiation; audioCmd is the capture process, when running,
+	// and audioSource is the resolved input name (for the operator's report).
+	audioMu     sync.Mutex
+	audioTrack  *webrtc.TrackLocalStaticRTP
+	audioCmd    *exec.Cmd
+	audioConn   *net.UDPConn
+	audioSource string
+	audioGen    int
 
 	// Region (change-only tiles) owns the capture while enabled; regionGen
 	// retires an old loop when the mode is toggled, and regionReset forces the
