@@ -162,6 +162,15 @@ export function useWebRTCLive(agentId: string) {
   // Change-only capture (mpdecimate): suppress unchanged frames, still send
   // every changed one. Toggling restarts the agent's pipeline.
   const [differential, setDifferential] = useState(false);
+  // Live audio: the Opus track is always negotiated; this flag starts/stops the
+  // target's capture. The element starts muted because browsers block autoplay
+  // with sound until the operator interacts.
+  const [audioOn, setAudioOn] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(true);
+  const [audioVolume, setAudioVolume] = useState(0.7);
+  const [audioError, setAudioError] = useState("");
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const pendingAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteInputError = useCallback((reason: string) => {
     setInputError(reason);
@@ -234,6 +243,11 @@ export function useWebRTCLive(agentId: string) {
     if (video) {
       video.srcObject = null;
     }
+    const audio = audioRef.current;
+    if (audio) {
+      audio.srcObject = null;
+    }
+    pendingAudioTrackRef.current = null;
     pendingLocalCandidatesRef.current = [];
     pendingRemoteCandidatesRef.current = [];
   }, [clearAnswerTimer]);
@@ -327,6 +341,31 @@ export function useWebRTCLive(agentId: string) {
     sendSignal({ type: "differential", enabled });
   }, [sendSignal]);
 
+  const toggleAudio = useCallback((enabled: boolean) => {
+    setAudioError("");
+    setAudioOn(enabled);
+    if (enabled) setAudioMuted(false);
+    sendSignal({ type: "audio", enabled });
+  }, [sendSignal]);
+
+  // Keep the audio element's volume/mute in sync with the controls.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.volume = audioVolume;
+    el.muted = audioMuted;
+  }, [audioVolume, audioMuted]);
+
+  // A track can arrive before the audio element is mounted; attach it then.
+  useEffect(() => {
+    const el = audioRef.current;
+    const track = pendingAudioTrackRef.current;
+    if (!el || !track) return;
+    el.srcObject = new MediaStream([track]);
+    pendingAudioTrackRef.current = null;
+    void el.play().catch(() => {});
+  }, [audioOn]);
+
   // The browser clipboard API needs a secure context and a user gesture. When
   // it is unavailable (plain-HTTP deployment, permission denied) the console
   // reports it and the manual paste box stays usable.
@@ -358,7 +397,7 @@ export function useWebRTCLive(agentId: string) {
   }, [sendSignal]);
 
   const start = useCallback(
-    async (presetValue: string, display = 0, differentialMode = false) => {
+    async (presetValue: string, display = 0, differentialMode = false, audioEnabled = false) => {
       if (!agentId) return;
       if (typeof RTCPeerConnection === "undefined" || typeof WebSocket === "undefined") {
         fail(t("agents.rdp_live_unsupported"));
@@ -373,6 +412,7 @@ export function useWebRTCLive(agentId: string) {
       setLiveHeight(preset.height);
       setSelectedDisplay(display);
       setDifferential(differentialMode);
+      setAudioOn(audioEnabled);
       setError("");
       setStatus("connecting");
 
@@ -386,6 +426,7 @@ export function useWebRTCLive(agentId: string) {
           encoder: "auto",
           display,
           differential: differentialMode,
+          audio: audioEnabled,
         });
       } catch (err) {
         setStatus("error");
@@ -411,8 +452,21 @@ export function useWebRTCLive(agentId: string) {
       activeRef.current = true;
       setActive(true);
       pc.addTransceiver("video", { direction: "recvonly" });
+      // The agent always negotiates an audio m-line, so the console can turn
+      // audio on later without a renegotiation round trip.
+      pc.addTransceiver("audio", { direction: "recvonly" });
 
       pc.ontrack = (event) => {
+        if (event.track.kind === "audio") {
+          const el = audioRef.current;
+          if (el) {
+            el.srcObject = new MediaStream([event.track]);
+            void el.play().catch(() => {});
+          } else {
+            pendingAudioTrackRef.current = event.track;
+          }
+          return;
+        }
         const video = videoRef.current;
         if (!video) return;
         video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
@@ -550,6 +604,10 @@ export function useWebRTCLive(agentId: string) {
           case "differential":
             if (typeof message.enabled === "boolean") setDifferential(message.enabled);
             break;
+          case "audio":
+            if (typeof message.enabled === "boolean") setAudioOn(message.enabled);
+            setAudioError(typeof message.reason === "string" ? message.reason : "");
+            break;
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -623,6 +681,14 @@ export function useWebRTCLive(agentId: string) {
     releaseControl,
     differential,
     toggleDifferential,
+    audioOn,
+    audioMuted,
+    audioVolume,
+    audioError,
+    audioRef,
+    toggleAudio,
+    setAudioMuted,
+    setAudioVolume,
     displays,
     selectedDisplay,
     selectDisplay,

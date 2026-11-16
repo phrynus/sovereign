@@ -1,0 +1,216 @@
+package main
+
+import (
+	"fmt"
+	"net"
+	"os/exec"
+	"runtime"
+	"strings"
+
+	"github.com/pion/rtp"
+)
+
+const (
+	audioSampleRate = 48000
+	// audioBitrateKbps is voice-grade mono Opus. The desktop video stream is
+	// the bandwidth consumer; audio is for "what is being said / played", not
+	// for music production.
+	audioBitrateKbps = 32
+	audioFrameMs     = 20
+)
+
+// buildAudioFFmpegArgs builds the capture → Opus → RTP chain that feeds the
+// WebRTC audio track. The input side is the only platform-specific part; the
+// encoder settings are fixed so the browser's Opus decoder (48 kHz mono,
+// 20 ms frames) is always satisfied.
+func buildAudioFFmpegArgs(rtpPort int, device string) ([]string, error) {
+	if rtpPort <= 0 || rtpPort > 65535 {
+		return nil, fmt.Errorf("invalid RTP port")
+	}
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
+	switch runtime.GOOS {
+	case "windows":
+		device = strings.TrimSpace(device)
+		if device == "" {
+			return nil, fmt.Errorf("no audio capture device found")
+		}
+		// dshow takes the device name verbatim: "audio=<name>".
+		args = append(args, "-f", "dshow", "-i", "audio="+device)
+	case "linux":
+		// PulseAudio is the default on desktop distributions; ALSA-only hosts
+		// answer an explicit error instead of silence.
+		args = append(args, "-f", "pulse", "-i", "default")
+	case "darwin":
+		args = append(args, "-f", "avfoundation", "-i", ":0")
+	default:
+		return nil, fmt.Errorf("unsupported platform %s", runtime.GOOS)
+	}
+	args = append(args,
+		"-c:a", "libopus",
+		"-b:a", fmt.Sprintf("%dk", audioBitrateKbps),
+		"-ar", fmt.Sprintf("%d", audioSampleRate),
+		"-ac", "1",
+		"-application", "lowdelay",
+		"-frame_duration", fmt.Sprintf("%d", audioFrameMs),
+		"-f", "rtp",
+		fmt.Sprintf("rtp://127.0.0.1:%d", rtpPort),
+	)
+	return args, nil
+}
+
+// parseDShowAudioDevices extracts audio capture devices from
+// `ffmpeg -list_devices true -f dshow -i dummy`. ffmpeg prints one quoted name
+// per device followed by "(audio)" or "(video)", plus an "@device..." alias
+// line that must not be mistaken for a name.
+func parseDShowAudioDevices(output string) []string {
+	var devices []string
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, "(audio)") {
+			continue
+		}
+		start := strings.Index(line, "\"")
+		end := strings.LastIndex(line, "\"")
+		if start < 0 || end <= start {
+			continue
+		}
+		name := strings.TrimSpace(line[start+1 : end])
+		if name == "" || strings.HasPrefix(name, "@device") {
+			continue
+		}
+		devices = append(devices, name)
+	}
+	return devices
+}
+
+// listDShowAudioDevices asks ffmpeg for the installed DirectShow devices.
+func listDShowAudioDevices(ffmpeg string) []string {
+	out, _ := exec.Command(ffmpeg,
+		"-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy").CombinedOutput()
+	return parseDShowAudioDevices(string(out))
+}
+
+// startAudioPipeline starts the capture→Opus→RTP process and pipes it into the
+// existing audio track. The track is added to the peer connection whether or not
+// audio is enabled, so toggling it later needs no renegotiation.
+func (s *agentWebRTCSession) startAudioPipeline() error {
+	if s.audioTrack == nil {
+		return fmt.Errorf("audio track is not initialized")
+	}
+	if s.ctx.Err() != nil {
+		return fmt.Errorf("session is already closed")
+	}
+	s.audioMu.Lock()
+	if s.audioCmd != nil {
+		s.audioMu.Unlock()
+		return nil // already running
+	}
+	s.audioMu.Unlock()
+
+	device := ""
+	if runtime.GOOS == "windows" {
+		devices := listDShowAudioDevices(s.ffmpeg)
+		if len(devices) == 0 {
+			return fmt.Errorf("no audio capture device found")
+		}
+		device = devices[0]
+	}
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		return fmt.Errorf("audio RTP listener: %w", err)
+	}
+	args, err := buildAudioFFmpegArgs(conn.LocalAddr().(*net.UDPAddr).Port, device)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	cmd := exec.CommandContext(s.ctx, s.ffmpeg, args...)
+	applyHideWindow(cmd)
+	stderr := &cappedBuffer{max: 4096}
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("audio ffmpeg start: %w", err)
+	}
+
+	s.audioMu.Lock()
+	s.audioCmd = cmd
+	s.audioConn = conn
+	gen := s.audioGen
+	s.audioMu.Unlock()
+
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, _, readErr := conn.ReadFromUDP(buf)
+			if readErr != nil {
+				return
+			}
+			var pkt rtp.Packet
+			if err := pkt.Unmarshal(buf[:n]); err != nil {
+				continue
+			}
+			if err := s.audioTrack.WriteRTP(&pkt); err != nil {
+				return
+			}
+		}
+	}()
+	go func() {
+		waitErr := cmd.Wait()
+		s.audioMu.Lock()
+		stale := s.audioGen != gen
+		s.audioMu.Unlock()
+		if stale || s.ctx.Err() != nil {
+			return
+		}
+		reason := strings.TrimSpace(stderr.String())
+		if reason == "" && waitErr != nil {
+			reason = waitErr.Error()
+		}
+		if reason == "" {
+			reason = "audio capture exited"
+		}
+		if len(reason) > 300 {
+			reason = reason[:300]
+		}
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "reason": reason})
+	}()
+
+	_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true})
+	return nil
+}
+
+// stopAudio kills the capture process and its RTP sink without touching video.
+func (s *agentWebRTCSession) stopAudio() {
+	s.audioMu.Lock()
+	s.audioGen++
+	cmd := s.audioCmd
+	conn := s.audioConn
+	s.audioCmd = nil
+	s.audioConn = nil
+	s.audioMu.Unlock()
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+}
+
+// setAudio enables or disables live audio. Video keeps running in both cases.
+func (s *agentWebRTCSession) setAudio(enabled bool) {
+	s.settingsMu.Lock()
+	changed := s.settings.Audio != enabled
+	s.settings.Audio = enabled
+	s.settingsMu.Unlock()
+	if !changed {
+		return
+	}
+	if !enabled {
+		s.stopAudio()
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false})
+		return
+	}
+	if err := s.startAudioPipeline(); err != nil {
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "reason": err.Error()})
+	}
+}

@@ -28339,6 +28339,8 @@ export interface operations {
                     display?: number;
                     /** @description Suppress unchanged frames (mpdecimate + vfr). Measured on synthetic 1280x720@30 content: a static desktop encodes one frame instead of 360 (-93.7% bytes), while moving content keeps all 360 frames (-0.1%). */
                     differential?: boolean;
+                    /** @description Stream the target's microphone as Opus (48 kHz mono, 20 ms frames) on the same peer connection. The audio m-line is always negotiated; this flag starts the capture. Measured: 2 s of real capture delivered 100 RTP packets / 6,720 bytes (about 27 kbps). */
+                    audio?: boolean;
                 };
             };
         };

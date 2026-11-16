@@ -86,6 +86,9 @@ type webrtcStartOptions struct {
 	// static desktop costs one keyframe instead of a full frame rate. Changed
 	// frames are never dropped (measured: 360/360 kept on moving content).
 	Differential bool `json:"differential"`
+	// Audio streams the target's microphone as Opus alongside the video. The
+	// track is negotiated with the session; the flag controls capture.
+	Audio bool `json:"audio"`
 }
 
 // webrtcIceServer mirrors the browser RTCIceServer shape and Pion's
@@ -673,6 +676,7 @@ type webrtcStartRequest struct {
 	Encoder      string `json:"encoder"`
 	Display      int    `json:"display"`
 	Differential bool   `json:"differential"`
+	Audio        bool   `json:"audio"`
 }
 
 func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
@@ -684,6 +688,7 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 		Encoder:      strings.ToLower(strings.TrimSpace(req.Encoder)),
 		Display:      req.Display,
 		Differential: req.Differential,
+		Audio:        req.Audio,
 	}
 	if opts.Display < 0 || opts.Display > MaxWebRTCDisplayIndex {
 		return opts, fmt.Errorf("display must be 0 (all displays) to %d", MaxWebRTCDisplayIndex)
@@ -959,6 +964,13 @@ func (s *Server) allowDifferentialToggle(operatorID, agentID string) bool {
 	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
 }
 
+// allowAudioToggle throttles live-audio switches: each one starts or stops a
+// capture process on the target.
+func (s *Server) allowAudioToggle(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":audio"
+	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
+}
+
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1230,6 +1242,33 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			if !sess.sendRawToAgent(forward) {
 				return
 			}
+		case "audio":
+			// Live audio capture on the target. Same policy as the other
+			// process-changing toggles: validated, rate-limited, forwarded.
+			if msg.Enabled == nil {
+				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "enabled is required"})
+				continue
+			}
+			if !s.allowAudioToggle(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "audio toggle rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "audio", "enabled": *msg.Enabled})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			state := "off"
+			if *msg.Enabled {
+				state = "on"
+			}
+			s.LogAuditRecord(c, "remote_audio", "agent", sess.AgentID, "live audio capture "+state, true, nil)
 		case "control":
 			switch strings.ToLower(strings.TrimSpace(msg.Action)) {
 			case "take":
@@ -1375,6 +1414,12 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 		case "differential":
 			// Confirmation of the change-only mode (advisory, tiny frame).
 			if len(raw) > 512 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "audio":
+			// Audio on/off confirmation and failure reason (advisory, bounded).
+			if len(raw) > 1024 {
 				continue
 			}
 			sess.sendRawToOperator(raw)

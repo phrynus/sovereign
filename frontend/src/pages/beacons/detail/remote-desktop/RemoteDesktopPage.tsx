@@ -16,6 +16,7 @@ import RdpClipboard from "./components/RdpClipboard";
 import RdpMessage from "./components/RdpMessage";
 import RdpKeys from "./components/RdpKeys";
 import RdpControl from "./components/RdpControl";
+import RdpAudio from "./components/RdpAudio";
 
 export default function RemoteDesktopPage() {
   const { t } = useI18n();
@@ -101,6 +102,17 @@ export default function RemoteDesktopPage() {
               />
               <RdpMessage t={t} status={rdp.messageStatus} onSend={rdp.sendMessage} />
               <RdpKeys t={t} enabled={rdp.keysOn} feed={rdp.keysFeed} onToggle={rdp.toggleKeys} />
+              <RdpAudio
+                t={t}
+                enabled={rdp.audioOn}
+                muted={rdp.audioMuted}
+                volume={rdp.audioVolume}
+                error={rdp.audioError}
+                audioRef={rdp.audioRef}
+                onToggle={rdp.toggleAudio}
+                onMute={rdp.setAudioMuted}
+                onVolume={rdp.setAudioVolume}
+              />
               <div className="mt-2">
                 <RdpControl
                   t={t}

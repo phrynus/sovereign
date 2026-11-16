@@ -368,6 +368,146 @@ func TestWebRTCStartCarriesDifferential(t *testing.T) {
 	}
 }
 
+// TestWebRTCStartCarriesAudio proves the audio flag survives start → task
+// payload, and that the toggle is relayed with a missing flag refused.
+func TestWebRTCStartCarriesAudio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	s.cfg.WebRTC.Enabled = true
+	s.cfg.WebRTC.TurnAddr = "127.0.0.1:0"
+	s.cfg.WebRTC.PublicIP = "127.0.0.1"
+	forgecrypto.InitLootEncryption(testStorageKeyHex)
+	agent := db.Implant{ID: "rd-audio-start", TenantID: 1, Hostname: "audio", Status: "online", LastSeen: time.Now()}
+	if err := s.db.Create(&agent).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	engine := gin.New()
+	engine.POST("/api/agents/:id/webrtc/start", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleWebRTCStart(c)
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/rd-audio-start/webrtc/start",
+		strings.NewReader(`{"width":1280,"height":720,"fps":30,"audio":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start = %d: %s", w.Code, w.Body.String())
+	}
+	t.Cleanup(func() {
+		if sess := s.webRTCHub().byAgentSession("rd-audio-start"); sess != nil {
+			sess.end("test")
+		}
+	})
+
+	var task db.Task
+	if err := s.db.Where("agent_id = ? AND type = ?", "rd-audio-start", "screen_webrtc_start").First(&task).Error; err != nil {
+		t.Fatalf("load start task: %v", err)
+	}
+	var payload struct {
+		Settings struct {
+			Audio bool `json:"audio"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal([]byte(task.Data), &payload); err != nil {
+		t.Fatalf("task data: %v (%s)", err, task.Data)
+	}
+	if !payload.Settings.Audio {
+		t.Fatal("audio flag did not survive into the agent payload")
+	}
+}
+
+// TestRDWebRTCAudioToggle drives the live audio switch: the request reaches the
+// agent, the agent's confirmation reaches the operator, and a missing flag is
+// refused instead of starting a capture process.
+func TestRDWebRTCAudioToggle(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-audio", TenantID: 1, Hostname: "audio", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-audio", 7, 1, webrtcStartOptions{Audio: true}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-audio", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"audio","enabled":true}`)
+	on := readJSON(agentPeer, "audio", 3*time.Second)
+	if on["enabled"] != true {
+		t.Fatalf("audio toggle = %+v", on)
+	}
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(`{"type":"audio","enabled":true}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	if confirmed := readJSON(conn, "audio", 3*time.Second); confirmed["enabled"] != true {
+		t.Fatalf("confirmation = %+v", confirmed)
+	}
+	send(`{"type":"audio"}`)
+	if rejected := readJSON(conn, "audio", 3*time.Second); !strings.Contains(fmt.Sprint(rejected["reason"]), "enabled") {
+		t.Fatalf("missing-flag refusal = %+v", rejected)
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).
