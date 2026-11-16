@@ -85,6 +85,13 @@ export interface ClipboardHistoryItem {
   at: string;
 }
 
+/** One selectable capture device, as enumerated by the agent. */
+export interface AudioDeviceInfo {
+  index: number;
+  name: string;
+  loopback: boolean;
+}
+
 /** One changed 64 px block of a region-mode frame (JPEG, base64). */
 export interface RegionTile {
   x: number;
@@ -242,6 +249,9 @@ export function useWebRTCLive(agentId: string) {
   // The capture source the agent actually resolved (a dshow device or a
   // PulseAudio source name), so "speaker" is verifiable and not just a flag.
   const [audioSource, setAudioSource] = useState("");
+  // Device names the agent enumerated for the current mode; empty until the
+  // first list arrives (then the console offers names instead of an index).
+  const [audioDevices, setAudioDevices] = useState<AudioDeviceInfo[]>([]);
   // Region mode replaces H.264 video with change-only tiles drawn on a canvas:
   // bandwidth tracks the changed area instead of the frame size, and no media
   // plane is used at all (useful on TCP-only or ffmpeg-less targets).
@@ -437,7 +447,14 @@ export function useWebRTCLive(agentId: string) {
     setAudioMode(mode);
     setAudioDevice(device);
     if (audioOn) sendSignal({ type: "audio", enabled: true, mode, device });
+    // The candidate list is per mode (microphones vs loopback devices), so a
+    // mode change must ask the target again.
+    sendSignal({ type: "audio_devices", mode });
   }, [sendSignal, audioOn]);
+
+  const requestAudioDevices = useCallback((mode: "mic" | "speaker") => {
+    sendSignal({ type: "audio_devices", mode });
+  }, [sendSignal]);
 
   const toggleRegion = useCallback((enabled: boolean) => {
     setRegionError("");
@@ -620,6 +637,9 @@ export function useWebRTCLive(agentId: string) {
               ws.send(JSON.stringify({ type: "ice", candidate }));
             }
             pendingLocalCandidatesRef.current = [];
+            // Ask for the target's capture devices so the audio strip can show
+            // names (a macOS loopback index is otherwise undiscoverable).
+            ws.send(JSON.stringify({ type: "audio_devices", mode: audioMode }));
             clearAnswerTimer();
             answerTimerRef.current = setTimeout(() => {
               if (activeRef.current && pc.remoteDescription === null) {
@@ -737,6 +757,25 @@ export function useWebRTCLive(agentId: string) {
             if (typeof message.source === "string" && message.source) setAudioSource(message.source);
             if (message.enabled === false) setAudioSource("");
             break;
+          case "audio_devices": {
+            const items = Array.isArray(message.items) ? message.items : [];
+            setAudioDevices(
+              items
+                .filter((item): item is AudioDeviceInfo =>
+                  typeof item === "object" && item !== null &&
+                  typeof (item as AudioDeviceInfo).index === "number" &&
+                  typeof (item as AudioDeviceInfo).name === "string")
+                .map((item) => ({
+                  index: Number(item.index),
+                  name: String(item.name),
+                  loopback: item.loopback === true,
+                })),
+            );
+            if (typeof message.reason === "string" && message.reason) {
+              setAudioError(message.reason);
+            }
+            break;
+          }
           case "region":
             if (typeof message.enabled === "boolean") setRegionOn(message.enabled);
             setRegionError(typeof message.reason === "string" ? message.reason : "");
@@ -769,7 +808,7 @@ export function useWebRTCLive(agentId: string) {
         }
       };
     },
-    [agentId, clearAnswerTimer, fail, noteInputError, sendSignal, stop, t],
+    [agentId, audioMode, audioDevice, clearAnswerTimer, fail, noteInputError, sendSignal, stop, t],
   );
 
   const markPlaying = useCallback(() => {
@@ -802,6 +841,7 @@ export function useWebRTCLive(agentId: string) {
     setKeysFeed("");
     setControl(null);
     setAudioSource("");
+    setAudioDevices([]);
     setRegionOn(false);
     setTileFrame(null);
     setRegionError("");
@@ -841,6 +881,8 @@ export function useWebRTCLive(agentId: string) {
     audioMode,
     audioDevice,
     audioSource,
+    audioDevices,
+    requestAudioDevices,
     selectAudioSource,
     regionOn,
     regionError,

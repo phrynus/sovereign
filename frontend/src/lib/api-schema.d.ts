@@ -28346,7 +28346,7 @@ export interface operations {
                      * @enum {string}
                      */
                     audio_mode?: "mic" | "speaker";
-                    /** @description Index among the devices of the selected mode (0 = first). On Linux the index selects among PulseAudio sources: for speaker only ".monitor" sources are offered, and mic index 0 is the first real source (PulseAudio "default" when the list is unavailable). */
+                    /** @description Index among the devices of the selected mode (0 = first). On Linux the index selects among PulseAudio sources: for speaker only ".monitor" sources are offered, and mic index 0 is the first real source (PulseAudio "default" when the list is unavailable). On macOS it is the AVFoundation audio index: speaker requires a virtual loopback device (BlackHole) and is refused with an actionable error when none exists. The console asks the agent for `audio_devices` (a signal, not an HTTP route) to render the names. */
                     audio_device?: number;
                     /** @description Stream change-only 64 px tiles over the operator socket instead of H.264 video. Only changed blocks are encoded, so bandwidth tracks the changed area; measured on synthetic 1280x720 content, a 120x40 moving box cost 4 tiles (~4.2 KB/tick, ~41 KiB/s at 10 fps) versus a full frame (~20.7 KB/tick, ~202 KiB/s), and a static screen sends nothing after the first frame. Uses no media plane, so it works on TCP-only or ffmpeg-less targets. */
                     region?: boolean;

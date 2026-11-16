@@ -85,6 +85,17 @@ func TestBuildAudioFFmpegArgsForPlatforms(t *testing.T) {
 	if err != nil || !strings.Contains(strings.Join(darwin, " "), "-f avfoundation -i :0") {
 		t.Fatalf("darwin build = %v err=%v", darwin, err)
 	}
+	// A loopback device is addressed by its AVFoundation audio index.
+	darwinLoopback, err := buildAudioFFmpegArgsFor("darwin", 41000, "2")
+	if err != nil || !strings.Contains(strings.Join(darwinLoopback, " "), "-f avfoundation -i :2") {
+		t.Fatalf("darwin loopback build = %v err=%v", darwinLoopback, err)
+	}
+	// A non-numeric index must not become an ffmpeg option.
+	for _, bad := range []string{"BlackHole 2ch", "-1", "1:0"} {
+		if _, err := buildAudioFFmpegArgsFor("darwin", 41000, bad); err == nil {
+			t.Fatalf("darwin accepted %q as an audio index", bad)
+		}
+	}
 
 	if _, err := buildAudioFFmpegArgsFor("plan9", 41000, ""); err == nil {
 		t.Fatal("an unsupported platform was accepted")

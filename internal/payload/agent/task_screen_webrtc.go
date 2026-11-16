@@ -864,6 +864,16 @@ func (s *agentWebRTCSession) readLoop() {
 				continue
 			}
 			s.setAudio(*msg.Enabled, msg.Mode, msg.Device)
+		case "audio_devices":
+			mode := msg.Mode
+			go func() {
+				devices, err := s.audioDevicesForMode(mode)
+				if err != nil {
+					_ = s.sendJSON(map[string]any{"type": "audio_devices", "mode": mode, "items": []any{}, "reason": err.Error()})
+					return
+				}
+				_ = s.sendJSON(map[string]any{"type": "audio_devices", "mode": mode, "items": devices})
+			}()
 		case "region":
 			if msg.Enabled == nil {
 				continue

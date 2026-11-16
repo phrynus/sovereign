@@ -5,6 +5,7 @@ import (
 	"net"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/pion/rtp"
@@ -30,7 +31,8 @@ func buildAudioFFmpegArgs(rtpPort int, device string) ([]string, error) {
 // buildAudioFFmpegArgsFor is buildAudioFFmpegArgs with the platform injected,
 // so every input path is testable on any host. On Linux `device` is a
 // PulseAudio SOURCE name: a ".monitor" source captures what the machine plays,
-// an empty name means the default source.
+// an empty name means the default source. On macOS `device` is the
+// AVFoundation AUDIO index (the number inside ":N"); empty means 0.
 func buildAudioFFmpegArgsFor(goos string, rtpPort int, device string) ([]string, error) {
 	if rtpPort <= 0 || rtpPort > 65535 {
 		return nil, fmt.Errorf("invalid RTP port")
@@ -54,7 +56,18 @@ func buildAudioFFmpegArgsFor(goos string, rtpPort int, device string) ([]string,
 		}
 		args = append(args, "-f", "pulse", "-i", source)
 	case "darwin":
-		args = append(args, "-f", "avfoundation", "-i", ":0")
+		// avfoundation addresses audio devices by index in an audio-only space,
+		// i.e. ":2". A non-numeric "device" would become an ffmpeg option, so it
+		// is refused here rather than passed through.
+		index := strings.TrimSpace(device)
+		if index == "" {
+			index = "0"
+		}
+		n, convErr := strconv.Atoi(index)
+		if convErr != nil || n < 0 {
+			return nil, fmt.Errorf("invalid AVFoundation audio index %q", device)
+		}
+		args = append(args, "-f", "avfoundation", "-i", ":"+strconv.Itoa(n))
 	default:
 		return nil, fmt.Errorf("unsupported platform %s", goos)
 	}
@@ -180,6 +193,221 @@ func selectAudioDevice(devices []string, mode string, index int) (string, error)
 		return "", fmt.Errorf("audio device %d is not available (%d %s device(s) found)", index, len(candidates), mode)
 	}
 	return candidates[index], nil
+}
+
+// avAudioDevice is one AVFoundation audio input as ffmpeg numbers it. The
+// index is the number inside ":N" — audio devices have their own numbering,
+// independent of video devices.
+type avAudioDevice struct {
+	Index int    `json:"index"`
+	Name  string `json:"name"`
+}
+
+// darwinLoopbackHints are the virtual audio drivers macOS uses to expose what
+// the machine plays. BlackHole (Existential Audio) is the common one;
+// Soundflower and Loopback are the older alternatives.
+var darwinLoopbackHints = []string{
+	"blackhole",
+	"soundflower",
+	"existential audio",
+	"loopback",
+	"virtual audio",
+}
+
+// isDarwinLoopbackDevice reports whether an AVFoundation device is a virtual
+// loopback rather than a microphone.
+func isDarwinLoopbackDevice(name string) bool {
+	lower := strings.ToLower(name)
+	for _, hint := range darwinLoopbackHints {
+		if strings.Contains(lower, hint) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseAVFoundationAudioDevices extracts the audio half of
+// `ffmpeg -f avfoundation -list_devices true -i ""`. ffmpeg prints a video
+// section and then an audio section; each device line looks like
+//
+//	[AVFoundation indev @ 0x7f...] [1] BlackHole 2ch
+//
+// so the device index is the LAST bracketed number on the line.
+func parseAVFoundationAudioDevices(output string) []avAudioDevice {
+	var devices []avAudioDevice
+	inAudio := false
+	for _, line := range strings.Split(output, "\n") {
+		switch {
+		case strings.Contains(line, "AVFoundation audio devices:"):
+			inAudio = true
+			continue
+		case strings.Contains(line, "AVFoundation video devices:"):
+			inAudio = false
+			continue
+		}
+		if !inAudio {
+			continue
+		}
+		open := strings.LastIndex(line, "[")
+		closeIdx := strings.LastIndex(line, "]")
+		if open < 0 || closeIdx <= open {
+			continue
+		}
+		index, err := strconv.Atoi(strings.TrimSpace(line[open+1 : closeIdx]))
+		if err != nil || index < 0 {
+			continue
+		}
+		name := strings.TrimSpace(line[closeIdx+1:])
+		if name == "" {
+			continue
+		}
+		devices = append(devices, avAudioDevice{Index: index, Name: name})
+	}
+	return devices
+}
+
+// listAVFoundationDevices asks ffmpeg for the installed AVFoundation devices.
+// ffmpeg exits non-zero for -list_devices by design, so the output is parsed
+// regardless of the exit status.
+func listAVFoundationDevices(ffmpeg string) ([]avAudioDevice, error) {
+	out, _ := exec.Command(ffmpeg,
+		"-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", "").CombinedOutput()
+	devices := parseAVFoundationAudioDevices(string(out))
+	if len(devices) == 0 {
+		detail := strings.TrimSpace(string(out))
+		if len(detail) > 200 {
+			detail = detail[:200]
+		}
+		if detail == "" {
+			return nil, fmt.Errorf("ffmpeg reported no AVFoundation audio devices")
+		}
+		return nil, fmt.Errorf("ffmpeg reported no AVFoundation audio devices: %s", detail)
+	}
+	return devices, nil
+}
+
+// selectAVFoundationDevice picks the device for a mode and index:
+//
+//   - "speaker" (loopback) only accepts a virtual audio device (BlackHole and
+//     friends) and fails with an actionable message when none is installed,
+//     instead of recording the room under a "speaker" label;
+//   - "mic" uses real capture devices, falling back to AVFoundation input 0
+//     when the list is empty;
+//   - an out-of-range index names how many devices that mode offers.
+func selectAVFoundationDevice(devices []avAudioDevice, mode string, index int) (avAudioDevice, error) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = AudioModeMic
+	}
+	var candidates []avAudioDevice
+	switch mode {
+	case AudioModeSpeaker:
+		for _, device := range devices {
+			if isDarwinLoopbackDevice(device.Name) {
+				candidates = append(candidates, device)
+			}
+		}
+		if len(candidates) == 0 {
+			return avAudioDevice{}, fmt.Errorf("no macOS loopback audio device found: install BlackHole (or another virtual audio device) and route the system output to it, or capture the microphone instead")
+		}
+	case AudioModeMic:
+		for _, device := range devices {
+			if !isDarwinLoopbackDevice(device.Name) {
+				candidates = append(candidates, device)
+			}
+		}
+		if len(candidates) == 0 {
+			candidates = []avAudioDevice{{Index: 0, Name: "default"}}
+		}
+	default:
+		return avAudioDevice{}, fmt.Errorf("audio mode must be mic or speaker")
+	}
+	if index < 0 || index >= len(candidates) {
+		return avAudioDevice{}, fmt.Errorf("audio device %d is not available (%d %s device(s) found)", index, len(candidates), mode)
+	}
+	return candidates[index], nil
+}
+
+// audioDeviceInfo is one selectable capture source, as sent to the console.
+// On Windows/Linux Index is the position within the mode's filtered list (what
+// audio_device means there); on macOS it is the AVFoundation audio index.
+type audioDeviceInfo struct {
+	Index    int    `json:"index"`
+	Name     string `json:"name"`
+	Loopback bool   `json:"loopback"`
+}
+
+// audioDevicesForMode enumerates what the agent would accept for a mode, so the
+// console offers names instead of an index the operator has to guess. The
+// filtering mirrors the three selectors exactly: a listed index is always a
+// valid audio_device value for that mode.
+func (s *agentWebRTCSession) audioDevicesForMode(mode string) ([]audioDeviceInfo, error) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = AudioModeMic
+	}
+	if mode != AudioModeMic && mode != AudioModeSpeaker {
+		return nil, fmt.Errorf("audio mode must be mic or speaker")
+	}
+	include := func(loopback bool) bool { return loopback == (mode == AudioModeSpeaker) }
+
+	switch runtime.GOOS {
+	case "windows":
+		devices := listDShowAudioDevices(s.ffmpeg)
+		out := make([]audioDeviceInfo, 0, len(devices))
+		for _, name := range devices {
+			loopback := isLoopbackDevice(name)
+			if include(loopback) {
+				out = append(out, audioDeviceInfo{Index: len(out), Name: name, Loopback: loopback})
+			}
+		}
+		if len(out) == 0 && mode == AudioModeMic {
+			for _, name := range devices {
+				out = append(out, audioDeviceInfo{Index: len(out), Name: name, Loopback: isLoopbackDevice(name)})
+			}
+		}
+		return out, nil
+	case "linux":
+		sources, err := listPulseSources()
+		if err != nil {
+			if mode == AudioModeSpeaker {
+				return nil, err
+			}
+			return []audioDeviceInfo{{Index: 0, Name: "default"}}, nil
+		}
+		out := make([]audioDeviceInfo, 0, len(sources))
+		for _, name := range sources {
+			loopback := isPulseMonitorSource(name)
+			if include(loopback) {
+				out = append(out, audioDeviceInfo{Index: len(out), Name: name, Loopback: loopback})
+			}
+		}
+		if len(out) == 0 && mode == AudioModeMic {
+			out = append(out, audioDeviceInfo{Index: 0, Name: "default"})
+		}
+		return out, nil
+	case "darwin":
+		devices, err := listAVFoundationDevices(s.ffmpeg)
+		if err != nil {
+			if mode == AudioModeSpeaker {
+				return nil, err
+			}
+			return []audioDeviceInfo{{Index: 0, Name: "default"}}, nil
+		}
+		out := make([]audioDeviceInfo, 0, len(devices))
+		for _, device := range devices {
+			loopback := isDarwinLoopbackDevice(device.Name)
+			if include(loopback) {
+				out = append(out, audioDeviceInfo{Index: device.Index, Name: device.Name, Loopback: loopback})
+			}
+		}
+		if len(out) == 0 && mode == AudioModeMic {
+			out = append(out, audioDeviceInfo{Index: 0, Name: "default"})
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported platform %s", runtime.GOOS)
+	}
 }
 
 // parsePactlSources extracts source NAMES from `pactl list short sources`.
@@ -318,9 +546,20 @@ func (s *agentWebRTCSession) startAudioPipeline() error {
 		}
 		device = selected
 	case "darwin":
-		if mode == AudioModeSpeaker {
-			return fmt.Errorf("speaker loopback capture is not supported on macOS yet: install BlackHole and select it as a microphone, or capture the microphone instead")
+		devices, listErr := listAVFoundationDevices(s.ffmpeg)
+		if listErr != nil {
+			if mode == AudioModeSpeaker {
+				return listErr
+			}
+			// Microphone capture still works on AVFoundation's default input.
+			device = ""
+			break
 		}
+		selected, err := selectAVFoundationDevice(devices, mode, settings.AudioDevice)
+		if err != nil {
+			return err
+		}
+		device = strconv.Itoa(selected.Index)
 	}
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {

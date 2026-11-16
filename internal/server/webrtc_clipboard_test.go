@@ -811,6 +811,122 @@ func TestRDWebRTCRegionRelay(t *testing.T) {
 	}
 }
 
+// TestRDWebRTCAudioDevicesRelay drives the capture-device list: the console's
+// request reaches the agent with its mode, the agent's names reach the console
+// (so a macOS BlackHole index is discoverable), an invalid mode and an
+// oversized list are refused.
+func TestRDWebRTCAudioDevicesRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-adev", TenantID: 1, Hostname: "adev", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-adev", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-adev", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"audio_devices","mode":"speaker"}`)
+	request := readJSON(agentPeer, "audio_devices", 3*time.Second)
+	if request["mode"] != "speaker" {
+		t.Fatalf("relayed mode = %+v", request["mode"])
+	}
+	if _, present := request["items"]; present {
+		// A request carries no list; the answer does.
+		t.Fatalf("request carried items: %+v", request)
+	}
+
+	// The agent answers with macOS loopback names and their AVFoundation index.
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"audio_devices","mode":"speaker","items":[{"index":1,"name":"BlackHole 2ch","loopback":true}]}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	list := readJSON(conn, "audio_devices", 3*time.Second)
+	items, _ := list["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("device list = %+v", list)
+	}
+	item, _ := items[0].(map[string]any)
+	if item["name"] != "BlackHole 2ch" || item["index"] != float64(1) || item["loopback"] != true {
+		t.Fatalf("device entry = %+v", item)
+	}
+
+	// An invalid mode is refused before the agent is asked.
+	send(`{"type":"audio_devices","mode":"line"}`)
+	rejected := readJSON(conn, "audio_devices", 3*time.Second)
+	if !strings.Contains(fmt.Sprint(rejected["reason"]), "mode") {
+		t.Fatalf("mode refusal = %+v", rejected)
+	}
+
+	// An oversized list is not relayed to the browser.
+	huge := fmt.Sprintf(`{"type":"audio_devices","mode":"mic","items":[{"index":0,"name":%q,"loopback":false}]}`,
+		strings.Repeat("d", MaxAudioDevicesFrameBytes))
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(huge)); err != nil {
+		t.Fatalf("agent write huge: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	if _, raw, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("an oversized device list was relayed: %d bytes", len(raw))
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).

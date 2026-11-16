@@ -1,7 +1,8 @@
 import { memo, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Mic, MicOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
+import type { AudioDeviceInfo } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -11,6 +12,17 @@ export const DEFAULT_AUDIO_VOLUME = 0.7;
 export function clampAudioVolume(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_AUDIO_VOLUME;
   return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * Picks the device index to send after switching audio mode. The candidate
+ * list is per mode, so an index from the previous mode is usually invalid;
+ * keeping the current index when it still exists avoids resetting a deliberate
+ * choice, otherwise the first device of the new mode is used.
+ */
+export function nextDeviceForMode(devices: AudioDeviceInfo[], current: number): number {
+  const indices = devices.map((device) => device.index);
+  return indices.includes(current) ? current : (indices[0] ?? 0);
 }
 
 interface RdpAudioProps {
@@ -23,9 +35,12 @@ interface RdpAudioProps {
   device: number;
   /** The capture source the agent resolved (dshow device / PulseAudio source). */
   source: string;
+  /** Devices the agent enumerated for the current mode (names + indices). */
+  devices: AudioDeviceInfo[];
   audioRef: RefObject<HTMLAudioElement | null>;
   onToggle: (enabled: boolean) => void;
   onSource: (mode: "mic" | "speaker", device: number) => void;
+  onRefresh: (mode: "mic" | "speaker") => void;
   onMute: (muted: boolean) => void;
   onVolume: (volume: number) => void;
 }
@@ -36,7 +51,7 @@ interface RdpAudioProps {
  * unmutes. Volume is clamped before it reaches the element.
  */
 export default memo(function RdpAudio({
-  t, enabled, muted, volume, error, mode, device, source, audioRef, onToggle, onSource, onMute, onVolume,
+  t, enabled, muted, volume, error, mode, device, source, devices, audioRef, onToggle, onSource, onRefresh, onMute, onVolume,
 }: RdpAudioProps) {
   return (
     <Card className="mt-3 rounded-lg px-3 py-2 shadow-sm">
@@ -46,26 +61,56 @@ export default memo(function RdpAudio({
         <select
           className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
           value={mode}
-          onChange={(e) => onSource(e.target.value === "speaker" ? "speaker" : "mic", device)}
+          onChange={(e) => {
+            const nextMode = e.target.value === "speaker" ? "speaker" : "mic";
+            // The candidate list is per mode; when the current index does not
+            // exist in the new mode, the first available device is selected so
+            // the operator never points at a missing index.
+            onSource(nextMode, nextDeviceForMode(devices, device));
+          }}
           aria-label={t("agents.rdp_audio_source")}
           title={t("agents.rdp_audio_source")}
         >
           <option value="mic">{t("agents.rdp_audio_mic")}</option>
           <option value="speaker">{t("agents.rdp_audio_speaker")}</option>
         </select>
-        <input
-          type="number"
-          min={0}
-          max={15}
-          value={device}
-          onChange={(e) => {
-            const next = Number(e.target.value);
-            if (Number.isInteger(next) && next >= 0 && next <= 15) onSource(mode, next);
-          }}
-          className="h-7 w-14 rounded-md border border-border bg-background px-1.5 text-xs"
-          aria-label={t("agents.rdp_audio_device")}
-          title={t("agents.rdp_audio_device")}
-        />
+        {devices.length > 0 ? (
+          <select
+            className="h-7 max-w-56 rounded-md border border-border bg-background px-1.5 text-xs"
+            value={device}
+            onChange={(e) => onSource(mode, Number(e.target.value))}
+            aria-label={t("agents.rdp_audio_device")}
+            title={t("agents.rdp_audio_device")}
+          >
+            {devices.map((d) => (
+              <option key={d.index} value={d.index}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="number"
+            min={0}
+            max={15}
+            value={device}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (Number.isInteger(next) && next >= 0 && next <= 15) onSource(mode, next);
+            }}
+            className="h-7 w-14 rounded-md border border-border bg-background px-1.5 text-xs"
+            aria-label={t("agents.rdp_audio_device")}
+            title={t("agents.rdp_audio_device")}
+          />
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onRefresh(mode)}
+          title={t("agents.rdp_audio_refresh")}
+        >
+          <RefreshCw className="size-3.5" />
+        </Button>
         <Button
           variant={enabled ? "destructive" : "outline"}
           size="sm"

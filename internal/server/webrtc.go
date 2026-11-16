@@ -55,6 +55,8 @@ const (
 	// MaxWebRTCTilesFrameBytes bounds one region tile frame relayed to the
 	// browser (the agent budgets its own payload below this).
 	MaxWebRTCTilesFrameBytes = 400 * 1024
+	// MaxAudioDevicesFrameBytes bounds a relayed capture-device list.
+	MaxAudioDevicesFrameBytes = 16 * 1024
 	// MaxClipboardHistory is the bounded ring the agent keeps; the list frame
 	// carries previews only, so its size stays a few KiB.
 	MaxClipboardHistory = 20
@@ -1020,6 +1022,13 @@ func (s *Server) allowRegionToggle(operatorID, agentID string) bool {
 	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
 }
 
+// allowAudioDevices throttles capture-device enumeration: each call spawns an
+// ffmpeg/pactl probe on the target.
+func (s *Server) allowAudioDevices(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":adev"
+	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
+}
+
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1385,6 +1394,35 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			s.LogAuditRecord(c, "remote_audio", "agent", sess.AgentID,
 				fmt.Sprintf("live audio capture %s (mode=%s)", state, mode), true, nil)
+		case "audio_devices":
+			// Enumerate the target's capture devices so the console can offer
+			// names instead of an index the operator has to guess.
+			mode := strings.ToLower(strings.TrimSpace(msg.Mode))
+			if mode != "" && mode != "mic" && mode != "speaker" {
+				sess.sendToOperator(gin.H{"type": "audio_devices", "items": []any{}, "reason": "mode must be mic or speaker"})
+				continue
+			}
+			if !s.allowAudioDevices(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "audio_devices", "items": []any{}, "reason": "audio device list rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forwardPayload := gin.H{"type": "audio_devices"}
+			if mode != "" {
+				forwardPayload["mode"] = mode
+			}
+			forward, marshalErr := json.Marshal(forwardPayload)
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			s.LogAuditRecord(c, "audio_devices", "agent", sess.AgentID,
+				"capture device list requested (mode="+mode+")", true, nil)
 		case "region":
 			// Live switch to change-only tiles (or back to H.264).
 			if msg.Enabled == nil {
@@ -1564,6 +1602,13 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 		case "audio":
 			// Audio on/off confirmation and failure reason (advisory, bounded).
 			if len(raw) > 1024 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "audio_devices":
+			// Capture-device list (names + indices). Bounded: a host cannot
+			// force a large frame through the operator socket.
+			if len(raw) > MaxAudioDevicesFrameBytes {
 				continue
 			}
 			sess.sendRawToOperator(raw)

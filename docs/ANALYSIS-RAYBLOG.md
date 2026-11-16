@@ -53,8 +53,24 @@
 
 ## 未做但值得排期的
 
-- **macOS 的扬声器回环**：Windows（`virtual-audio-capturer`/立体声混音）与 Linux
-  （PulseAudio `.monitor`）已支持；macOS 需要 BlackHole 之类的虚拟声卡，目前返回明确错误。
+银狐功能对照表里的核心模块（屏幕多模式、键盘记录、实时音频、远程交谈、文件/终端/注册表/服务/进程、
+代理、搜索、浏览器数据、注入、生成）已全部覆盖。剩下的不是缺失模块，而是工程质量项：
+
+- **Linux/macOS 的设备名列表**已随本轮下发；后续可加"设备热插拔"（当前需要点一次刷新）。
+- **音频编码参数**（码率、声道）仍是固定的 32 kbps 单声道；如需"听音乐"可加高质量档位。
+
+## macOS 扬声器回环（2026-11-16）
+
+AVFoundation 的音频设备有独立编号，`-i ":N"` 中的 N 必须与 `ffmpeg -f avfoundation -list_devices`
+音频段里方括号中的数字一致。
+
+- 枚举：`ffmpeg -f avfoundation -list_devices true -i ""`，只取 `AVFoundation audio devices:` 段，
+  索引取行内**最后一个**方括号数字（前缀里也有方括号）。
+- 选择：`speaker` 只接受虚拟声卡（BlackHole/Soundflower/Loopback/"virtual audio"），没有则返回
+  "安装 BlackHole 或改录麦克风"的明确错误；`mic` 用真实输入，枚举失败时回退到 `:0`。
+- 采集：`ffmpeg -f avfoundation -i :<index>`；非数字索引直接拒绝，避免变成 ffmpeg 选项。
+- 控制台：请求 `audio_devices` 拿到设备名列表（Windows dshow / Linux PulseAudio / macOS AVFoundation），
+  下拉选择而不是猜索引，并带刷新按钮。
 
 ## Linux 扬声器回环（2026-11-16）
 

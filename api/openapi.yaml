@@ -13627,7 +13627,11 @@ paths:
                     On Linux the index selects among PulseAudio sources: for
                     speaker only ".monitor" sources are offered, and mic index
                     0 is the first real source (PulseAudio "default" when the
-                    list is unavailable).
+                    list is unavailable). On macOS it is the AVFoundation audio
+                    index: speaker requires a virtual loopback device (BlackHole)
+                    and is refused with an actionable error when none exists.
+                    The console asks the agent for `audio_devices` (a signal, not
+                    an HTTP route) to render the names.
                 region:
                   type: boolean
                   description: >
