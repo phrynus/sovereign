@@ -6357,23 +6357,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rd/{id}/frame": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Remote desktop frame */
-        get: operations["rdFrame"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/ws/operator": {
         parameters: {
             query?: never;
@@ -11006,6 +10989,30 @@ export interface paths {
         put?: never;
         /** Stop the WebRTC remote-desktop session of the agent */
         post: operations["agentWebRTCStop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who holds the exclusive remote-control lease for this beacon
+         * @description One operator at a time may inject input into a beacon. The lease is claimed by the first input event, renewed by every accepted event, and expires after 60 idle seconds. This endpoint reports the live holder.
+         */
+        get: operations["getAgentControl"];
+        put?: never;
+        /**
+         * Take or release the exclusive remote-control lease
+         * @description `action=take` transfers control immediately and is audited (it names the previous holder); `action=release` drops your own lease so the next operator may drive.
+         */
+        post: operations["agentControl"];
         delete?: never;
         options?: never;
         head?: never;
@@ -21971,26 +21978,6 @@ export interface operations {
             };
         };
     };
-    rdFrame: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     wsOperator: {
         parameters: {
             query?: never;
@@ -28390,6 +28377,74 @@ export interface operations {
         responses: {
             /** @description Session stopped */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description held */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "take" | "release";
+                };
+            };
+        };
+        responses: {
+            /** @description The new holder (or an empty holder after release) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid action */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

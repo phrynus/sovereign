@@ -382,36 +382,6 @@ func (h *RDHub) HasOperator(agentID, operatorID string) bool {
 	return ok
 }
 
-// BroadcastFrame sends a screen frame to all operators in a session.
-func (h *RDHub) BroadcastFrame(agentID string, frameData []byte) {
-	h.mu.RLock()
-	session, exists := h.sessions[agentID]
-	h.mu.RUnlock()
-	if !exists {
-		return
-	}
-
-	session.mu.RLock()
-	ops := make([]*rdOperator, 0, len(session.Operators))
-	ids := make([]string, 0, len(session.Operators))
-	for id, op := range session.Operators {
-		ops = append(ops, op)
-		ids = append(ids, id)
-	}
-	session.mu.RUnlock()
-
-	for i, op := range ops {
-		op.writeMu.Lock()
-		_ = op.conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
-		err := op.conn.WriteMessage(websocket.BinaryMessage, frameData)
-		op.writeMu.Unlock()
-		if err != nil {
-			slog.Debug("Failed to send frame", "user", ids[i], "error", err)
-			h.Leave(agentID, ids[i], op.conn)
-		}
-	}
-}
-
 // SendInput sends an input event to the agent via the beacon WebSocket.
 func (h *RDHub) SendInput(s *Server, agentID string, inputType string, data map[string]interface{}) {
 	if beacon := s.wsHub.Get(agentID); beacon != nil {
@@ -437,6 +407,61 @@ func (h *RDHub) SendInput(s *Server, agentID string, inputType string, data map[
 }
 
 // handleRDWebSocket handles operator WebSocket connections for remote desktop.
+// handleAgentControl exposes the per-agent exclusive-control lease. GET reads
+// who holds it; POST takes it explicitly (audited) or releases your own.
+func (s *Server) handleAgentControl(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	uid, ok := currentUserID(c)
+	if !ok {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	username := c.GetString("user")
+
+	if c.Request.Method == http.MethodPost {
+		var req struct {
+			Action string `json:"action"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			respondError(c, http.StatusBadRequest, "invalid json: expected {action}")
+			return
+		}
+		switch strings.ToLower(strings.TrimSpace(req.Action)) {
+		case "take":
+			prev, _ := s.controlHolderFor(id)
+			holder, _ := s.claimControl(id, uid, username, true)
+			if prev.OperatorID != 0 && prev.OperatorID != uid {
+				s.LogAuditRecord(c, "remote_control_take", "agent", id,
+					fmt.Sprintf("%s took control from %s", holder.Username, prev.Username), true, nil)
+			}
+			respond(c, gin.H{"holder": holder.Username, "you": true, "since": holder.Since.UTC()})
+		case "release":
+			s.releaseControl(id, uid)
+			s.LogAuditRecord(c, "remote_control_release", "agent", id, "control released", true, nil)
+			respond(c, gin.H{"holder": "", "you": false})
+		default:
+			respondError(c, http.StatusBadRequest, "action must be take or release")
+		}
+		return
+	}
+
+	holder, held := s.controlHolderFor(id)
+	payload := gin.H{"held": held, "you": false}
+	if held {
+		payload["holder"] = holder.Username
+		payload["since"] = holder.Since.UTC()
+		payload["expires_in_seconds"] = int(ControlLeaseTTL.Seconds() - time.Since(holder.Renewed).Seconds())
+		payload["you"] = holder.OperatorID == uid
+	}
+	respond(c, payload)
+}
+
 func (s *Server) handleRDWebSocket(c *gin.Context) {
 	// Remote desktop streams screen content and relays operator input to
 	// agents, so viewer-role users must not access it.
@@ -585,41 +610,6 @@ func (s *Server) handleRDWebSocket(c *gin.Context) {
 			"x": req.X, "y": req.Y, "key": req.Key,
 		})
 	}
-}
-
-// handleRDAPIGetFrame returns the latest screen frame for an agent (HTTP fallback).
-func (s *Server) handleRDAPIGetFrame(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	agentID := c.Param("id")
-	// Tenant scoping: frames are agent screen content — same visibility
-	// rule as any other agent read.
-	if _, ok := s.getAgentOrFail(c, agentID); !ok {
-		return
-	}
-
-	// Get frame from the frame buffer
-	frame := getFrameBuffer(agentID)
-	if frame == nil {
-		respondError(c, http.StatusNotFound, "no frame available")
-		return
-	}
-
-	c.Data(http.StatusOK, "image/png", frame)
-}
-
-// frameBuffers stores the latest screen frame for each agent.
-var (
-	frameBuffers  = make(map[string][]byte)
-	frameBufferMu sync.RWMutex
-)
-
-// getFrameBuffer returns the latest frame for an agent.
-func getFrameBuffer(agentID string) []byte {
-	frameBufferMu.RLock()
-	defer frameBufferMu.RUnlock()
-	return frameBuffers[agentID]
 }
 
 // handleRDAPIScreenshot triggers a screenshot request for an agent.

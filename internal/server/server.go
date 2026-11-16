@@ -48,6 +48,10 @@ type Server struct {
 	// silent drop is the failure this counter exists to make impossible to
 	// miss: see broadcastFanout.
 	wsSlowClientDrops atomic.Uint64
+	// controlMu guards controlLeases: one live remote-control lease per agent,
+	// so two operators cannot inject into the same desktop at once.
+	controlMu     sync.Mutex
+	controlLeases map[string]controlHolder
 	// The build-health snapshot belongs to THIS server: it describes this database's build history. A package-level cache let one
 	// test's failed builds decide another test's readiness answer, which is how a global cache turns into a flaky suite.
 	buildHealthMu     sync.Mutex

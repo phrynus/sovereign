@@ -78,6 +78,9 @@ export function useRemoteDesktop(agentId: string) {
     keysOn: liveKeysOn,
     keysFeed: liveKeysFeed,
     toggleKeys: liveToggleKeys,
+    control: liveControl,
+    takeControl: liveTakeControl,
+    releaseControl: liveReleaseControl,
     presets: livePresets,
     livePreset,
     setLivePreset,
@@ -590,5 +593,6 @@ export function useRemoteDesktop(agentId: string) {
     pasteLocalClipboard: livePasteLocalClipboard, copyClipboardToLocal: liveCopyClipboardToLocal,
     messageStatus: liveMessageStatus, sendMessage: liveSendMessage,
     keysOn: liveKeysOn, keysFeed: liveKeysFeed, toggleKeys: liveToggleKeys,
+    control: liveControl, takeControl: liveTakeControl, releaseControl: liveReleaseControl,
   };
 }

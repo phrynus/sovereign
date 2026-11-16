@@ -25,6 +25,9 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		// One download that hands over the whole exercise: summary, tasks, audit window, agents and plugins.
 		agentsRead.GET("/api/engagements/:id/bundle", s.handleEngagementBundle)
 		agentsRead.GET("/agents/:id", s.handleAgentDetail)
+		// Who currently holds the exclusive remote-control lease for this
+		// beacon. Read-only, so a viewer can see the badge without write perms.
+		agentsRead.GET("/agents/:id/control", s.handleAgentControl)
 		agentsRead.GET("/agents/:id/shell", s.handleShellPage)
 		agentsRead.GET("/agents/:id/files", s.handleFileBrowserPage)
 		agentsRead.GET("/agents/:id/screen", s.handleScreenMonitorPage)
@@ -111,6 +114,8 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 	{
 		agentCmd.POST("/command", s.handleSendCommand)
 		agentCmd.POST("/shell", s.handleSendCommand)
+		// Exclusive-control lease: take (explicit, audited) or release.
+		agentCmd.POST("/control", s.handleAgentControl)
 		agentCmd.GET("/screenshot", s.handleGetAgentScreenshot)
 		agentCmd.POST("/screenshot", s.handleRequestScreenshot)
 		agentCmd.POST("/screenshot_window", s.handleRequestScreenshotWindow)

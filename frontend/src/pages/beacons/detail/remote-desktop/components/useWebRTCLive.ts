@@ -92,6 +92,8 @@ interface SignalMessage {
   title?: string;
   status?: string;
   enabled?: boolean;
+  holder?: string;
+  you?: boolean;
 }
 
 /**
@@ -154,6 +156,9 @@ export function useWebRTCLive(agentId: string) {
   // the bounded tail of what the target typed.
   const [keysOn, setKeysOn] = useState(false);
   const [keysFeed, setKeysFeed] = useState("");
+  // Exclusive control: the agent has one controller at a time. `null` means
+  // nobody holds the lease yet (the next input claims it).
+  const [control, setControl] = useState<{ holder: string; you: boolean } | null>(null);
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteInputError = useCallback((reason: string) => {
     setInputError(reason);
@@ -304,6 +309,14 @@ export function useWebRTCLive(agentId: string) {
   const toggleKeys = useCallback((enabled: boolean) => {
     if (enabled) setKeysFeed("");
     if (!sendSignal({ type: "keys", enabled })) setKeysOn(false);
+  }, [sendSignal]);
+
+  const takeControl = useCallback(() => {
+    return sendSignal({ type: "control", action: "take" });
+  }, [sendSignal]);
+
+  const releaseControl = useCallback(() => {
+    return sendSignal({ type: "control", action: "release" });
   }, [sendSignal]);
 
   // The browser clipboard API needs a secure context and a user gesture. When
@@ -518,6 +531,11 @@ export function useWebRTCLive(agentId: string) {
               setKeysFeed((prev) => appendKeyFeed(prev, message.text as string));
             }
             break;
+          case "control": {
+            const holder = typeof message.holder === "string" ? message.holder : "";
+            setControl(holder ? { holder, you: message.you === true } : null);
+            break;
+          }
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -566,6 +584,7 @@ export function useWebRTCLive(agentId: string) {
     setMessageStatus("");
     setKeysOn(false);
     setKeysFeed("");
+    setControl(null);
   }, [agentId, cleanupLocal]);
 
   return {
@@ -585,6 +604,9 @@ export function useWebRTCLive(agentId: string) {
     keysOn,
     keysFeed,
     toggleKeys,
+    control,
+    takeControl,
+    releaseControl,
     displays,
     selectedDisplay,
     selectDisplay,

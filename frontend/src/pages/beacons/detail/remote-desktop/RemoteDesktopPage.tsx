@@ -15,6 +15,7 @@ import RdpStatusCards from "./components/RdpStatusCards";
 import RdpClipboard from "./components/RdpClipboard";
 import RdpMessage from "./components/RdpMessage";
 import RdpKeys from "./components/RdpKeys";
+import RdpControl from "./components/RdpControl";
 
 export default function RemoteDesktopPage() {
   const { t } = useI18n();
@@ -98,6 +99,14 @@ export default function RemoteDesktopPage() {
               />
               <RdpMessage t={t} status={rdp.messageStatus} onSend={rdp.sendMessage} />
               <RdpKeys t={t} enabled={rdp.keysOn} feed={rdp.keysFeed} onToggle={rdp.toggleKeys} />
+              <div className="mt-2">
+                <RdpControl
+                  t={t}
+                  control={rdp.control}
+                  onTake={() => void rdp.takeControl()}
+                  onRelease={() => void rdp.releaseControl()}
+                />
+              </div>
             </div>
           )}
         </div>

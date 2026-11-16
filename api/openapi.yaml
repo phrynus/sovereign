@@ -9071,22 +9071,6 @@ paths:
         '410':
           description: Stage token expired or already consumed
 
-  /rd/{id}/frame:
-    get:
-      tags: [Monitor]
-      summary: Remote desktop frame
-      operationId: rdFrame
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-
   /ws/operator:
     get:
       tags: [Collaboration]
@@ -13622,6 +13606,45 @@ paths:
         - {name: id, in: path, required: true, schema: {type: string}}
       responses:
         '200': {description: Session stopped}
+        '404': {description: Agent not visible to this tenant}
+  /agents/{id}/control:
+    get:
+      tags: [Agents]
+      summary: Who holds the exclusive remote-control lease for this beacon
+      description: >
+        One operator at a time may inject input into a beacon. The lease is
+        claimed by the first input event, renewed by every accepted event, and
+        expires after 60 idle seconds. This endpoint reports the live holder.
+      operationId: getAgentControl
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200': {description: held, holder, since, expires_in_seconds, you}
+        '404': {description: Agent not visible to this tenant}
+    post:
+      tags: [Agents]
+      summary: Take or release the exclusive remote-control lease
+      description: >
+        `action=take` transfers control immediately and is audited (it names the
+        previous holder); `action=release` drops your own lease so the next
+        operator may drive.
+      operationId: agentControl
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: {type: string, enum: [take, release]}
+      responses:
+        '200': {description: The new holder (or an empty holder after release)}
+        '400': {description: Invalid action}
         '404': {description: Agent not visible to this tenant}
   /ws/rd/operator:
     get:

@@ -875,6 +875,8 @@ type webrtcSignal struct {
 	Candidate json.RawMessage     `json:"candidate,omitempty"`
 	Event     *remoteInputRequest `json:"event,omitempty"`
 	Reason    string              `json:"reason,omitempty"`
+	// Action is the control-lease verb: take or release.
+	Action string `json:"action,omitempty"`
 	// Display is the monitor switch requested by the console (0 = all).
 	Display *int `json:"display,omitempty"`
 	// Clipboard payloads: text is the value, enabled toggles change streaming.
@@ -985,6 +987,16 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 	} else {
 		sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
 	}
+	// Tell the console who currently owns the beacon, so the badge is right on
+	// the first frame instead of after the first rejected click.
+	if holder, held := s.controlHolderFor(sess.AgentID); held {
+		sess.sendToOperator(gin.H{
+			"type":   "control",
+			"holder": holder.Username,
+			"you":    holder.OperatorID == uid,
+			"since":  holder.Since.UTC(),
+		})
+	}
 	s.LogAuditRecord(c, "webrtc_open", "agent", sess.AgentID, "WebRTC operator stream opened ("+sess.ID+")", true, nil)
 	defer func() {
 		sess.end("operator_closed")
@@ -1055,6 +1067,13 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				sess.sendToOperator(gin.H{"type": "input_rejected", "error": err.Error()})
 				continue
 			}
+			// Exclusive control: only the lease holder may inject. The lease is
+			// renewed by the event itself, so an operator who is actually
+			// driving never loses it to the TTL.
+			if holder, granted := s.claimControl(sess.AgentID, uid, c.GetString("user"), false); !granted {
+				sess.sendToOperator(gin.H{"type": "input_rejected", "error": controlConflictMessage(holder)})
+				continue
+			}
 			if !s.allowRemoteInput(strconv.FormatUint(uint64(uid), 10), sess.AgentID, event.Type) {
 				sess.sendToOperator(gin.H{"type": "input_rejected", "error": "input rate limit exceeded"})
 				continue
@@ -1093,6 +1112,11 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			text, err := sanitizeClipboardPayload(msg.Text)
 			if err != nil {
 				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": err.Error()})
+				continue
+			}
+			// A paste is typing: it requires control as much as a keystroke does.
+			if holder, granted := s.claimControl(sess.AgentID, uid, c.GetString("user"), false); !granted {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": controlConflictMessage(holder)})
 				continue
 			}
 			if !s.allowClipboardSet(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
@@ -1170,6 +1194,23 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				state = "on"
 			}
 			s.LogAuditRecord(c, "remote_keys", "agent", sess.AgentID, "live keystroke feed "+state, true, nil)
+		case "control":
+			switch strings.ToLower(strings.TrimSpace(msg.Action)) {
+			case "take":
+				prev, _ := s.controlHolderFor(sess.AgentID)
+				holder, _ := s.claimControl(sess.AgentID, uid, c.GetString("user"), true)
+				if prev.OperatorID != 0 && prev.OperatorID != uid {
+					s.LogAuditRecord(c, "remote_control_take", "agent", sess.AgentID,
+						fmt.Sprintf("%s took control from %s", holder.Username, prev.Username), true, nil)
+				}
+				sess.sendToOperator(gin.H{"type": "control", "holder": holder.Username, "you": true, "since": holder.Since.UTC()})
+			case "release":
+				s.releaseControl(sess.AgentID, uid)
+				s.LogAuditRecord(c, "remote_control_release", "agent", sess.AgentID, "control released", true, nil)
+				sess.sendToOperator(gin.H{"type": "control", "holder": "", "you": false})
+			default:
+				sess.sendToOperator(gin.H{"type": "error", "error": "control action must be take or release"})
+			}
 		case "stop":
 			sess.end("operator_stop")
 			return

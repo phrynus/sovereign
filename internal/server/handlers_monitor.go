@@ -1197,6 +1197,13 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 	// write path at line speed. pushback is reported as 429, not silently
 	// dropped, so a mis-throttled client can tell.
 	if userID, ok := currentUserID(c); ok {
+		if holder, granted := s.claimControl(id, userID, c.GetString("user"), false); !granted {
+			// Exclusive control: another operator is driving this beacon. The
+			// refusal names the holder so the operator can ask them to stop or
+			// take over explicitly (POST /agents/:id/control action=take).
+			respondError(c, http.StatusConflict, controlConflictMessage(holder))
+			return
+		}
 		if !s.allowRemoteInput(strconv.FormatUint(uint64(userID), 10), id, req.Type) {
 			respondError(c, http.StatusTooManyRequests, "remote input rate limit exceeded")
 			return

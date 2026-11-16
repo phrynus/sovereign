@@ -90,7 +90,6 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	rdRead.Use(middleware.RequirePermission(db.PermAgentsRead))
 	{
 		rdRead.GET("/ws/remote-desktop", s.handleRDWebSocket)
-		rdRead.GET("/rd/:id/frame", s.handleRDAPIGetFrame)
 	}
 	rdWrite := auth.Group("/")
 	rdWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
