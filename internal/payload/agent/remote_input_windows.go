@@ -147,6 +147,24 @@ func modVK(mod string) (uint16, bool) {
 	}
 }
 
+// mergeRemoteInputMods unions two modifier lists, keeping the first list's
+// order. VkKeyScanW reports the modifiers the active layout needs for a
+// character, and those are merged with the operator's own chord.
+func mergeRemoteInputMods(a, b []string) []string {
+	out := append([]string(nil), a...)
+	seen := make(map[string]bool, len(a)+len(b))
+	for _, mod := range a {
+		seen[mod] = true
+	}
+	for _, mod := range b {
+		if !seen[mod] {
+			seen[mod] = true
+			out = append(out, mod)
+		}
+	}
+	return out
+}
+
 // pressModifiers holds every modifier down (or releases them in reverse order)
 // so Ctrl+C arrives as one chord rather than three unrelated key presses.
 func pressModifiers(mods []string, down bool) error {

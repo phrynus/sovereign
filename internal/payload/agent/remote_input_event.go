@@ -63,18 +63,6 @@ func normalizeRemoteInputMods(mods []string) []string {
 }
 
 // mergeRemoteInputMods unions two modifier lists, keeping the first list's
-// order.
-func mergeRemoteInputMods(a, b []string) []string {
-	out := append([]string(nil), a...)
-	seen := make(map[string]bool, len(a)+len(b))
-	for _, mod := range a {
-		seen[mod] = true
-	}
-	for _, mod := range b {
-		if !seen[mod] {
-			seen[mod] = true
-			out = append(out, mod)
-		}
-	}
-	return out
-}
+// order. Only the Windows dispatcher needs it (VkKeyScanW reports the layout
+// modifiers), so it lives there: a helper used only by a build-tagged file is
+// "unused" in the Linux lint job and would fail the build.
