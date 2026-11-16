@@ -50,6 +50,8 @@ const (
 	MaxWebRTCDisplayIndex = 8
 	// MaxWebRTCClipboardBytes bounds one clipboard value in both directions.
 	MaxWebRTCClipboardBytes = 64 * 1024
+	// MaxWebRTCAudioDevice bounds the capture-device selector (per mode).
+	MaxWebRTCAudioDevice = 15
 	// MaxClipboardHistory is the bounded ring the agent keeps; the list frame
 	// carries previews only, so its size stays a few KiB.
 	MaxClipboardHistory = 20
@@ -94,6 +96,10 @@ type webrtcStartOptions struct {
 	// Audio streams the target's microphone as Opus alongside the video. The
 	// track is negotiated with the session; the flag controls capture.
 	Audio bool `json:"audio"`
+	// AudioMode is mic (default) or speaker (loopback); AudioDevice selects
+	// among the devices of that mode.
+	AudioMode   string `json:"audio_mode,omitempty"`
+	AudioDevice int    `json:"audio_device,omitempty"`
 }
 
 // webrtcIceServer mirrors the browser RTCIceServer shape and Pion's
@@ -682,6 +688,8 @@ type webrtcStartRequest struct {
 	Display      int    `json:"display"`
 	Differential bool   `json:"differential"`
 	Audio        bool   `json:"audio"`
+	AudioMode    string `json:"audio_mode"`
+	AudioDevice  int    `json:"audio_device"`
 }
 
 func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
@@ -694,6 +702,14 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 		Display:      req.Display,
 		Differential: req.Differential,
 		Audio:        req.Audio,
+		AudioMode:    strings.ToLower(strings.TrimSpace(req.AudioMode)),
+		AudioDevice:  req.AudioDevice,
+	}
+	if opts.AudioMode != "" && opts.AudioMode != "mic" && opts.AudioMode != "speaker" {
+		return opts, errors.New("audio_mode must be mic or speaker")
+	}
+	if opts.AudioDevice < 0 || opts.AudioDevice > MaxWebRTCAudioDevice {
+		return opts, fmt.Errorf("audio_device must be 0-%d", MaxWebRTCAudioDevice)
 	}
 	if opts.Display < 0 || opts.Display > MaxWebRTCDisplayIndex {
 		return opts, fmt.Errorf("display must be 0 (all displays) to %d", MaxWebRTCDisplayIndex)
@@ -904,6 +920,9 @@ type webrtcSignal struct {
 	// Limit/Index address the bounded clipboard history.
 	Limit *int `json:"limit,omitempty"`
 	Index *int `json:"index,omitempty"`
+	// Audio source selection: mode is mic|speaker, device is a 0-based index.
+	Mode   string `json:"mode,omitempty"`
+	Device *int   `json:"device,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -1314,6 +1333,15 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "enabled is required"})
 				continue
 			}
+			mode := strings.ToLower(strings.TrimSpace(msg.Mode))
+			if mode != "" && mode != "mic" && mode != "speaker" {
+				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "mode must be mic or speaker"})
+				continue
+			}
+			if msg.Device != nil && (*msg.Device < 0 || *msg.Device > MaxWebRTCAudioDevice) {
+				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "device must be 0-15"})
+				continue
+			}
 			if !s.allowAudioToggle(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
 				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "audio toggle rate limit exceeded"})
 				continue
@@ -1322,7 +1350,14 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
 				continue
 			}
-			forward, marshalErr := json.Marshal(gin.H{"type": "audio", "enabled": *msg.Enabled})
+			forwardPayload := gin.H{"type": "audio", "enabled": *msg.Enabled}
+			if mode != "" {
+				forwardPayload["mode"] = mode
+			}
+			if msg.Device != nil {
+				forwardPayload["device"] = *msg.Device
+			}
+			forward, marshalErr := json.Marshal(forwardPayload)
 			if marshalErr != nil {
 				continue
 			}
@@ -1333,7 +1368,8 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			if *msg.Enabled {
 				state = "on"
 			}
-			s.LogAuditRecord(c, "remote_audio", "agent", sess.AgentID, "live audio capture "+state, true, nil)
+			s.LogAuditRecord(c, "remote_audio", "agent", sess.AgentID,
+				fmt.Sprintf("live audio capture %s (mode=%s)", state, mode), true, nil)
 		case "control":
 			switch strings.ToLower(strings.TrimSpace(msg.Action)) {
 			case "take":

@@ -182,6 +182,8 @@ export function useWebRTCLive(agentId: string) {
   const [audioMuted, setAudioMuted] = useState(true);
   const [audioVolume, setAudioVolume] = useState(0.7);
   const [audioError, setAudioError] = useState("");
+  const [audioMode, setAudioMode] = useState<"mic" | "speaker">("mic");
+  const [audioDevice, setAudioDevice] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -359,8 +361,16 @@ export function useWebRTCLive(agentId: string) {
     setAudioError("");
     setAudioOn(enabled);
     if (enabled) setAudioMuted(false);
-    sendSignal({ type: "audio", enabled });
-  }, [sendSignal]);
+    sendSignal({ type: "audio", enabled, mode: audioMode, device: audioDevice });
+  }, [sendSignal, audioMode, audioDevice]);
+
+  // A source change while audio is running restarts only the capture process;
+  // the negotiated Opus track stays as it is.
+  const selectAudioSource = useCallback((mode: "mic" | "speaker", device: number) => {
+    setAudioMode(mode);
+    setAudioDevice(device);
+    if (audioOn) sendSignal({ type: "audio", enabled: true, mode, device });
+  }, [sendSignal, audioOn]);
 
   // Keep the audio element's volume/mute in sync with the controls.
   useEffect(() => {
@@ -449,6 +459,8 @@ export function useWebRTCLive(agentId: string) {
           display,
           differential: differentialMode,
           audio: audioEnabled,
+          audio_mode: audioMode,
+          audio_device: audioDevice,
         });
       } catch (err) {
         setStatus("error");
@@ -728,6 +740,9 @@ export function useWebRTCLive(agentId: string) {
     audioError,
     audioRef,
     toggleAudio,
+    audioMode,
+    audioDevice,
+    selectAudioSource,
     setAudioMuted,
     setAudioVolume,
     displays,

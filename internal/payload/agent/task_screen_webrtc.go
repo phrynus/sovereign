@@ -69,6 +69,10 @@ type webRTCSettings struct {
 	// Opus on the same peer connection. The track is always negotiated; this
 	// flag only controls whether a capture process is running.
 	Audio bool `json:"audio"`
+	// AudioMode is "mic" (default) or "speaker" (loopback capture of what the
+	// machine plays); AudioDevice picks among the devices of that mode.
+	AudioMode   string `json:"audio_mode,omitempty"`
+	AudioDevice int    `json:"audio_device,omitempty"`
 }
 
 type webRTCAgentStartData struct {
@@ -97,6 +101,9 @@ type webRTCSignal struct {
 	// Limit/Index address the bounded clipboard history.
 	Limit *int `json:"limit,omitempty"`
 	Index *int `json:"index,omitempty"`
+	// Audio source selection: mode is mic|speaker, device is a 0-based index.
+	Mode   string `json:"mode,omitempty"`
+	Device *int   `json:"device,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -823,7 +830,7 @@ func (s *agentWebRTCSession) readLoop() {
 			if msg.Enabled == nil {
 				continue
 			}
-			s.setAudio(*msg.Enabled)
+			s.setAudio(*msg.Enabled, msg.Mode, msg.Device)
 		case "stop", "session_end":
 			return
 		}

@@ -111,8 +111,11 @@ export default function RemoteDesktopPage() {
                 muted={rdp.audioMuted}
                 volume={rdp.audioVolume}
                 error={rdp.audioError}
+                mode={rdp.audioMode}
+                device={rdp.audioDevice}
                 audioRef={rdp.audioRef}
                 onToggle={rdp.toggleAudio}
+                onSource={rdp.selectAudioSource}
                 onMute={rdp.setAudioMuted}
                 onVolume={rdp.setAudioVolume}
               />

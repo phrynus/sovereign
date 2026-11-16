@@ -55,8 +55,8 @@
 
 - **差异屏幕的"区域编码"**：当前实现是**丢帧**（`mpdecimate` + vfr），已覆盖"静止屏幕不占带宽"；
   只编码变化区域（tile diff + 局部刷新）能进一步压低活动画面，但需要自绘采集/编码路径。
-- **扬声器回环采集**：目前取第一个采集设备（通常是麦克风）；"播放监听"需要虚拟声卡
-  （Windows 需 `virtual-audio-capturer`），可作为音频模式的一个选项。
+- **Linux/macOS 的扬声器回环**：Windows 已支持（枚举 `virtual-audio-capturer`/立体声混音）；
+  Linux 需要枚举 PulseAudio 的 `.monitor` source，macOS 需要 BlackHole，目前返回明确错误。
 
 ## 实时音频的实测（2026-11-16）
 

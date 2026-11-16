@@ -28341,6 +28341,13 @@ export interface operations {
                     differential?: boolean;
                     /** @description Stream the target's microphone as Opus (48 kHz mono, 20 ms frames) on the same peer connection. The audio m-line is always negotiated; this flag starts the capture. Measured: 2 s of real capture delivered 100 RTP packets / 6,720 bytes (about 27 kbps). */
                     audio?: boolean;
+                    /**
+                     * @description mic (default) captures a real microphone; speaker captures what the machine plays and requires a loopback device (virtual-audio-capturer / Stereo Mix); without one the agent answers an explicit error instead of recording the room.
+                     * @enum {string}
+                     */
+                    audio_mode?: "mic" | "speaker";
+                    /** @description Index among the devices of the selected mode (0 = first). */
+                    audio_device?: number;
                 };
             };
         };

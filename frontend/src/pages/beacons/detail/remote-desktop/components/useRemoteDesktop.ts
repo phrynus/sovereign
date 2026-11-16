@@ -92,6 +92,9 @@ export function useRemoteDesktop(agentId: string) {
     audioError: liveAudioError,
     audioRef: liveAudioRef,
     toggleAudio: liveToggleAudio,
+    audioMode: liveAudioMode,
+    audioDevice: liveAudioDevice,
+    selectAudioSource: liveSelectAudioSource,
     setAudioMuted: liveSetAudioMuted,
     setAudioVolume: liveSetAudioVolume,
     presets: livePresets,
@@ -612,6 +615,7 @@ export function useRemoteDesktop(agentId: string) {
     differential: liveDifferential, toggleDifferential: liveToggleDifferential,
     audioOn: liveAudioOn, audioMuted: liveAudioMuted, audioVolume: liveAudioVolume,
     audioError: liveAudioError, audioRef: liveAudioRef, toggleAudio: liveToggleAudio,
+    audioMode: liveAudioMode, audioDevice: liveAudioDevice, selectAudioSource: liveSelectAudioSource,
     setAudioMuted: liveSetAudioMuted, setAudioVolume: liveSetAudioVolume,
   };
 }

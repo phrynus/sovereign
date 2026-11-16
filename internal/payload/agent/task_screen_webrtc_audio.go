@@ -89,6 +89,86 @@ func listDShowAudioDevices(ffmpeg string) []string {
 	return parseDShowAudioDevices(string(out))
 }
 
+// audioDeviceKinds classifies capture devices so "microphone" and
+// "speaker/loopback" can be offered as separate sources.
+const (
+	AudioModeMic     = "mic"
+	AudioModeSpeaker = "speaker"
+)
+
+// loopbackDeviceHints are the names virtual loopback capture devices use:
+// screen-capture tools install virtual-audio-capturer, sound-card drivers
+// expose Stereo Mix / What U Hear / Wave Out Mix, and PulseAudio exposes
+// ".monitor" sources.
+var loopbackDeviceHints = []string{
+	"virtual-audio-capturer",
+	"stereo mix",
+	"what u hear",
+	"wave out mix",
+	"loopback",
+	"monitor",
+	"立体声混音",
+}
+
+// isLoopbackDevice reports whether a capture device carries what the machine
+// plays (rather than what the room says).
+func isLoopbackDevice(name string) bool {
+	lower := strings.ToLower(name)
+	for _, hint := range loopbackDeviceHints {
+		if strings.Contains(lower, hint) {
+			return true
+		}
+	}
+	return false
+}
+
+// selectAudioDevice picks the capture device for a mode and index. It is the
+// whole policy in one pure function so the console's choice is testable without
+// a sound card:
+//
+//   - "speaker" (loopback) only accepts a virtual/stereo-mix device; when none
+//     is installed it fails with an actionable error instead of silently
+//     recording the room.
+//   - "mic" prefers real capture devices and falls back to the full list if the
+//     host only exposes loopback ones.
+//   - an index out of range is an error naming how many devices exist.
+func selectAudioDevice(devices []string, mode string, index int) (string, error) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = AudioModeMic
+	}
+	var candidates []string
+	switch mode {
+	case AudioModeSpeaker:
+		for _, d := range devices {
+			if isLoopbackDevice(d) {
+				candidates = append(candidates, d)
+			}
+		}
+		if len(candidates) == 0 {
+			return "", fmt.Errorf("no loopback capture device found: install a virtual-audio-capturer or enable Stereo Mix")
+		}
+	case AudioModeMic:
+		for _, d := range devices {
+			if !isLoopbackDevice(d) {
+				candidates = append(candidates, d)
+			}
+		}
+		if len(candidates) == 0 {
+			candidates = devices
+		}
+	default:
+		return "", fmt.Errorf("audio mode must be mic or speaker")
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no audio capture device found")
+	}
+	if index < 0 || index >= len(candidates) {
+		return "", fmt.Errorf("audio device %d is not available (%d %s device(s) found)", index, len(candidates), mode)
+	}
+	return candidates[index], nil
+}
+
 // startAudioPipeline starts the capture→Opus→RTP process and pipes it into the
 // existing audio track. The track is added to the peer connection whether or not
 // audio is enabled, so toggling it later needs no renegotiation.
@@ -106,13 +186,20 @@ func (s *agentWebRTCSession) startAudioPipeline() error {
 	}
 	s.audioMu.Unlock()
 
+	settings := s.settingsSnapshot()
 	device := ""
 	if runtime.GOOS == "windows" {
 		devices := listDShowAudioDevices(s.ffmpeg)
-		if len(devices) == 0 {
-			return fmt.Errorf("no audio capture device found")
+		selected, err := selectAudioDevice(devices, settings.AudioMode, settings.AudioDevice)
+		if err != nil {
+			return err
 		}
-		device = devices[0]
+		device = selected
+	} else if strings.EqualFold(settings.AudioMode, AudioModeSpeaker) {
+		// PulseAudio's ".monitor" source and macOS BlackHole exist, but neither
+		// is enumerable without extra tooling; refuse rather than record the
+		// room under a "speaker" label.
+		return fmt.Errorf("speaker loopback capture is not supported on this platform yet")
 	}
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {
@@ -196,21 +283,40 @@ func (s *agentWebRTCSession) stopAudio() {
 	}
 }
 
-// setAudio enables or disables live audio. Video keeps running in both cases.
-func (s *agentWebRTCSession) setAudio(enabled bool) {
+// setAudio enables, disables or reconfigures live audio. Video keeps running in
+// every case. A mode/device change while audio is on restarts only the capture
+// process; the Opus track and its negotiated m-line are untouched.
+func (s *agentWebRTCSession) setAudio(enabled bool, mode string, device *int) {
 	s.settingsMu.Lock()
 	changed := s.settings.Audio != enabled
-	s.settings.Audio = enabled
-	s.settingsMu.Unlock()
-	if !changed {
-		return
+	curMode := s.settings.AudioMode
+	if strings.TrimSpace(mode) != "" {
+		curMode = strings.ToLower(strings.TrimSpace(mode))
+		if s.settings.AudioMode != curMode {
+			s.settings.AudioMode = curMode
+			changed = true
+		}
 	}
+	if device != nil && s.settings.AudioDevice != *device {
+		s.settings.AudioDevice = *device
+		changed = true
+	}
+	s.settings.Audio = enabled
+	curDevice := s.settings.AudioDevice
+	s.settingsMu.Unlock()
+
 	if !enabled {
 		s.stopAudio()
-		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false})
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "mode": curMode, "device": curDevice})
 		return
 	}
+	if !changed {
+		// Already running with this mode/device: just confirm.
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true, "mode": curMode, "device": curDevice})
+		return
+	}
+	s.stopAudio()
 	if err := s.startAudioPipeline(); err != nil {
-		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "reason": err.Error()})
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "mode": curMode, "device": curDevice, "reason": err.Error()})
 	}
 }

@@ -19,8 +19,11 @@ interface RdpAudioProps {
   muted: boolean;
   volume: number;
   error: string;
+  mode: "mic" | "speaker";
+  device: number;
   audioRef: RefObject<HTMLAudioElement | null>;
   onToggle: (enabled: boolean) => void;
+  onSource: (mode: "mic" | "speaker", device: number) => void;
   onMute: (muted: boolean) => void;
   onVolume: (volume: number) => void;
 }
@@ -31,13 +34,36 @@ interface RdpAudioProps {
  * unmutes. Volume is clamped before it reaches the element.
  */
 export default memo(function RdpAudio({
-  t, enabled, muted, volume, error, audioRef, onToggle, onMute, onVolume,
+  t, enabled, muted, volume, error, mode, device, audioRef, onToggle, onSource, onMute, onVolume,
 }: RdpAudioProps) {
   return (
     <Card className="mt-3 rounded-lg px-3 py-2 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         {enabled ? <Mic className="size-3.5 text-success-ink" /> : <MicOff className="size-3.5 text-muted-foreground" />}
         <span className="text-xs font-medium text-foreground">{t("agents.rdp_audio")}</span>
+        <select
+          className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+          value={mode}
+          onChange={(e) => onSource(e.target.value === "speaker" ? "speaker" : "mic", device)}
+          aria-label={t("agents.rdp_audio_source")}
+          title={t("agents.rdp_audio_source")}
+        >
+          <option value="mic">{t("agents.rdp_audio_mic")}</option>
+          <option value="speaker">{t("agents.rdp_audio_speaker")}</option>
+        </select>
+        <input
+          type="number"
+          min={0}
+          max={15}
+          value={device}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (Number.isInteger(next) && next >= 0 && next <= 15) onSource(mode, next);
+          }}
+          className="h-7 w-14 rounded-md border border-border bg-background px-1.5 text-xs"
+          aria-label={t("agents.rdp_audio_device")}
+          title={t("agents.rdp_audio_device")}
+        />
         <Button
           variant={enabled ? "destructive" : "outline"}
           size="sm"
