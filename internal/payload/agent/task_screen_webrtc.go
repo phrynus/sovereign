@@ -412,16 +412,6 @@ func (s *agentWebRTCSession) switchDisplay(display int) {
 	_ = s.sendJSON(map[string]any{"type": "state", "state": "display", "selected": display})
 }
 
-func screenRectFromNative() screenRect {
-	x, y, w, h, _ := nativeScreenRect()
-	return screenRect{X: x, Y: y, Width: w, Height: h}
-}
-
-func hasNativeScreenRect() bool {
-	_, _, w, h, ok := nativeScreenRect()
-	return ok && w > 0 && h > 0
-}
-
 func dialAgentSignaling(data webRTCAgentStartData) (*websocket.Conn, error) {
 	urls := c2URLsSnapshot()
 	if len(urls) == 0 {

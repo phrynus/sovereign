@@ -68,6 +68,18 @@ func selectScreenRect(rects []screenRect, virtual screenRect, hasVirtual bool, d
 	return rect, true
 }
 
+// screenRectFromNative is the virtual desktop as a screenRect.
+func screenRectFromNative() screenRect {
+	x, y, w, h, _ := nativeScreenRect()
+	return screenRect{X: x, Y: y, Width: w, Height: h}
+}
+
+// hasNativeScreenRect reports whether the platform could report a screen size.
+func hasNativeScreenRect() bool {
+	_, _, w, h, ok := nativeScreenRect()
+	return ok && w > 0 && h > 0
+}
+
 // resolveCaptureRect is selectScreenRect against the live platform.
 func resolveCaptureRect(display int) (screenRect, bool) {
 	vx, vy, vw, vh, ok := nativeScreenRect()
