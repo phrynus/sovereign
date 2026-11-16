@@ -40,6 +40,9 @@ const (
 	webRTCSignalReadLimit  = 512 * 1024
 	webRTCSignalDeadline   = 5 * time.Minute
 	webRTCSignalPingPeriod = 30 * time.Second
+	// MaxDisplayIndex bounds the monitor selector on both ends: 0 means the
+	// whole virtual desktop, 1..MaxDisplayIndex picks a monitor.
+	MaxDisplayIndex = 8
 )
 
 type webRTCIceServer struct {
@@ -54,6 +57,10 @@ type webRTCSettings struct {
 	FPS         int    `json:"fps"`
 	BitrateKbps int    `json:"bitrate_kbps"`
 	Encoder     string `json:"encoder"`
+	// Display selects what to capture: 0 (or absent) is the whole virtual
+	// desktop, N>=1 is monitor N in the agent's announced order. The console
+	// sends it in the start request, and the live "display" signal switches it.
+	Display int `json:"display"`
 }
 
 type webRTCAgentStartData struct {
@@ -72,6 +79,8 @@ type webRTCSignal struct {
 	Event     json.RawMessage `json:"event,omitempty"`
 	State     string          `json:"state,omitempty"`
 	Reason    string          `json:"reason,omitempty"`
+	// Display is the monitor switch requested by the console (0 = all).
+	Display *int `json:"display,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -95,19 +104,21 @@ type agentWebRTCSession struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 
-	writeMu      sync.Mutex
-	cmdMu        sync.Mutex
-	rtpMu        sync.Mutex
-	cmd          *exec.Cmd
-	pipelineOnce sync.Once
-	stopOnce     sync.Once
+	writeMu   sync.Mutex
+	cmdMu     sync.Mutex
+	rtpMu     sync.Mutex
+	captureMu sync.RWMutex
+	cmd       *exec.Cmd
+	stopOnce  sync.Once
+	// captureGen identifies the live ffmpeg process. A restart (display switch)
+	// increments it, and the old process's Wait goroutine checks it before
+	// reporting a failure: killing ffmpeg on purpose must not end the session.
+	captureGen int
 
-	screenOnce sync.Once
-	screenX    int
-	screenY    int
-	screenW    int
-	screenH    int
-	screenOK   bool
+	// capture is the region ffmpeg encodes and input coordinates map into:
+	// the whole virtual desktop or one monitor.
+	capture   screenRect
+	captureOK bool
 
 	// inputErrAt rate-limits "input_rejected" reports; the signaling read loop
 	// is the only writer.
@@ -183,7 +194,22 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 		return fmt.Errorf("unsupported bitrate %d", settings.BitrateKbps)
 	}
 	settings.Encoder = normalizeAgentEncoder(settings.Encoder)
+	if settings.Display < 0 || settings.Display > MaxDisplayIndex {
+		return fmt.Errorf("unsupported display index %d (0 = all displays)", settings.Display)
+	}
 	data.Settings = settings
+
+	// Resolve the requested display BEFORE connecting: a monitor index that
+	// does not exist must fail the task with a reason the operator can act on,
+	// not start a stream of the wrong screen.
+	capture, hasCapture := resolveCaptureRect(settings.Display)
+	if !hasCapture {
+		if settings.Display > 0 {
+			return fmt.Errorf("display %d is not available (this host reports %d display(s))",
+				settings.Display, len(nativeScreenRects()))
+		}
+		return fmt.Errorf("screen geometry is unavailable; cannot choose a capture region")
+	}
 
 	ffmpeg := findFFmpegBinary()
 	if ffmpeg == "" {
@@ -192,11 +218,13 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	sess := &agentWebRTCSession{
-		id:       data.SessionID,
-		ffmpeg:   ffmpeg,
-		settings: settings,
-		ctx:      ctx,
-		cancel:   cancel,
+		id:        data.SessionID,
+		ffmpeg:    ffmpeg,
+		settings:  settings,
+		ctx:       ctx,
+		cancel:    cancel,
+		capture:   capture,
+		captureOK: true,
 	}
 	webRTCSessionMu.Lock()
 	if webRTCSessionActive != nil {
@@ -328,7 +356,70 @@ func (s *agentWebRTCSession) connect(data webRTCAgentStartData) error {
 	})
 
 	_ = s.sendJSON(map[string]any{"type": "state", "state": "waiting_for_offer"})
+	// Announce the displays so the console can offer a monitor picker. This is
+	// a `state` frame, which the server already forwards verbatim, so a client
+	// that predates the picker simply ignores it.
+	rects := nativeScreenRects()
+	if virtual, ok := s.captureSnapshot(); ok {
+		_ = s.sendJSON(map[string]any{
+			"type":     "state",
+			"state":    "displays",
+			"displays": displayDescriptors(rects),
+			"virtual": map[string]int{
+				"x": virtual.X, "y": virtual.Y, "width": virtual.Width, "height": virtual.Height,
+			},
+			"selected": s.settings.Display,
+		})
+	}
 	return nil
+}
+
+// captureSnapshot returns the current capture region under the lock.
+func (s *agentWebRTCSession) captureSnapshot() (screenRect, bool) {
+	s.captureMu.RLock()
+	defer s.captureMu.RUnlock()
+	return s.capture, s.captureOK
+}
+
+// switchDisplay changes the captured monitor without ending the session: the
+// capture region is updated, ffmpeg is restarted against it, and the input
+// mapper immediately scales against the new rectangle. A rejected index is
+// reported the same way as a rejected key: visible, non-fatal.
+func (s *agentWebRTCSession) switchDisplay(display int) {
+	rects := nativeScreenRects()
+	capture, ok := selectScreenRect(rects, screenRectFromNative(), hasNativeScreenRect(), display)
+	if !ok {
+		_ = s.sendJSON(map[string]any{
+			"type":   "input_error",
+			"reason": fmt.Sprintf("display %d is not available (this host reports %d display(s))", display, len(rects)),
+		})
+		return
+	}
+	s.captureMu.Lock()
+	s.capture = capture
+	s.captureOK = true
+	s.settings.Display = display
+	s.captureMu.Unlock()
+
+	s.stopCapture()
+	// ensurePipeline already fired for this session, so restart directly: it
+	// must NOT re-run the once-guard or the new display would never be captured.
+	if err := s.startRTPPipeline(); err != nil {
+		_ = s.sendJSON(map[string]any{"type": "error", "reason": "display switch: " + err.Error()})
+		s.stop("display switch failed")
+		return
+	}
+	_ = s.sendJSON(map[string]any{"type": "state", "state": "display", "selected": display})
+}
+
+func screenRectFromNative() screenRect {
+	x, y, w, h, _ := nativeScreenRect()
+	return screenRect{X: x, Y: y, Width: w, Height: h}
+}
+
+func hasNativeScreenRect() bool {
+	_, _, w, h, ok := nativeScreenRect()
+	return ok && w > 0 && h > 0
 }
 
 func dialAgentSignaling(data webRTCAgentStartData) (*websocket.Conn, error) {
@@ -444,16 +535,13 @@ func (s *agentWebRTCSession) reportInputError(err error) {
 }
 
 // scaleInput maps browser coordinates from the encoded video back to native
-// screen pixels. ffmpeg pads and scales the capture to settings.Width/Height,
-// so forwarding the video coordinates unchanged would target the wrong place
-// on any display larger than the stream (for example 1080p at the 720p
-// preset). The native rectangle is probed once per session because ffmpeg
-// fixes the capture size when the pipeline starts.
+// screen pixels. ffmpeg pads and scales the CAPTURED REGION to
+// settings.Width/Height, so forwarding the video coordinates unchanged would
+// target the wrong place on any display larger than the stream (for example
+// 1080p at the 720p preset) and on every monitor other than the first.
 func (s *agentWebRTCSession) scaleInput(raw []byte) []byte {
-	s.screenOnce.Do(func() {
-		s.screenX, s.screenY, s.screenW, s.screenH, s.screenOK = nativeScreenRect()
-	})
-	return mapWebRTCInput(raw, s.screenX, s.screenY, s.screenW, s.screenH, s.settings.Width, s.settings.Height, s.screenOK)
+	capture, ok := s.captureSnapshot()
+	return mapWebRTCInput(raw, capture.X, capture.Y, capture.Width, capture.Height, s.settings.Width, s.settings.Height, ok)
 }
 
 // mapWebRTCInput is the testable half of scaleInput. It only rewrites pointer
@@ -595,6 +683,11 @@ func (s *agentWebRTCSession) readLoop() {
 					s.reportInputError(err)
 				}
 			}
+		case "display":
+			if msg.Display == nil {
+				continue
+			}
+			s.switchDisplay(*msg.Display)
 		case "stop", "session_end":
 			return
 		}
@@ -602,12 +695,33 @@ func (s *agentWebRTCSession) readLoop() {
 }
 
 func (s *agentWebRTCSession) ensurePipeline() {
-	s.pipelineOnce.Do(func() {
-		if err := s.startRTPPipeline(); err != nil {
-			_ = s.sendJSON(map[string]any{"type": "error", "reason": err.Error()})
-			s.stop("pipeline failed")
-		}
-	})
+	if err := s.startRTPPipeline(); err != nil {
+		_ = s.sendJSON(map[string]any{"type": "error", "reason": err.Error()})
+		s.stop("pipeline failed")
+	}
+}
+
+// stopCapture kills the current ffmpeg and its RTP sink without ending the
+// session. A display switch uses it before starting the new region; the
+// generation counter keeps the dying process's Wait goroutine from reporting a
+// failure that tears the session down.
+func (s *agentWebRTCSession) stopCapture() {
+	s.cmdMu.Lock()
+	s.captureGen++
+	cmd := s.cmd
+	s.cmd = nil
+	s.cmdMu.Unlock()
+
+	s.rtpMu.Lock()
+	rtpConn := s.rtpConn
+	s.rtpConn = nil
+	s.rtpMu.Unlock()
+	if rtpConn != nil {
+		_ = rtpConn.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
 }
 
 func (s *agentWebRTCSession) startRTPPipeline() error {
@@ -645,7 +759,12 @@ func (s *agentWebRTCSession) startRTPPipeline() error {
 		_ = conn.Close()
 		return fmt.Errorf("WebRTC session is already closed")
 	}
-	args, err := buildScreenFFmpegArgs(s.settings, conn.LocalAddr().(*net.UDPAddr).Port)
+	capture, hasCapture := s.captureSnapshot()
+	if !hasCapture {
+		_ = conn.Close()
+		return fmt.Errorf("screen geometry is unavailable")
+	}
+	args, err := buildScreenFFmpegArgs(s.settings, conn.LocalAddr().(*net.UDPAddr).Port, capture, hasCapture)
 	if err != nil {
 		_ = conn.Close()
 		return err
@@ -659,11 +778,20 @@ func (s *agentWebRTCSession) startRTPPipeline() error {
 	}
 	s.cmdMu.Lock()
 	s.cmd = cmd
+	gen := s.captureGen
 	s.cmdMu.Unlock()
 	_ = s.sendJSON(map[string]any{"type": "state", "state": "streaming"})
 	go func() {
 		waitErr := cmd.Wait()
 		if s.ctx.Err() != nil {
+			return
+		}
+		// A display switch killed this process on purpose; its successor owns
+		// the session now.
+		s.cmdMu.Lock()
+		stale := s.captureGen != gen
+		s.cmdMu.Unlock()
+		if stale {
 			return
 		}
 		reason := strings.TrimSpace(stderr.String())
@@ -717,14 +845,25 @@ func (s *agentWebRTCSession) stop(reason string) {
 	})
 }
 
-func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int) ([]string, error) {
+func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int, capture screenRect, hasCapture bool) ([]string, error) {
 	if rtpPort <= 0 || rtpPort > 65535 {
 		return nil, fmt.Errorf("invalid RTP port")
 	}
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
 	switch runtime.GOOS {
 	case "windows":
-		args = append(args, "-f", "gdigrab", "-framerate", fmt.Sprintf("%d", settings.FPS), "-draw_mouse", "1", "-i", "desktop")
+		// gdigrab captures the whole desktop by default. A selected monitor is
+		// a region of it: -offset_x/-offset_y move into the virtual desktop
+		// (negative for a monitor left of / above the primary) and -video_size
+		// bounds it.
+		args = append(args, "-f", "gdigrab", "-framerate", fmt.Sprintf("%d", settings.FPS), "-draw_mouse", "1")
+		if hasCapture {
+			args = append(args,
+				"-offset_x", fmt.Sprintf("%d", capture.X),
+				"-offset_y", fmt.Sprintf("%d", capture.Y),
+				"-video_size", fmt.Sprintf("%dx%d", capture.Width, capture.Height))
+		}
+		args = append(args, "-i", "desktop")
 	case "linux":
 		display := strings.TrimSpace(os.Getenv("DISPLAY"))
 		if display == "" {
@@ -734,8 +873,13 @@ func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int) ([]string, erro
 		if size == "" {
 			size = fmt.Sprintf("%dx%d", settings.Width, settings.Height)
 		}
+		offset := "+0,0"
+		if hasCapture {
+			size = fmt.Sprintf("%dx%d", capture.Width, capture.Height)
+			offset = fmt.Sprintf("+%d,%d", capture.X, capture.Y)
+		}
 		args = append(args, "-f", "x11grab", "-framerate", fmt.Sprintf("%d", settings.FPS),
-			"-draw_mouse", "1", "-video_size", size, "-i", display+"+0,0")
+			"-draw_mouse", "1", "-video_size", size, "-i", display+offset)
 	case "darwin":
 		args = append(args, "-f", "avfoundation", "-framerate", fmt.Sprintf("%d", settings.FPS),
 			"-capture_cursor", "1", "-i", "1:none")

@@ -239,7 +239,7 @@ jobs:
         run: |
           set -o pipefail
           go test ./internal/payload/agent/ -count=1 -timeout 10m \
-            -run 'TestGenerateNTLMChallengeIsRandom|TestParseNTLMAuthMalformedIsBounded|TestBeaconRandomization|TestAdaptiveFactor|TestNoBeaconStorm|TestFloorBeaconInterval|TestComputeBeacon|TestApplyMaxRandomCap|TestGaussianRandom|TestExponentialRandom|TestComputeSleepDuration|TestRemoteInput'
+            -run 'TestGenerateNTLMChallengeIsRandom|TestParseNTLMAuthMalformedIsBounded|TestBeaconRandomization|TestAdaptiveFactor|TestNoBeaconStorm|TestFloorBeaconInterval|TestComputeBeacon|TestApplyMaxRandomCap|TestGaussianRandom|TestExponentialRandom|TestComputeSleepDuration|TestRemoteInput|TestSelectScreenRect|TestCropScreenToRect|TestDisplayDescriptors|TestSortScreenRects|TestParseDisplayArg|TestParseXRandRMonitors|TestBuildScreenFFmpegArgs'
 
   # The C implant ships as source and is assembled on operator machines, so no
   # other job would notice a syntax error, a fresh compiler warning, a task type

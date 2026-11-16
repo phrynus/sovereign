@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WorkspaceToolbar } from "@/components/ui/workspace-toolbar";
-import { Compass, Expand, Maximize2, Play, Square, Users } from "lucide-react";
+import { Compass, Expand, Maximize2, Monitor, Play, Square, Users } from "lucide-react";
 import { isExperimentalDesktop } from "../../components/session-quality";
 import type { ResolutionOption } from "./useRemoteDesktop";
-import type { LivePreset } from "./useWebRTCLive";
+import type { DisplayInfo, LivePreset } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -24,6 +24,9 @@ interface RdpToolbarProps {
   livePresets: Array<LivePreset & { label: string }>;
   livePreset: LivePreset["value"];
   setLivePreset: (preset: LivePreset["value"]) => void;
+  displays: DisplayInfo[];
+  selectedDisplay: number;
+  onSelectDisplay: (index: number) => void;
   active: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -36,6 +39,7 @@ interface RdpToolbarProps {
 export default memo(function RdpToolbar({
   t, agentId, nativeWidth, nativeHeight, resolutions, resolution, setResolution,
   mode, setMode, livePresets, livePreset, setLivePreset,
+  displays, selectedDisplay, onSelectDisplay,
   active, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
 }: RdpToolbarProps) {
   return (
@@ -101,6 +105,35 @@ export default memo(function RdpToolbar({
                 {livePresets.map((preset) => (
                   <SelectItem key={preset.value} value={preset.value}>
                     {preset.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {mode === "live" && (
+            <Select
+              value={String(selectedDisplay)}
+              onValueChange={(v) => {
+                const index = Number(v);
+                if (Number.isInteger(index) && index >= 0) onSelectDisplay(index);
+              }}
+            >
+              <SelectTrigger
+                className="w-[190px]"
+                aria-label={t("agents.rdp_display")}
+                title={t("agents.rdp_display_hint")}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  <Monitor className="size-3.5 shrink-0" />
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">{t("agents.rdp_display_all")}</SelectItem>
+                {displays.map((display) => (
+                  <SelectItem key={display.index} value={String(display.index)}>
+                    {t("agents.rdp_display_n", { n: display.index })} · {display.width}x{display.height}
+                    {display.primary ? ` (${t("agents.rdp_display_primary")})` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>

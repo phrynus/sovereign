@@ -36,6 +36,9 @@ export default function RemoteDesktopPage() {
         livePresets={rdp.livePresets}
         livePreset={rdp.livePreset}
         setLivePreset={rdp.setLivePreset}
+        displays={rdp.displays}
+        selectedDisplay={rdp.selectedDisplay}
+        onSelectDisplay={rdp.selectDisplay}
         active={rdp.sessionActive}
         isFullscreen={rdp.isFullscreen}
         onToggleFullscreen={() => void rdp.toggleFullscreen()}

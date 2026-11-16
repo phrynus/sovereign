@@ -59,6 +59,15 @@ interface StartResponse {
   expires_at?: string;
 }
 
+export interface DisplayInfo {
+  index: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  primary?: boolean;
+}
+
 interface SignalMessage {
   type?: string;
   sdp?: string;
@@ -66,6 +75,29 @@ interface SignalMessage {
   state?: string;
   reason?: string;
   error?: string;
+  displays?: DisplayInfo[];
+  selected?: number;
+}
+
+/**
+ * Extracts the monitor list from the agent's `state: displays` frame. A frame
+ * with no usable geometry is ignored (the picker keeps its previous value)
+ * rather than rendering a monitor the agent cannot capture.
+ */
+export function parseDisplayState(
+  message: SignalMessage,
+): { displays: DisplayInfo[]; selected: number } | null {
+  if (message.state !== "displays" || !Array.isArray(message.displays)) return null;
+  const displays = message.displays.filter(
+    (d) =>
+      Number.isInteger(d?.index) &&
+      d.index >= 1 &&
+      Number(d.width) > 0 &&
+      Number(d.height) > 0,
+  );
+  if (displays.length === 0) return null;
+  const selected = typeof message.selected === "number" && message.selected >= 0 ? message.selected : 0;
+  return { displays, selected };
 }
 
 function normalizeIceServers(servers: IceServerResponse[] | undefined): RTCIceServer[] {
@@ -93,6 +125,10 @@ export function useWebRTCLive(agentId: string) {
   // A rejected input event is not a session failure: show it briefly and keep
   // the desktop alive, otherwise one unsupported key would tear down a session.
   const [inputError, setInputError] = useState("");
+  const [displays, setDisplays] = useState<DisplayInfo[]>([]);
+  // 0 = all displays (the historical behaviour); 1..N = one monitor. The agent
+  // announces the list on connect, so the picker appears without a restart.
+  const [selectedDisplay, setSelectedDisplay] = useState(0);
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteInputError = useCallback((reason: string) => {
     setInputError(reason);
@@ -223,8 +259,16 @@ export function useWebRTCLive(agentId: string) {
     stoppingRef.current = false;
   }, [agentId, cleanupLocal, sendSignal]);
 
+  const selectDisplay = useCallback((display: number) => {
+    setSelectedDisplay(display);
+    // While a session is live the agent restarts its capture against the new
+    // monitor; before a session the choice is simply remembered for the start
+    // request.
+    if (activeRef.current) sendSignal({ type: "display", display });
+  }, [sendSignal]);
+
   const start = useCallback(
-    async (presetValue: string) => {
+    async (presetValue: string, display = 0) => {
       if (!agentId) return;
       if (typeof RTCPeerConnection === "undefined" || typeof WebSocket === "undefined") {
         fail(t("agents.rdp_live_unsupported"));
@@ -237,6 +281,7 @@ export function useWebRTCLive(agentId: string) {
       setLivePreset(preset.value);
       setLiveWidth(preset.width);
       setLiveHeight(preset.height);
+      setSelectedDisplay(display);
       setError("");
       setStatus("connecting");
 
@@ -248,6 +293,7 @@ export function useWebRTCLive(agentId: string) {
           fps: preset.fps,
           bitrate_kbps: preset.bitrateKbps,
           encoder: "auto",
+          display,
         });
       } catch (err) {
         setStatus("error");
@@ -357,11 +403,20 @@ export function useWebRTCLive(agentId: string) {
               void pc.addIceCandidate(message.candidate).catch(() => {});
             }
             break;
-          case "state":
+          case "state": {
             if (message.state === "connected" || message.state === "streaming") {
               setStatus("connected");
+              break;
+            }
+            const parsed = parseDisplayState(message);
+            if (parsed) {
+              setDisplays(parsed.displays);
+              setSelectedDisplay(parsed.selected);
+            } else if (message.state === "display" && typeof message.selected === "number") {
+              setSelectedDisplay(message.selected);
             }
             break;
+          }
           case "waiting":
             setStatus("connecting");
             break;
@@ -423,6 +478,9 @@ export function useWebRTCLive(agentId: string) {
     status,
     error,
     inputError,
+    displays,
+    selectedDisplay,
+    selectDisplay,
     presets,
     livePreset,
     setLivePreset,

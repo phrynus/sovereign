@@ -341,7 +341,7 @@ export interface paths {
         put?: never;
         /**
          * Take screenshot
-         * @description Capture a screenshot from the agent
+         * @description Capture a screenshot from the agent. An optional `display` selects one monitor (1..8); the agent crops it out of the full capture. 0 or an absent body captures the whole virtual desktop.
          */
         post: operations["requestScreenshot"];
         delete?: never;
@@ -10984,7 +10984,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start a WebRTC remote-desktop session for the agent */
+        /**
+         * Start a WebRTC remote-desktop session for the agent
+         * @description Starts one session per agent. `display` selects what the agent captures: 0 (default) is the whole virtual desktop, N selects monitor N from the list the agent announces over the signaling socket. The index is carried in the screen_webrtc_start task and can be changed live with a `display` signaling message.
+         */
         post: operations["agentWebRTCStart"];
         delete?: never;
         options?: never;
@@ -12993,7 +12996,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description 0 = all displays, N = monitor N */
+                    display?: number;
+                };
+            };
+        };
         responses: {
             /** @description Screenshot task created */
             200: {
@@ -28329,7 +28339,20 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    width?: number;
+                    height?: number;
+                    fps?: number;
+                    bitrate_kbps?: number;
+                    /** @enum {string} */
+                    encoder?: "auto" | "libx264" | "h264_nvenc" | "h264_qsv" | "h264_amf" | "h264_videotoolbox";
+                    /** @description 0 = all displays, N = monitor N */
+                    display?: number;
+                };
+            };
+        };
         responses: {
             /** @description Session id */
             200: {

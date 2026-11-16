@@ -17,7 +17,7 @@ import (
 // ── Screenshot / Screen Stream ──────────────────────────────────────────
 
 func handleScreenshot(task Task, res *TaskResult) {
-	results := takeScreenshotChunked(65)
+	results := takeScreenshotChunked(65, parseDisplayArg(task.Command))
 	if len(results) == 0 {
 		res.Error = "screenshot failed"
 		return
@@ -51,7 +51,7 @@ func handleScreenStreamStart(task Task, res *TaskResult) {
 	}
 	// Capture synchronously first so we never report "started" on a stream
 	// that cannot produce frames (headless/DUMMY display, no grabber, etc.).
-	first, err := takeScreenshotJPEG(quality)
+	first, err := takeScreenshotJPEG(quality, parseDisplayArg(task.Command))
 	if err != nil {
 		atomic.StoreInt32(&screenStreaming, 0)
 		res.Error = "screen stream failed to start: " + err.Error()
@@ -77,7 +77,7 @@ func handleScreenStreamStart(task Task, res *TaskResult) {
 			if atomic.LoadInt32(&screenStreaming) != 1 {
 				return
 			}
-			data, err := takeScreenshotJPEG(quality)
+			data, err := takeScreenshotJPEG(quality, parseDisplayArg(task.Command))
 			if err != nil {
 				atomic.StoreInt32(&screenStreaming, 0)
 				sendScreenStreamError("screen stream stopped: " + err.Error())
@@ -171,7 +171,7 @@ func handleScreenStreamStop(task Task, res *TaskResult) {
 }
 
 func handleScreenshotWindow(task Task, res *TaskResult) {
-	results := takeScreenshotChunked(85)
+	results := takeScreenshotChunked(85, 0)
 	if len(results) == 0 {
 		res.Error = "screenshot failed"
 		return

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"image/jpeg"
 	"log/slog"
 	"net/http"
@@ -21,12 +22,29 @@ func (s *Server) handleRequestScreenshot(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "screenshot"})
+	// Optional monitor selector: 0/absent is the whole virtual desktop, N>=1
+	// captures that display (the agent crops it out of the full capture). The
+	// value travels in the task command as display=N.
+	var req struct {
+		Display int `json:"display"`
+	}
+	if c.Request.ContentLength > 0 {
+		_ = c.ShouldBindJSON(&req) // optional; a malformed body means "all displays"
+	}
+	if req.Display < 0 || req.Display > MaxWebRTCDisplayIndex {
+		respondError(c, http.StatusBadRequest, "display must be 0 (all displays) or a monitor index")
+		return
+	}
+	command := ""
+	if req.Display > 0 {
+		command = fmt.Sprintf("display=%d", req.Display)
+	}
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "screenshot", Command: command})
 	if task == nil {
 		return
 	}
 
-	slog.Info("Screenshot requested", "agent_id", id)
+	slog.Info("Screenshot requested", "agent_id", id, "display", req.Display)
 	s.dispatchTask(c, task, "request_screenshot", "screenshot")
 }
 

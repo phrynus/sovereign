@@ -102,7 +102,7 @@ func screenTriggerLoop(taskID uint, match string, intervalSec int) {
 }
 
 func captureScreenTrigger(taskID uint, title string) bool {
-	data, err := takeScreenshotJPEG(screenTriggerQuality)
+	data, err := takeScreenshotJPEG(screenTriggerQuality, 0)
 	if err != nil {
 		if Debug {
 			fmt.Println("[screen_trigger]", err)

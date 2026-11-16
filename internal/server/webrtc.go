@@ -45,6 +45,9 @@ const (
 	webrtcDefaultTTL       = time.Hour
 	webrtcMaxTTL           = 24 * time.Hour
 	webrtcTurnCredSlack    = 5 * time.Minute
+	// MaxWebRTCDisplayIndex bounds the monitor selector: 0 is the whole virtual
+	// desktop, 1..N is one monitor. The agent enforces the same bound.
+	MaxWebRTCDisplayIndex = 8
 )
 
 var errWebRTCDisabled = errors.New("WebRTC is disabled (set webrtc.enabled: true in config.yaml)")
@@ -57,6 +60,11 @@ type webrtcStartOptions struct {
 	FPS         int    `json:"fps"`
 	BitrateKbps int    `json:"bitrate_kbps"`
 	Encoder     string `json:"encoder"`
+	// Display selects the captured monitor: 0 (default) is the whole virtual
+	// desktop, N>=1 is monitor N in the agent's announced order. It travels in
+	// the screen_webrtc_start task and can be changed live with a "display"
+	// signal, so the console does not need to restart the session to switch.
+	Display int `json:"display"`
 }
 
 // webrtcIceServer mirrors the browser RTCIceServer shape and Pion's
@@ -642,6 +650,7 @@ type webrtcStartRequest struct {
 	FPS         int    `json:"fps"`
 	BitrateKbps int    `json:"bitrate_kbps"`
 	Encoder     string `json:"encoder"`
+	Display     int    `json:"display"`
 }
 
 func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
@@ -651,6 +660,10 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 		FPS:         req.FPS,
 		BitrateKbps: req.BitrateKbps,
 		Encoder:     strings.ToLower(strings.TrimSpace(req.Encoder)),
+		Display:     req.Display,
+	}
+	if opts.Display < 0 || opts.Display > MaxWebRTCDisplayIndex {
+		return opts, fmt.Errorf("display must be 0 (all displays) to %d", MaxWebRTCDisplayIndex)
 	}
 	if opts.Width == 0 && opts.Height == 0 {
 		opts.Width, opts.Height = 1280, 720
@@ -846,6 +859,8 @@ type webrtcSignal struct {
 	Candidate json.RawMessage     `json:"candidate,omitempty"`
 	Event     *remoteInputRequest `json:"event,omitempty"`
 	Reason    string              `json:"reason,omitempty"`
+	// Display is the monitor switch requested by the console (0 = all).
+	Display *int `json:"display,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -982,6 +997,20 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			forward, _ := json.Marshal(gin.H{"type": "input", "event": json.RawMessage(payload)})
 			if !sess.sendRawToAgent(forward) {
+				return
+			}
+		case "display":
+			// Live monitor switch: validated here, forwarded unchanged to the
+			// agent, which restarts its capture against the new region.
+			if msg.Display == nil || *msg.Display < 0 || *msg.Display > MaxWebRTCDisplayIndex {
+				sess.sendToOperator(gin.H{"type": "error", "error": "invalid display index"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			if !sess.sendRawToAgent(raw) {
 				return
 			}
 		case "stop":

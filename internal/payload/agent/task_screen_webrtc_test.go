@@ -41,7 +41,7 @@ func TestBuildAgentSignalURL(t *testing.T) {
 
 func TestBuildScreenFFmpegArgs(t *testing.T) {
 	settings := webRTCSettings{Width: 1920, Height: 1080, FPS: 30, BitrateKbps: 4500, Encoder: "libx264"}
-	args, err := buildScreenFFmpegArgs(settings, 40000)
+	args, err := buildScreenFFmpegArgs(settings, 40000, screenRect{}, false)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -77,7 +77,31 @@ func TestBuildScreenFFmpegArgs(t *testing.T) {
 		}
 	}
 
-	if _, err := buildScreenFFmpegArgs(settings, 0); err == nil {
+	// A selected monitor is a region of the desktop: both capture backends
+	// must address it, or the operator watches the wrong screen while the
+	// input mapper targets the right one.
+	region := screenRect{X: 1920, Y: 0, Width: 1280, Height: 1024}
+	args, err = buildScreenFFmpegArgs(settings, 40000, region, true)
+	if err != nil {
+		t.Fatalf("build region: %v", err)
+	}
+	joined = strings.Join(args, " ")
+	switch runtime.GOOS {
+	case "windows":
+		for _, want := range []string{"-offset_x 1920", "-offset_y 0", "-video_size 1280x1024"} {
+			if !strings.Contains(joined, want) {
+				t.Fatalf("windows region capture missing %q: %s", want, joined)
+			}
+		}
+	case "linux":
+		for _, want := range []string{"-video_size 1280x1024", "+1920,0"} {
+			if !strings.Contains(joined, want) {
+				t.Fatalf("linux region capture missing %q: %s", want, joined)
+			}
+		}
+	}
+
+	if _, err := buildScreenFFmpegArgs(settings, 0, screenRect{}, false); err == nil {
 		t.Fatal("invalid port must fail")
 	}
 }

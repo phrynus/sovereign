@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -108,8 +110,8 @@ func sendScreenFrame(data []byte) {
 	}
 }
 
-func takeScreenshotJPEG(quality int) ([]byte, error) {
-	img, err := captureScreenRGBA()
+func takeScreenshotJPEG(quality, display int) ([]byte, error) {
+	img, err := captureScreenForDisplay(display)
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +123,45 @@ func takeScreenshotJPEG(quality int) ([]byte, error) {
 	return jpegBuf.Bytes(), nil
 }
 
+// captureScreenForDisplay captures the whole virtual desktop and crops the
+// requested monitor out of it. Cropping at the image layer keeps one capture
+// implementation for every platform; a display index that does not exist is an
+// error rather than a silently wrong picture.
+func captureScreenForDisplay(display int) (*image.RGBA, error) {
+	img, err := captureScreenRGBA()
+	if err != nil {
+		return nil, err
+	}
+	if display <= 0 {
+		return img, nil
+	}
+	rect, ok := resolveCaptureRect(display)
+	if !ok {
+		return nil, fmt.Errorf("display %d is not available (this host reports %d display(s))",
+			display, len(nativeScreenRects()))
+	}
+	virtual := screenRectFromNative()
+	return cropScreenToRect(img, virtual, rect), nil
+}
+
+// parseDisplayArg extracts "display=N" from a task command (comma-, space- or
+// semicolon-separated tokens). Absent or 0 means the whole virtual desktop.
+func parseDisplayArg(command string) int {
+	tokens := strings.FieldsFunc(command, func(r rune) bool {
+		return r == ',' || r == ' ' || r == ';'
+	})
+	for _, tok := range tokens {
+		kv := strings.SplitN(strings.TrimSpace(tok), "=", 2)
+		if len(kv) != 2 || !strings.EqualFold(strings.TrimSpace(kv[0]), "display") {
+			continue
+		}
+		if v, err := strconv.Atoi(strings.TrimSpace(kv[1])); err == nil && v >= 0 && v <= 8 {
+			return v
+		}
+	}
+	return 0
+}
+
 // stampScreenshotTask attaches the capture task id to every chunk. Without it
 // the server cannot associate the chunks with the screenshot task (the old
 // results carried TaskID 0 and were silently discarded).
@@ -130,8 +171,8 @@ func stampScreenshotTask(taskID uint, results []TaskResult) {
 	}
 }
 
-func takeScreenshotChunked(quality int) []TaskResult {
-	imgBytes, err := takeScreenshotJPEG(quality)
+func takeScreenshotChunked(quality, display int) []TaskResult {
+	imgBytes, err := takeScreenshotJPEG(quality, display)
 	if err != nil {
 		return []TaskResult{{Error: err.Error()}}
 	}

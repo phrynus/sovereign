@@ -787,7 +787,10 @@ paths:
     post:
       tags: [Agents]
       summary: Take screenshot
-      description: Capture a screenshot from the agent
+      description: >
+        Capture a screenshot from the agent. An optional `display` selects one
+        monitor (1..8); the agent crops it out of the full capture. 0 or an
+        absent body captures the whole virtual desktop.
       operationId: requestScreenshot
       security:
         - SessionCookie: []
@@ -798,6 +801,18 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display:
+                  type: integer
+                  minimum: 0
+                  maximum: 8
+                  description: 0 = all displays, N = monitor N
       responses:
         '200':
           description: Screenshot task created
@@ -13564,10 +13579,35 @@ paths:
     post:
       tags: [Agents]
       summary: Start a WebRTC remote-desktop session for the agent
+      description: >
+        Starts one session per agent. `display` selects what the agent captures:
+        0 (default) is the whole virtual desktop, N selects monitor N from the
+        list the agent announces over the signaling socket. The index is carried
+        in the screen_webrtc_start task and can be changed live with a `display`
+        signaling message.
       operationId: agentWebRTCStart
       security: [{SessionCookie: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                width: {type: integer, minimum: 640, maximum: 1920}
+                height: {type: integer, minimum: 360, maximum: 1080}
+                fps: {type: integer, minimum: 15, maximum: 30}
+                bitrate_kbps: {type: integer, minimum: 500, maximum: 8000}
+                encoder:
+                  type: string
+                  enum: [auto, libx264, h264_nvenc, h264_qsv, h264_amf, h264_videotoolbox]
+                display:
+                  type: integer
+                  minimum: 0
+                  maximum: 8
+                  description: 0 = all displays, N = monitor N
       responses:
         '200': {description: Session id, ICE configuration and TURN credentials}
         '404': {description: Agent not visible to this tenant}

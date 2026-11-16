@@ -196,6 +196,27 @@ func TestRDWebRTCInputRelayCarriesExtendedFields(t *testing.T) {
 	if !strings.Contains(string(raw), "input_rejected") {
 		t.Fatalf("invalid event answer = %s, want input_rejected", raw)
 	}
+
+	// A live monitor switch reaches the agent, and an out-of-range index is
+	// refused at the server so the agent never has to guess.
+	send(`{"type":"display","display":2}`)
+	agentPeer.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, rawAgent, err := agentPeer.ReadMessage()
+	if err != nil {
+		t.Fatalf("agent read display switch: %v", err)
+	}
+	if !strings.Contains(string(rawAgent), `"type":"display"`) || !strings.Contains(string(rawAgent), `"display":2`) {
+		t.Fatalf("display switch frame = %s", rawAgent)
+	}
+	send(`{"type":"display","display":99}`)
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, raw, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read display rejection: %v", err)
+	}
+	if !strings.Contains(string(raw), "invalid display index") {
+		t.Fatalf("invalid display answer = %s", raw)
+	}
 }
 
 // TestRDWebRTCInputRelayRateLimitsActions proves the live path uses the action
