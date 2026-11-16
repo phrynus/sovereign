@@ -8,7 +8,7 @@ name: forgec2-demo
 # The image defaults to the published edge build. Pin the digest when you need
 # a byte-identical deployment; this is the build the current demo runs:
 #
-#   FORGEC2_IMAGE=ghcr.io/r0si/forgec2@sha256:a40302924e87dcf54a85bd085cf4e0f497e59fa450ce7c1c6ac975653f01dbb0
+#   FORGEC2_IMAGE=ghcr.io/r0si/forgec2@sha256:7b757fe8c968eb192fa0349c8fa67ac289c64c3c0238f00ee41ac830c20ef754
 #
 # `edge` and its sha-<commit> tag resolve to the same manifest. On hosts where
 # GHCR is unreachable, a read-only mirror serves the identical manifest; set
