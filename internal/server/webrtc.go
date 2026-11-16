@@ -48,6 +48,12 @@ const (
 	// MaxWebRTCDisplayIndex bounds the monitor selector: 0 is the whole virtual
 	// desktop, 1..N is one monitor. The agent enforces the same bound.
 	MaxWebRTCDisplayIndex = 8
+	// MaxWebRTCClipboardBytes bounds one clipboard value in both directions.
+	MaxWebRTCClipboardBytes = 64 * 1024
+	// MaxClipboardSetsPerWindow throttles operator pastes. Ten in ten seconds
+	// is far above human use and far below a write-amplification stream.
+	MaxClipboardSetsPerWindow = 10
+	ClipboardRateWindow       = 10 * time.Second
 )
 
 var errWebRTCDisabled = errors.New("WebRTC is disabled (set webrtc.enabled: true in config.yaml)")
@@ -861,6 +867,9 @@ type webrtcSignal struct {
 	Reason    string              `json:"reason,omitempty"`
 	// Display is the monitor switch requested by the console (0 = all).
 	Display *int `json:"display,omitempty"`
+	// Clipboard payloads: text is the value, enabled toggles change streaming.
+	Text    string `json:"text,omitempty"`
+	Enabled *bool  `json:"enabled,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -873,6 +882,26 @@ func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
 	}
 	msg.Type = strings.ToLower(strings.TrimSpace(msg.Type))
 	return msg, nil
+}
+
+// sanitizeClipboardPayload canonicalises operator clipboard text the same way
+// the agent does (drop invalid UTF-8 and NUL bytes). Unlike a read, an
+// oversized SET is refused rather than truncated: pasting half a script into a
+// remote shell executes a command nobody wrote.
+func sanitizeClipboardPayload(raw string) (string, error) {
+	text := strings.ToValidUTF8(raw, "")
+	text = strings.ReplaceAll(text, "\x00", "")
+	if len(text) > MaxWebRTCClipboardBytes {
+		return "", fmt.Errorf("clipboard text exceeds %d bytes", MaxWebRTCClipboardBytes)
+	}
+	return text, nil
+}
+
+// allowClipboardSet throttles operator pastes per (operator, agent): every one
+// is a write into the target's clipboard and an audit record.
+func (s *Server) allowClipboardSet(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":clipboard"
+	return s.remoteInputLimiter.allow(key, MaxClipboardSetsPerWindow, ClipboardRateWindow, time.Now())
 }
 
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
@@ -1013,6 +1042,47 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			if !sess.sendRawToAgent(raw) {
 				return
 			}
+		case "clipboard_get":
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			if !sess.sendRawToAgent(raw) {
+				return
+			}
+		case "clipboard_set":
+			text, err := sanitizeClipboardPayload(msg.Text)
+			if err != nil {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": err.Error()})
+				continue
+			}
+			if !s.allowClipboardSet(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": "clipboard rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "clipboard_set", "text": text})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			// Length only: the clipboard is exactly the kind of secret an audit
+			// log must not copy into a second place.
+			s.LogAuditRecord(c, "clipboard_sync", "agent", sess.AgentID,
+				fmt.Sprintf("clipboard paste to target: %d bytes", len(text)), true, nil)
+		case "clipboard_watch":
+			if msg.Enabled == nil {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": "enabled is required"})
+				continue
+			}
+			if !sess.sendRawToAgent(raw) {
+				return
+			}
 		case "stop":
 			sess.end("operator_stop")
 			return
@@ -1114,6 +1184,14 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 					continue
 				}
 				sess.sendRawToOperator(clipped)
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "clipboard", "clipboard_error":
+			// The agent caps clipboard text at MaxWebRTCClipboardBytes; anything
+			// larger is not a clipboard frame and is dropped rather than relayed
+			// to a browser.
+			if len(raw) > MaxWebRTCClipboardBytes+2048 {
 				continue
 			}
 			sess.sendRawToOperator(raw)

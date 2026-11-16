@@ -68,6 +68,14 @@ export interface DisplayInfo {
   primary?: boolean;
 }
 
+/** Last clipboard value seen on this session (from the target or a paste). */
+export interface ClipboardState {
+  text: string;
+  source: "agent" | "operator";
+  truncated: boolean;
+  at: number;
+}
+
 interface SignalMessage {
   type?: string;
   sdp?: string;
@@ -77,6 +85,9 @@ interface SignalMessage {
   error?: string;
   displays?: DisplayInfo[];
   selected?: number;
+  text?: string;
+  source?: string;
+  truncated?: boolean;
 }
 
 /**
@@ -129,6 +140,10 @@ export function useWebRTCLive(agentId: string) {
   // 0 = all displays (the historical behaviour); 1..N = one monitor. The agent
   // announces the list on connect, so the picker appears without a restart.
   const [selectedDisplay, setSelectedDisplay] = useState(0);
+  // Live clipboard: the agent publishes the target's value on connect and on
+  // change; a paste updates it and the target reflects it immediately.
+  const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
+  const [clipboardError, setClipboardError] = useState("");
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteInputError = useCallback((reason: string) => {
     setInputError(reason);
@@ -248,6 +263,8 @@ export function useWebRTCLive(agentId: string) {
     cleanupLocal();
     setStatus("idle");
     setError("");
+    setClipboard(null);
+    setClipboardError("");
     if (agentId) {
       // Fallback for an agent whose signaling socket died before it saw the
       // close: the server queues screen_webrtc_stop. The session id keeps a
@@ -259,8 +276,37 @@ export function useWebRTCLive(agentId: string) {
     stoppingRef.current = false;
   }, [agentId, cleanupLocal, sendSignal]);
 
-  const selectDisplay = useCallback((display: number) => {
-    setSelectedDisplay(display);
+  const requestClipboard = useCallback(() => {
+    if (!sendSignal({ type: "clipboard_get" })) setClipboardError(t("agents.rdp_clipboard_failed"));
+  }, [sendSignal, t]);
+
+  const pushClipboard = useCallback((text: string) => {
+    if (!sendSignal({ type: "clipboard_set", text })) setClipboardError(t("agents.rdp_clipboard_failed"));
+  }, [sendSignal, t]);
+
+  // The browser clipboard API needs a secure context and a user gesture. When
+  // it is unavailable (plain-HTTP deployment, permission denied) the console
+  // reports it and the manual paste box stays usable.
+  const pasteLocalClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      pushClipboard(text);
+    } catch {
+      setClipboardError(t("agents.rdp_clipboard_denied"));
+    }
+  }, [pushClipboard, t]);
+
+  const copyClipboardToLocal = useCallback(async () => {
+    if (!clipboard) return;
+    try {
+      await navigator.clipboard.writeText(clipboard.text);
+      setClipboardError("");
+    } catch {
+      setClipboardError(t("agents.rdp_clipboard_denied"));
+    }
+  }, [clipboard, t]);
+
+  const selectDisplay = useCallback((display: number) => {    setSelectedDisplay(display);
     // While a session is live the agent restarts its capture against the new
     // monitor; before a session the choice is simply remembered for the start
     // request.
@@ -427,6 +473,20 @@ export function useWebRTCLive(agentId: string) {
           case "input_rejected":
             noteInputError(message.reason || message.error || t("agents.rdp_input_rejected"));
             break;
+          case "clipboard":
+            if (typeof message.text === "string") {
+              setClipboard({
+                text: message.text,
+                source: message.source === "operator" ? "operator" : "agent",
+                truncated: message.truncated === true,
+                at: Date.now(),
+              });
+              setClipboardError("");
+            }
+            break;
+          case "clipboard_error":
+            setClipboardError(message.reason || message.error || t("agents.rdp_clipboard_failed"));
+            break;
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -470,6 +530,8 @@ export function useWebRTCLive(agentId: string) {
     setStatus("idle");
     setError("");
     setInputError("");
+    setClipboard(null);
+    setClipboardError("");
   }, [agentId, cleanupLocal]);
 
   return {
@@ -478,6 +540,12 @@ export function useWebRTCLive(agentId: string) {
     status,
     error,
     inputError,
+    clipboard,
+    clipboardError,
+    requestClipboard,
+    pushClipboard,
+    pasteLocalClipboard,
+    copyClipboardToLocal,
     displays,
     selectedDisplay,
     selectDisplay,

@@ -81,6 +81,9 @@ type webRTCSignal struct {
 	Reason    string          `json:"reason,omitempty"`
 	// Display is the monitor switch requested by the console (0 = all).
 	Display *int `json:"display,omitempty"`
+	// Clipboard payloads: text is the value, enabled toggles change streaming.
+	Text    string `json:"text,omitempty"`
+	Enabled *bool  `json:"enabled,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -123,6 +126,12 @@ type agentWebRTCSession struct {
 	// inputErrAt rate-limits "input_rejected" reports; the signaling read loop
 	// is the only writer.
 	inputErrAt time.Time
+
+	// Live clipboard: the watcher goroutine sends the target clipboard when it
+	// changes, and an operator paste updates it without echoing back.
+	clipMu       sync.Mutex
+	clipWatch    bool
+	clipLastHash string
 }
 
 var (
@@ -225,6 +234,9 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 		cancel:    cancel,
 		capture:   capture,
 		captureOK: true,
+		// Live clipboard is on by default: the operator opened a remote-control
+		// page, and the first frame shows what the target already holds.
+		clipWatch: true,
 	}
 	webRTCSessionMu.Lock()
 	if webRTCSessionActive != nil {
@@ -240,6 +252,7 @@ func startAgentWebRTC(data webRTCAgentStartData) error {
 		return err
 	}
 	go sess.readLoop()
+	go sess.clipboardWatcher()
 	return nil
 }
 
@@ -678,6 +691,17 @@ func (s *agentWebRTCSession) readLoop() {
 				continue
 			}
 			s.switchDisplay(*msg.Display)
+		case "clipboard_get":
+			s.publishClipboard(true)
+		case "clipboard_set":
+			// The OS write can block (xclip hands the selection to a helper),
+			// so it must not stall input handling on the read loop.
+			text := msg.Text
+			go s.applyClipboardSet(text)
+		case "clipboard_watch":
+			if msg.Enabled != nil {
+				s.setClipboardWatch(*msg.Enabled)
+			}
 		case "stop", "session_end":
 			return
 		}

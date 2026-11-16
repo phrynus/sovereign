@@ -96,7 +96,7 @@ var auditCategoryRules = []auditCategoryRule{
 			"execute_assembly", "approve_task", "reject_task", "batch_command",
 			"batch_delete_agents", "batch_sleep_clamped", "tasks_rerun_by_signature",
 			"task_export", "timeline_export", "screenshot_request", "request_hostinfo",
-			"remote_desktop_open", "remote_desktop_close", "remote_input",
+			"remote_desktop_open", "remote_desktop_close", "remote_input", "clipboard_sync",
 			"screen_monitor_start", "screen_monitor_stop", "run_evasion",
 			"spawn", "lateral", "privesc_check", "privilege_escalation_check",
 			"uac_bypass", "persistence_add", "persistence_list", "persistence_remove",

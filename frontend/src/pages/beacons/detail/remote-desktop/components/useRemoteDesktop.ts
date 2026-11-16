@@ -67,6 +67,12 @@ export function useRemoteDesktop(agentId: string) {
     displays: liveDisplays,
     selectedDisplay,
     selectDisplay,
+    clipboard: liveClipboard,
+    clipboardError: liveClipboardError,
+    requestClipboard: liveRequestClipboard,
+    pushClipboard: livePushClipboard,
+    pasteLocalClipboard: livePasteLocalClipboard,
+    copyClipboardToLocal: liveCopyClipboardToLocal,
     presets: livePresets,
     livePreset,
     setLivePreset,
@@ -574,5 +580,8 @@ export function useRemoteDesktop(agentId: string) {
     liveActive, liveStatus, liveError, livePresets, livePreset, setLivePreset,
     liveWidth, liveHeight, liveVideoRef, markLivePlaying, liveInputError: live.inputError,
     displays: liveDisplays, selectedDisplay, selectDisplay,
+    clipboard: liveClipboard, clipboardError: liveClipboardError,
+    requestClipboard: liveRequestClipboard, pushClipboard: livePushClipboard,
+    pasteLocalClipboard: livePasteLocalClipboard, copyClipboardToLocal: liveCopyClipboardToLocal,
   };
 }
