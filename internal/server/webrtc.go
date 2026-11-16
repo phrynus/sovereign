@@ -50,6 +50,11 @@ const (
 	MaxWebRTCDisplayIndex = 8
 	// MaxWebRTCClipboardBytes bounds one clipboard value in both directions.
 	MaxWebRTCClipboardBytes = 64 * 1024
+	// MaxClipboardHistory is the bounded ring the agent keeps; the list frame
+	// carries previews only, so its size stays a few KiB.
+	MaxClipboardHistory = 20
+	// MaxClipboardHistoryFrameBytes bounds the relayed history list frame.
+	MaxClipboardHistoryFrameBytes = 16 * 1024
 	// MaxClipboardSetsPerWindow throttles operator pastes. Ten in ten seconds
 	// is far above human use and far below a write-amplification stream.
 	MaxClipboardSetsPerWindow = 10
@@ -896,6 +901,9 @@ type webrtcSignal struct {
 	Enabled *bool  `json:"enabled,omitempty"`
 	// Title is the optional dialog title for a chat message.
 	Title string `json:"title,omitempty"`
+	// Limit/Index address the bounded clipboard history.
+	Limit *int `json:"limit,omitempty"`
+	Index *int `json:"index,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -969,6 +977,13 @@ func (s *Server) allowDifferentialToggle(operatorID, agentID string) bool {
 func (s *Server) allowAudioToggle(operatorID, agentID string) bool {
 	key := operatorID + ":" + strings.ToLower(agentID) + ":audio"
 	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
+}
+
+// allowClipboardHistory throttles history reads: the history is sensitive and
+// scrolling it is cheap, so 20 per 10 s is generous without being a bulk dump.
+func (s *Server) allowClipboardHistory(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":cliph"
+	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
 }
 
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
@@ -1170,6 +1185,56 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				continue
 			}
 			if !sess.sendRawToAgent(raw) {
+				return
+			}
+		case "clipboard_history":
+			// Bounded list request: previews only, newest first. The limit is
+			// validated here so the agent never has to guess what the console
+			// asked for.
+			limit := MaxClipboardHistory
+			if msg.Limit != nil {
+				limit = *msg.Limit
+			}
+			if limit < 1 || limit > MaxClipboardHistory {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": "history limit must be 1-20"})
+				continue
+			}
+			if !s.allowClipboardHistory(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": "clipboard history rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "clipboard_history", "limit": limit})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			s.LogAuditRecord(c, "clipboard_history", "agent", sess.AgentID,
+				fmt.Sprintf("clipboard history read (limit %d)", limit), true, nil)
+		case "clipboard_history_get":
+			// One full remembered value, by newest-first index.
+			if msg.Index == nil || *msg.Index < 0 || *msg.Index >= MaxClipboardHistory {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": "history index must be 0-19"})
+				continue
+			}
+			if !s.allowClipboardHistory(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "clipboard_error", "reason": "clipboard history rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "clipboard_history_get", "index": *msg.Index})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
 				return
 			}
 		case "message":
@@ -1395,6 +1460,13 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 			// larger is not a clipboard frame and is dropped rather than relayed
 			// to a browser.
 			if len(raw) > MaxWebRTCClipboardBytes+2048 {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "clipboard_history":
+			// Previews only; a frame larger than the list bound is not a
+			// history response and is dropped.
+			if len(raw) > MaxClipboardHistoryFrameBytes {
 				continue
 			}
 			sess.sendRawToOperator(raw)

@@ -77,6 +77,14 @@ export interface ClipboardState {
   at: number;
 }
 
+/** One remembered clipboard value as listed by the agent (preview only). */
+export interface ClipboardHistoryItem {
+  index: number;
+  preview: string;
+  bytes: number;
+  at: string;
+}
+
 interface SignalMessage {
   type?: string;
   sdp?: string;
@@ -94,6 +102,8 @@ interface SignalMessage {
   enabled?: boolean;
   holder?: string;
   you?: boolean;
+  items?: unknown[];
+  total?: number;
 }
 
 /**
@@ -150,6 +160,9 @@ export function useWebRTCLive(agentId: string) {
   // change; a paste updates it and the target reflects it immediately.
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
   const [clipboardError, setClipboardError] = useState("");
+  // Bounded clipboard history (previews only; the full value is fetched on
+  // demand and then lands in `clipboard`, so Copy/Paste work unchanged).
+  const [clipboardHistory, setClipboardHistory] = useState<ClipboardHistoryItem[]>([]);
   // Outcome of the last operator chat message (shown on the target / failed).
   const [messageStatus, setMessageStatus] = useState<"shown" | "failed" | "">("");
   // Live keystroke feed: `keysOn` follows the agent's confirmation, `feed` is
@@ -297,6 +310,7 @@ export function useWebRTCLive(agentId: string) {
     setError("");
     setClipboard(null);
     setClipboardError("");
+    setClipboardHistory([]);
     if (agentId) {
       // Fallback for an agent whose signaling socket died before it saw the
       // close: the server queues screen_webrtc_stop. The session id keeps a
@@ -387,6 +401,14 @@ export function useWebRTCLive(agentId: string) {
       setClipboardError(t("agents.rdp_clipboard_denied"));
     }
   }, [clipboard, t]);
+
+  const requestClipboardHistory = useCallback(() => {
+    sendSignal({ type: "clipboard_history", limit: 20 });
+  }, [sendSignal]);
+
+  const loadHistoryItem = useCallback((index: number) => {
+    sendSignal({ type: "clipboard_history_get", index });
+  }, [sendSignal]);
 
   const selectDisplay = useCallback((display: number) => {
     setSelectedDisplay(display);
@@ -587,6 +609,21 @@ export function useWebRTCLive(agentId: string) {
           case "clipboard_error":
             setClipboardError(message.reason || message.error || t("agents.rdp_clipboard_failed"));
             break;
+          case "clipboard_history": {
+            const items = Array.isArray(message.items) ? message.items : [];
+            setClipboardHistory(
+              items
+                .filter((item): item is ClipboardHistoryItem =>
+                  typeof item === "object" && item !== null && typeof (item as ClipboardHistoryItem).index === "number")
+                .map((item) => ({
+                  index: Number(item.index),
+                  preview: String(item.preview ?? ""),
+                  bytes: Number(item.bytes ?? 0),
+                  at: String(item.at ?? ""),
+                })),
+            );
+            break;
+          }
           case "message_status":
             setMessageStatus(message.status === "shown" ? "shown" : "failed");
             break;
@@ -653,6 +690,7 @@ export function useWebRTCLive(agentId: string) {
     setInputError("");
     setClipboard(null);
     setClipboardError("");
+    setClipboardHistory([]);
     setMessageStatus("");
     setKeysOn(false);
     setKeysFeed("");
@@ -669,6 +707,9 @@ export function useWebRTCLive(agentId: string) {
     clipboardError,
     requestClipboard,
     pushClipboard,
+    clipboardHistory,
+    requestClipboardHistory,
+    loadHistoryItem,
     pasteLocalClipboard,
     copyClipboardToLocal,
     messageStatus,

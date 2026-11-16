@@ -2,8 +2,8 @@ import { memo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ClipboardCopy, ClipboardPaste, RefreshCw, Send } from "lucide-react";
-import type { ClipboardState } from "./useWebRTCLive";
+import { ClipboardCopy, ClipboardPaste, History, RefreshCw, Send } from "lucide-react";
+import type { ClipboardHistoryItem, ClipboardState } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -11,10 +11,13 @@ interface RdpClipboardProps {
   t: TKey;
   clipboard: ClipboardState | null;
   error: string;
+  history: ClipboardHistoryItem[];
   onRead: () => void;
   onCopyToLocal: () => void;
   onPasteLocal: () => void;
   onSendText: (text: string) => void;
+  onRequestHistory: () => void;
+  onLoadHistory: (index: number) => void;
 }
 
 /** How much of the clipboard value the strip shows before eliding. */
@@ -30,6 +33,15 @@ export function clipboardPreview(text: string): string {
   return `${chars.slice(0, CLIPBOARD_PREVIEW_CHARS).join("")}…`;
 }
 
+/** HH:MM:SS from an RFC3339 timestamp; empty when the value is unusable. */
+export function historyTime(iso: string): string {
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return "";
+  const d = new Date(parsed);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /**
  * Live clipboard strip: shows what the target currently holds, lets the
  * operator copy it locally, and sends either the browser clipboard or typed
@@ -37,9 +49,11 @@ export function clipboardPreview(text: string): string {
  * unavailable on plain-HTTP deployments and in some permission states.
  */
 export default memo(function RdpClipboard({
-  t, clipboard, error, onRead, onCopyToLocal, onPasteLocal, onSendText,
+  t, clipboard, error, history, onRead, onCopyToLocal, onPasteLocal, onSendText,
+  onRequestHistory, onLoadHistory,
 }: RdpClipboardProps) {
   const [manual, setManual] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const hasText = Boolean(clipboard?.text);
 
   return (
@@ -84,6 +98,19 @@ export default memo(function RdpClipboard({
           <ClipboardCopy className="size-3.5" />
         </Button>
         <Button
+          variant={showHistory ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            const next = !showHistory;
+            setShowHistory(next);
+            if (next) onRequestHistory();
+          }}
+          title={t("agents.rdp_clipboard_history")}
+          aria-pressed={showHistory}
+        >
+          <History className="size-3.5" />
+        </Button>
+        <Button
           variant="outline"
           size="sm"
           onClick={onPasteLocal}
@@ -93,6 +120,34 @@ export default memo(function RdpClipboard({
           <ClipboardPaste className="size-3.5" />
         </Button>
       </div>
+
+      {showHistory && (
+        <div className="mt-2 max-h-40 overflow-auto rounded-md border border-border">
+          {history.length === 0 ? (
+            <p className="px-2 py-1 text-micro-sm text-muted-foreground">{t("agents.rdp_clipboard_history_empty")}</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {history.map((item) => (
+                <li key={item.index} className="flex items-center gap-2 px-2 py-1">
+                  <span className="min-w-0 flex-1 truncate font-mono text-micro-sm" title={item.preview}>
+                    {item.preview}
+                  </span>
+                  <span className="shrink-0 text-micro-sm text-muted-foreground">{item.bytes} B</span>
+                  <span className="shrink-0 text-micro-sm text-muted-foreground">{historyTime(item.at)}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onLoadHistory(item.index)}
+                    title={t("agents.rdp_clipboard_load")}
+                  >
+                    {t("agents.rdp_clipboard_load")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center gap-2">
         <input

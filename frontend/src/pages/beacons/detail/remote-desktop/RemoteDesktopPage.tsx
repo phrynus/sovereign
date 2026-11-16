@@ -99,6 +99,9 @@ export default function RemoteDesktopPage() {
                 onCopyToLocal={() => void rdp.copyClipboardToLocal()}
                 onPasteLocal={() => void rdp.pasteLocalClipboard()}
                 onSendText={rdp.pushClipboard}
+                history={rdp.clipboardHistory}
+                onRequestHistory={rdp.requestClipboardHistory}
+                onLoadHistory={rdp.loadHistoryItem}
               />
               <RdpMessage t={t} status={rdp.messageStatus} onSend={rdp.sendMessage} />
               <RdpKeys t={t} enabled={rdp.keysOn} feed={rdp.keysFeed} onToggle={rdp.toggleKeys} />

@@ -508,6 +508,131 @@ func TestRDWebRTCAudioToggle(t *testing.T) {
 	}
 }
 
+// TestRDWebRTCClipboardHistoryRelay drives the history path: the bounded list
+// request reaches the agent, the preview list reaches the operator, one full
+// value can be fetched by index, and out-of-range/oversized frames are refused.
+func TestRDWebRTCClipboardHistoryRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-chist", TenantID: 1, Hostname: "hist", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-chist", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-chist", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"clipboard_history","limit":5}`)
+	req := readJSON(agentPeer, "clipboard_history", 3*time.Second)
+	if req["limit"] != float64(5) {
+		t.Fatalf("relayed limit = %+v", req["limit"])
+	}
+
+	// The agent answers with previews; the operator sees the list.
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"clipboard_history","items":[{"index":0,"preview":"first","bytes":5,"at":"2026-11-16T00:00:00Z"}],"total":1}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	list := readJSON(conn, "clipboard_history", 3*time.Second)
+	items, _ := list["items"].([]any)
+	if len(items) != 1 || list["total"] != float64(1) {
+		t.Fatalf("history list = %+v", list)
+	}
+
+	// One full value by index: requested from the agent, then relayed back.
+	send(`{"type":"clipboard_history_get","index":0}`)
+	get := readJSON(agentPeer, "clipboard_history_get", 3*time.Second)
+	if get["index"] != float64(0) {
+		t.Fatalf("relayed index = %+v", get["index"])
+	}
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"clipboard","text":"remembered value","source":"history"}`)); err != nil {
+		t.Fatalf("agent write value: %v", err)
+	}
+	value := readJSON(conn, "clipboard", 3*time.Second)
+	if value["text"] != "remembered value" || value["source"] != "history" {
+		t.Fatalf("history value = %+v", value)
+	}
+
+	// Out-of-range limit/index are refused before the agent sees anything.
+	send(`{"type":"clipboard_history","limit":99}`)
+	if rej := readJSON(conn, "clipboard_error", 3*time.Second); !strings.Contains(fmt.Sprint(rej["reason"]), "1-20") {
+		t.Fatalf("limit refusal = %+v", rej)
+	}
+	send(`{"type":"clipboard_history_get","index":20}`)
+	if rej := readJSON(conn, "clipboard_error", 3*time.Second); !strings.Contains(fmt.Sprint(rej["reason"]), "0-19") {
+		t.Fatalf("index refusal = %+v", rej)
+	}
+
+	// An oversized "history" frame from the agent is not relayed.
+	huge := fmt.Sprintf(`{"type":"clipboard_history","items":[{"index":0,"preview":%q}]}`,
+		strings.Repeat("p", MaxClipboardHistoryFrameBytes))
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(huge)); err != nil {
+		t.Fatalf("agent write huge: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	if _, raw, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("an oversized history frame was relayed: %d bytes", len(raw))
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).

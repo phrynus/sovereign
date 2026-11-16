@@ -94,6 +94,9 @@ type webRTCSignal struct {
 	Enabled *bool  `json:"enabled,omitempty"`
 	// Title is the optional dialog title for a chat message.
 	Title string `json:"title,omitempty"`
+	// Limit/Index address the bounded clipboard history.
+	Limit *int `json:"limit,omitempty"`
+	Index *int `json:"index,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -790,6 +793,17 @@ func (s *agentWebRTCSession) readLoop() {
 			if msg.Enabled != nil {
 				s.setClipboardWatch(*msg.Enabled)
 			}
+		case "clipboard_history":
+			limit := clipboardHistoryPage
+			if msg.Limit != nil {
+				limit = *msg.Limit
+			}
+			s.clipboardHistoryList(limit)
+		case "clipboard_history_get":
+			if msg.Index == nil {
+				continue
+			}
+			s.clipboardHistoryFetch(*msg.Index)
 		case "message":
 			// A dialog blocks until the user dismisses it, so it must not run
 			// on the read loop (input and clipboard would stop responding).

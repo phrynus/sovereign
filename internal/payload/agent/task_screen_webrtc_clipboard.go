@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -8,6 +10,91 @@ import (
 // the last value sent. Polling (instead of a Win32 clipboard-viewer chain)
 // keeps one implementation for every platform and costs one hash per tick.
 const clipboardPollInterval = 1500 * time.Millisecond
+
+// Clipboard history bounds. The value cap matches one clipboard frame; the
+// list cap keeps the whole history under ~1.3 MiB of host memory and one
+// history frame under a few KiB (the list carries previews, not values).
+const (
+	maxClipboardHistory  = 20
+	clipboardPreviewLen  = 160
+	clipboardHistoryPage = 20
+)
+
+// clipboardHistoryEntry is one remembered clipboard value.
+type clipboardHistoryEntry struct {
+	text string
+	at   time.Time
+}
+
+var (
+	clipHistMu sync.Mutex
+	clipHist   []clipboardHistoryEntry // oldest first; newest at the end
+)
+
+// clipboardHistoryRecord remembers one value: consecutive duplicates are
+// ignored (a poll that sees the same text must not fill the history), and the
+// oldest entry is evicted once the cap is reached.
+func clipboardHistoryRecord(text string, at time.Time) {
+	if text == "" {
+		return
+	}
+	if len(text) > MaxClipboardBytes {
+		text = text[:MaxClipboardBytes]
+	}
+	clipHistMu.Lock()
+	defer clipHistMu.Unlock()
+	if n := len(clipHist); n > 0 && clipHist[n-1].text == text {
+		return
+	}
+	clipHist = append(clipHist, clipboardHistoryEntry{text: text, at: at})
+	if len(clipHist) > maxClipboardHistory {
+		clipHist = clipHist[len(clipHist)-maxClipboardHistory:]
+	}
+}
+
+// clipboardHistorySnapshot returns up to limit entries, newest first. Index 0
+// is always the newest, which is what the console shows on top.
+func clipboardHistorySnapshot(limit int) []clipboardHistoryEntry {
+	if limit <= 0 || limit > maxClipboardHistory {
+		limit = clipboardHistoryPage
+	}
+	clipHistMu.Lock()
+	defer clipHistMu.Unlock()
+	out := make([]clipboardHistoryEntry, 0, limit)
+	for i := len(clipHist) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, clipHist[i])
+	}
+	return out
+}
+
+// clipboardHistoryAt resolves one entry by its newest-first index.
+func clipboardHistoryAt(index int) (clipboardHistoryEntry, bool) {
+	clipHistMu.Lock()
+	defer clipHistMu.Unlock()
+	pos := len(clipHist) - 1 - index
+	if index < 0 || pos < 0 || pos >= len(clipHist) {
+		return clipboardHistoryEntry{}, false
+	}
+	return clipHist[pos], true
+}
+
+// clipboardHistoryTotal returns how many values are remembered.
+func clipboardHistoryTotal() int {
+	clipHistMu.Lock()
+	defer clipHistMu.Unlock()
+	return len(clipHist)
+}
+
+// clipboardPreviewText flattens a value into one short line for the history
+// list. It slices by rune so a multi-byte character is never split.
+func clipboardPreviewText(text string) string {
+	flat := strings.Join(strings.Fields(text), " ")
+	runes := []rune(flat)
+	if len(runes) <= clipboardPreviewLen {
+		return flat
+	}
+	return string(runes[:clipboardPreviewLen]) + "…"
+}
 
 // clipboardWatcher publishes the target clipboard when it changes. It sends the
 // current value once on connect (so the console shows what is already there),
@@ -49,6 +136,7 @@ func (s *agentWebRTCSession) publishClipboard(force bool) {
 	s.clipLastHash = hash
 	s.clipMu.Unlock()
 
+	clipboardHistoryRecord(text, time.Now())
 	_ = s.sendJSON(map[string]any{
 		"type":      "clipboard",
 		"text":      text,
@@ -94,10 +182,47 @@ func (s *agentWebRTCSession) applyClipboardSet(raw string) {
 	s.clipMu.Lock()
 	s.clipLastHash = clipboardHash(text)
 	s.clipMu.Unlock()
+	clipboardHistoryRecord(text, time.Now())
 	_ = s.sendJSON(map[string]any{
 		"type":      "clipboard",
 		"text":      text,
 		"source":    "operator",
+		"truncated": false,
+	})
+}
+
+// clipboardHistoryList answers a history request with previews only: the list
+// frame must stay small even when 20 values are 64 KiB each.
+func (s *agentWebRTCSession) clipboardHistoryList(limit int) {
+	entries := clipboardHistorySnapshot(limit)
+	items := make([]map[string]any, 0, len(entries))
+	for i, entry := range entries {
+		items = append(items, map[string]any{
+			"index":   i,
+			"preview": clipboardPreviewText(entry.text),
+			"bytes":   len(entry.text),
+			"at":      entry.at.UTC().Format(time.RFC3339),
+		})
+	}
+	_ = s.sendJSON(map[string]any{
+		"type":  "clipboard_history",
+		"items": items,
+		"total": clipboardHistoryTotal(),
+	})
+}
+
+// clipboardHistoryFetch sends one full remembered value. The console uses it to
+// load an entry into the strip, then Copy/Paste as usual.
+func (s *agentWebRTCSession) clipboardHistoryFetch(index int) {
+	entry, ok := clipboardHistoryAt(index)
+	if !ok {
+		_ = s.sendJSON(map[string]any{"type": "clipboard_error", "reason": "clipboard history index out of range"})
+		return
+	}
+	_ = s.sendJSON(map[string]any{
+		"type":      "clipboard",
+		"text":      entry.text,
+		"source":    "history",
 		"truncated": false,
 	})
 }
