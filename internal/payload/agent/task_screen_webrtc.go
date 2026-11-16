@@ -61,6 +61,10 @@ type webRTCSettings struct {
 	// desktop, N>=1 is monitor N in the agent's announced order. The console
 	// sends it in the start request, and the live "display" signal switches it.
 	Display int `json:"display"`
+	// Differential drops frames that are near-identical to their predecessor
+	// (mpdecimate), so a static desktop stops costing a full frame rate while
+	// every changed frame is still sent.
+	Differential bool `json:"differential"`
 }
 
 type webRTCAgentStartData struct {
@@ -113,8 +117,10 @@ type agentWebRTCSession struct {
 	cmdMu     sync.Mutex
 	rtpMu     sync.Mutex
 	captureMu sync.RWMutex
-	cmd       *exec.Cmd
-	stopOnce  sync.Once
+	// settingsMu guards the mutable settings (differential can be toggled live).
+	settingsMu sync.RWMutex
+	cmd        *exec.Cmd
+	stopOnce   sync.Once
 	// captureGen identifies the live ffmpeg process. A restart (display switch)
 	// increments it, and the old process's Wait goroutine checks it before
 	// reporting a failure: killing ffmpeg on purpose must not end the session.
@@ -392,7 +398,7 @@ func (s *agentWebRTCSession) connect(data webRTCAgentStartData) error {
 			"virtual": map[string]int{
 				"x": virtual.X, "y": virtual.Y, "width": virtual.Width, "height": virtual.Height,
 			},
-			"selected": s.settings.Display,
+			"selected": s.settingsSnapshot().Display,
 		})
 	}
 	return nil
@@ -422,8 +428,10 @@ func (s *agentWebRTCSession) switchDisplay(display int) {
 	s.captureMu.Lock()
 	s.capture = capture
 	s.captureOK = true
-	s.settings.Display = display
 	s.captureMu.Unlock()
+	s.settingsMu.Lock()
+	s.settings.Display = display
+	s.settingsMu.Unlock()
 
 	s.stopCapture()
 	// ensurePipeline already fired for this session, so restart directly: it
@@ -548,6 +556,40 @@ func (s *agentWebRTCSession) reportInputError(err error) {
 	_ = s.sendJSON(map[string]any{"type": "input_error", "reason": err.Error()})
 }
 
+// settingsSnapshot returns a copy of the mutable settings for one pipeline
+// start (differential can change while a session is live).
+func (s *agentWebRTCSession) settingsSnapshot() webRTCSettings {
+	s.settingsMu.RLock()
+	defer s.settingsMu.RUnlock()
+	return s.settings
+}
+
+// setDifferential switches the change-only capture mode. A running pipeline is
+// restarted against the new filter chain; before the stream starts the value
+// simply applies when it does.
+func (s *agentWebRTCSession) setDifferential(enabled bool) {
+	s.settingsMu.Lock()
+	changed := s.settings.Differential != enabled
+	s.settings.Differential = enabled
+	s.settingsMu.Unlock()
+
+	_ = s.sendJSON(map[string]any{"type": "differential", "enabled": enabled})
+	if !changed {
+		return
+	}
+	s.cmdMu.Lock()
+	running := s.cmd != nil
+	s.cmdMu.Unlock()
+	if !running {
+		return
+	}
+	s.stopCapture()
+	if err := s.startRTPPipeline(); err != nil {
+		_ = s.sendJSON(map[string]any{"type": "error", "reason": "differential switch: " + err.Error()})
+		s.stop("differential switch failed")
+	}
+}
+
 // scaleInput maps browser coordinates from the encoded video back to native
 // screen pixels. ffmpeg pads and scales the CAPTURED REGION to
 // settings.Width/Height, so forwarding the video coordinates unchanged would
@@ -555,7 +597,8 @@ func (s *agentWebRTCSession) reportInputError(err error) {
 // 1080p at the 720p preset) and on every monitor other than the first.
 func (s *agentWebRTCSession) scaleInput(raw []byte) []byte {
 	capture, ok := s.captureSnapshot()
-	return mapWebRTCInput(raw, capture.X, capture.Y, capture.Width, capture.Height, s.settings.Width, s.settings.Height, ok)
+	settings := s.settingsSnapshot()
+	return mapWebRTCInput(raw, capture.X, capture.Y, capture.Width, capture.Height, settings.Width, settings.Height, ok)
 }
 
 // mapWebRTCInput is the testable half of scaleInput. It only rewrites pointer
@@ -723,6 +766,11 @@ func (s *agentWebRTCSession) readLoop() {
 				continue
 			}
 			s.setKeyFeed(*msg.Enabled)
+		case "differential":
+			if msg.Enabled == nil {
+				continue
+			}
+			s.setDifferential(*msg.Enabled)
 		case "stop", "session_end":
 			return
 		}
@@ -799,7 +847,7 @@ func (s *agentWebRTCSession) startRTPPipeline() error {
 		_ = conn.Close()
 		return fmt.Errorf("screen geometry is unavailable")
 	}
-	args, err := buildScreenFFmpegArgs(s.settings, conn.LocalAddr().(*net.UDPAddr).Port, capture, hasCapture)
+	args, err := buildScreenFFmpegArgs(s.settingsSnapshot(), conn.LocalAddr().(*net.UDPAddr).Port, capture, hasCapture)
 	if err != nil {
 		_ = conn.Close()
 		return err
@@ -928,9 +976,23 @@ func buildScreenFFmpegArgs(settings webRTCSettings, rtpPort int, capture screenR
 	if settings.Width*settings.Height > 1280*720 {
 		level = "4.0"
 	}
-	filter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-		settings.Width, settings.Height, settings.Width, settings.Height)
-	args = append(args, "-vf", filter)
+	// Differential mode: mpdecimate drops frames that are near-identical to
+	// their predecessor, and -fps_mode vfr keeps the surviving frames on their
+	// original timestamps (without it ffmpeg duplicates the dropped frames back
+	// to the input rate and the saving disappears). It goes FIRST in the chain:
+	// decimating after scaling would compare already-resampled pixels.
+	filters := make([]string, 0, 4)
+	if settings.Differential {
+		filters = append(filters, "mpdecimate")
+	}
+	filters = append(filters,
+		fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", settings.Width, settings.Height),
+		fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2", settings.Width, settings.Height),
+		"format=yuv420p")
+	args = append(args, "-vf", strings.Join(filters, ","))
+	if settings.Differential {
+		args = append(args, "-fps_mode", "vfr")
+	}
 	args = append(args, encoderFFmpegArgs(settings.Encoder, level)...)
 	gop := settings.FPS * 2
 	args = append(args,

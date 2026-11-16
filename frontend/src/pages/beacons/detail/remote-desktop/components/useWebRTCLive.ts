@@ -159,6 +159,9 @@ export function useWebRTCLive(agentId: string) {
   // Exclusive control: the agent has one controller at a time. `null` means
   // nobody holds the lease yet (the next input claims it).
   const [control, setControl] = useState<{ holder: string; you: boolean } | null>(null);
+  // Change-only capture (mpdecimate): suppress unchanged frames, still send
+  // every changed one. Toggling restarts the agent's pipeline.
+  const [differential, setDifferential] = useState(false);
   const inputErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteInputError = useCallback((reason: string) => {
     setInputError(reason);
@@ -319,6 +322,11 @@ export function useWebRTCLive(agentId: string) {
     return sendSignal({ type: "control", action: "release" });
   }, [sendSignal]);
 
+  const toggleDifferential = useCallback((enabled: boolean) => {
+    setDifferential(enabled);
+    sendSignal({ type: "differential", enabled });
+  }, [sendSignal]);
+
   // The browser clipboard API needs a secure context and a user gesture. When
   // it is unavailable (plain-HTTP deployment, permission denied) the console
   // reports it and the manual paste box stays usable.
@@ -341,7 +349,8 @@ export function useWebRTCLive(agentId: string) {
     }
   }, [clipboard, t]);
 
-  const selectDisplay = useCallback((display: number) => {    setSelectedDisplay(display);
+  const selectDisplay = useCallback((display: number) => {
+    setSelectedDisplay(display);
     // While a session is live the agent restarts its capture against the new
     // monitor; before a session the choice is simply remembered for the start
     // request.
@@ -349,7 +358,7 @@ export function useWebRTCLive(agentId: string) {
   }, [sendSignal]);
 
   const start = useCallback(
-    async (presetValue: string, display = 0) => {
+    async (presetValue: string, display = 0, differentialMode = false) => {
       if (!agentId) return;
       if (typeof RTCPeerConnection === "undefined" || typeof WebSocket === "undefined") {
         fail(t("agents.rdp_live_unsupported"));
@@ -363,6 +372,7 @@ export function useWebRTCLive(agentId: string) {
       setLiveWidth(preset.width);
       setLiveHeight(preset.height);
       setSelectedDisplay(display);
+      setDifferential(differentialMode);
       setError("");
       setStatus("connecting");
 
@@ -375,6 +385,7 @@ export function useWebRTCLive(agentId: string) {
           bitrate_kbps: preset.bitrateKbps,
           encoder: "auto",
           display,
+          differential: differentialMode,
         });
       } catch (err) {
         setStatus("error");
@@ -536,6 +547,9 @@ export function useWebRTCLive(agentId: string) {
             setControl(holder ? { holder, you: message.you === true } : null);
             break;
           }
+          case "differential":
+            if (typeof message.enabled === "boolean") setDifferential(message.enabled);
+            break;
           case "session_end": {
             if (stoppingRef.current) return;
             fail(message.reason ? `${t("agents.rdp_live_ended")} (${message.reason})` : t("agents.rdp_live_ended"));
@@ -607,6 +621,8 @@ export function useWebRTCLive(agentId: string) {
     control,
     takeControl,
     releaseControl,
+    differential,
+    toggleDifferential,
     displays,
     selectedDisplay,
     selectDisplay,

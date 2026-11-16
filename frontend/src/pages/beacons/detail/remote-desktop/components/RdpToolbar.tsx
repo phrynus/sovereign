@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WorkspaceToolbar } from "@/components/ui/workspace-toolbar";
-import { Compass, Expand, Maximize2, Monitor, Play, Square, Users } from "lucide-react";
+import { Compass, Expand, Gauge, Maximize2, Monitor, Play, Square, Users } from "lucide-react";
 import { isExperimentalDesktop } from "../../components/session-quality";
 import type { ResolutionOption } from "./useRemoteDesktop";
 import type { DisplayInfo, LivePreset } from "./useWebRTCLive";
@@ -27,6 +27,8 @@ interface RdpToolbarProps {
   displays: DisplayInfo[];
   selectedDisplay: number;
   onSelectDisplay: (index: number) => void;
+  differential: boolean;
+  onToggleDifferential: (enabled: boolean) => void;
   active: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -40,6 +42,7 @@ export default memo(function RdpToolbar({
   t, agentId, nativeWidth, nativeHeight, resolutions, resolution, setResolution,
   mode, setMode, livePresets, livePreset, setLivePreset,
   displays, selectedDisplay, onSelectDisplay,
+  differential, onToggleDifferential,
   active, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
 }: RdpToolbarProps) {
   return (
@@ -138,6 +141,18 @@ export default memo(function RdpToolbar({
                 ))}
               </SelectContent>
             </Select>
+          )}
+          {mode === "live" && (
+            <Button
+              variant={differential ? "default" : "outline"}
+              size="sm"
+              onClick={() => onToggleDifferential(!differential)}
+              title={t("agents.rdp_differential_hint")}
+              aria-pressed={differential}
+            >
+              <Gauge className="size-3.5" />
+              {t("agents.rdp_differential")}
+            </Button>
           )}
           <Tooltip>
             <TooltipTrigger render={<Button

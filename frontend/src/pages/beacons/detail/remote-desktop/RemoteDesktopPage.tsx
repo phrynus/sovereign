@@ -43,6 +43,8 @@ export default function RemoteDesktopPage() {
         displays={rdp.displays}
         selectedDisplay={rdp.selectedDisplay}
         onSelectDisplay={rdp.selectDisplay}
+        differential={rdp.differential}
+        onToggleDifferential={rdp.toggleDifferential}
         active={rdp.sessionActive}
         isFullscreen={rdp.isFullscreen}
         onToggleFullscreen={() => void rdp.toggleFullscreen()}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -217,6 +218,153 @@ func TestRDWebRTCKeyFeedRelay(t *testing.T) {
 	off := readJSON(agentPeer, "keys", 3*time.Second)
 	if off["enabled"] != false {
 		t.Fatalf("disable frame = %+v", off)
+	}
+}
+
+// TestRDWebRTCDifferentialToggle drives the live change-only mode switch: the
+// operator's toggle reaches the agent, the agent's confirmation reaches the
+// operator, and a missing flag is refused.
+func TestRDWebRTCDifferentialToggle(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-diff", TenantID: 1, Hostname: "diff", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-diff", 7, 1, webrtcStartOptions{Differential: true}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-diff", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"differential","enabled":true}`)
+	on := readJSON(agentPeer, "differential", 3*time.Second)
+	if on["enabled"] != true {
+		t.Fatalf("differential toggle = %+v", on)
+	}
+
+	// The agent's confirmation reaches the operator.
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"differential","enabled":true}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	confirmed := readJSON(conn, "differential", 3*time.Second)
+	if confirmed["enabled"] != true {
+		t.Fatalf("confirmation = %+v", confirmed)
+	}
+
+	// A toggle without the flag is refused instead of restarting the pipeline.
+	send(`{"type":"differential"}`)
+	rejected := readJSON(conn, "differential", 3*time.Second)
+	if !strings.Contains(fmt.Sprint(rejected["reason"]), "enabled") {
+		t.Fatalf("missing-flag refusal = %+v", rejected)
+	}
+}
+
+// TestWebRTCStartCarriesDifferential proves the start request's change-only
+// flag survives into the encrypted task payload the agent reads.
+func TestWebRTCStartCarriesDifferential(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	s.cfg.WebRTC.Enabled = true
+	s.cfg.WebRTC.TurnAddr = "127.0.0.1:0"
+	s.cfg.WebRTC.PublicIP = "127.0.0.1"
+	forgecrypto.InitLootEncryption(testStorageKeyHex)
+	agent := db.Implant{ID: "rd-diff-start", TenantID: 1, Hostname: "diff", Status: "online", LastSeen: time.Now()}
+	if err := s.db.Create(&agent).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	engine := gin.New()
+	engine.POST("/api/agents/:id/webrtc/start", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleWebRTCStart(c)
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/rd-diff-start/webrtc/start",
+		strings.NewReader(`{"width":1280,"height":720,"fps":30,"differential":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start = %d: %s", w.Code, w.Body.String())
+	}
+	t.Cleanup(func() {
+		if sess := s.webRTCHub().byAgentSession("rd-diff-start"); sess != nil {
+			sess.end("test")
+		}
+	})
+
+	var task db.Task
+	if err := s.db.Where("agent_id = ? AND type = ?", "rd-diff-start", "screen_webrtc_start").First(&task).Error; err != nil {
+		t.Fatalf("load start task: %v", err)
+	}
+	var payload struct {
+		Settings struct {
+			Differential bool `json:"differential"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal([]byte(task.Data), &payload); err != nil {
+		t.Fatalf("task data: %v (%s)", err, task.Data)
+	}
+	if !payload.Settings.Differential {
+		t.Fatal("differential flag did not survive into the agent payload")
 	}
 }
 

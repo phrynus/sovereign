@@ -28337,6 +28337,8 @@ export interface operations {
                     encoder?: "auto" | "libx264" | "h264_nvenc" | "h264_qsv" | "h264_amf" | "h264_videotoolbox";
                     /** @description 0 = all displays, N = monitor N */
                     display?: number;
+                    /** @description Suppress unchanged frames (mpdecimate + vfr). Measured on synthetic 1280x720@30 content: a static desktop encodes one frame instead of 360 (-93.7% bytes), while moving content keeps all 360 frames (-0.1%). */
+                    differential?: boolean;
                 };
             };
         };

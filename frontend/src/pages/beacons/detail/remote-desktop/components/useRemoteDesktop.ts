@@ -81,6 +81,8 @@ export function useRemoteDesktop(agentId: string) {
     control: liveControl,
     takeControl: liveTakeControl,
     releaseControl: liveReleaseControl,
+    differential: liveDifferential,
+    toggleDifferential: liveToggleDifferential,
     presets: livePresets,
     livePreset,
     setLivePreset,
@@ -550,11 +552,11 @@ export function useRemoteDesktop(agentId: string) {
       return;
     }
     try {
-      await startLive(livePreset, selectedDisplay);
+      await startLive(livePreset, selectedDisplay, liveDifferential);
     } catch (e) {
       toastError(e, "agents.rdp_live_start_failed");
     }
-  }, [id, versionBlocked, startLive, livePreset, selectedDisplay, t, toastError]);
+  }, [id, versionBlocked, startLive, livePreset, selectedDisplay, liveDifferential, t, toastError]);
 
   const handleStart = useCallback(() => {
     if (mode === "live") {
@@ -594,5 +596,6 @@ export function useRemoteDesktop(agentId: string) {
     messageStatus: liveMessageStatus, sendMessage: liveSendMessage,
     keysOn: liveKeysOn, keysFeed: liveKeysFeed, toggleKeys: liveToggleKeys,
     control: liveControl, takeControl: liveTakeControl, releaseControl: liveReleaseControl,
+    differential: liveDifferential, toggleDifferential: liveToggleDifferential,
   };
 }

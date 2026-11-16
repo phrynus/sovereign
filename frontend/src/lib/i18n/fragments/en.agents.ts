@@ -836,6 +836,8 @@ export const enAgents: Record<string, string> = {
   "agents.rdp_clipboard_truncated": "truncated at 64 KiB",
   "agents.rdp_connected": "Connected",
   "agents.rdp_connection": "Connection",
+  "agents.rdp_differential": "Only changes",
+  "agents.rdp_differential_hint": "Suppress unchanged frames: a static desktop costs one keyframe, and every changed frame is still sent. Restarts the capture pipeline when toggled.",
   "agents.rdp_disconnected": "Disconnected",
   "agents.rdp_display": "Display",
   "agents.rdp_display_all": "All displays",

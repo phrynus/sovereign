@@ -101,6 +101,31 @@ func TestBuildScreenFFmpegArgs(t *testing.T) {
 		}
 	}
 
+	// Differential mode: mpdecimate goes FIRST (decimating after scaling would
+	// compare resampled pixels) and -fps_mode vfr keeps the surviving frames on
+	// their original timestamps.
+	diffSettings := settings
+	diffSettings.Differential = true
+	diffArgs, err := buildScreenFFmpegArgs(diffSettings, 40000, region, true)
+	if err != nil {
+		t.Fatalf("build differential: %v", err)
+	}
+	joined = strings.Join(diffArgs, " ")
+	if !strings.Contains(joined, "-vf mpdecimate,scale=1920:1080") {
+		t.Fatalf("differential filter is not first in the chain: %s", joined)
+	}
+	if !strings.Contains(joined, "-fps_mode vfr") {
+		t.Fatalf("differential mode must keep original timestamps: %s", joined)
+	}
+	baseArgs, err := buildScreenFFmpegArgs(settings, 40000, region, true)
+	if err != nil {
+		t.Fatalf("build baseline: %v", err)
+	}
+	baseJoined := strings.Join(baseArgs, " ")
+	if strings.Contains(baseJoined, "mpdecimate") || strings.Contains(baseJoined, "-fps_mode vfr") {
+		t.Fatalf("baseline mode carries the differential filter: %s", baseJoined)
+	}
+
 	if _, err := buildScreenFFmpegArgs(settings, 0, screenRect{}, false); err == nil {
 		t.Fatal("invalid port must fail")
 	}

@@ -81,6 +81,11 @@ type webrtcStartOptions struct {
 	// the screen_webrtc_start task and can be changed live with a "display"
 	// signal, so the console does not need to restart the session to switch.
 	Display int `json:"display"`
+	// Differential suppresses unchanged frames at the capture stage: ffmpeg's
+	// mpdecimate drops frames that are near-identical to their predecessor, so a
+	// static desktop costs one keyframe instead of a full frame rate. Changed
+	// frames are never dropped (measured: 360/360 kept on moving content).
+	Differential bool `json:"differential"`
 }
 
 // webrtcIceServer mirrors the browser RTCIceServer shape and Pion's
@@ -661,22 +666,24 @@ func (s *Server) webRTCHub() *webrtcHub {
 }
 
 type webrtcStartRequest struct {
-	Width       int    `json:"width"`
-	Height      int    `json:"height"`
-	FPS         int    `json:"fps"`
-	BitrateKbps int    `json:"bitrate_kbps"`
-	Encoder     string `json:"encoder"`
-	Display     int    `json:"display"`
+	Width        int    `json:"width"`
+	Height       int    `json:"height"`
+	FPS          int    `json:"fps"`
+	BitrateKbps  int    `json:"bitrate_kbps"`
+	Encoder      string `json:"encoder"`
+	Display      int    `json:"display"`
+	Differential bool   `json:"differential"`
 }
 
 func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 	opts := webrtcStartOptions{
-		Width:       req.Width,
-		Height:      req.Height,
-		FPS:         req.FPS,
-		BitrateKbps: req.BitrateKbps,
-		Encoder:     strings.ToLower(strings.TrimSpace(req.Encoder)),
-		Display:     req.Display,
+		Width:        req.Width,
+		Height:       req.Height,
+		FPS:          req.FPS,
+		BitrateKbps:  req.BitrateKbps,
+		Encoder:      strings.ToLower(strings.TrimSpace(req.Encoder)),
+		Display:      req.Display,
+		Differential: req.Differential,
 	}
 	if opts.Display < 0 || opts.Display > MaxWebRTCDisplayIndex {
 		return opts, fmt.Errorf("display must be 0 (all displays) to %d", MaxWebRTCDisplayIndex)
@@ -945,6 +952,13 @@ func (s *Server) allowKeysToggle(operatorID, agentID string) bool {
 	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
 }
 
+// allowDifferentialToggle throttles differential-mode toggles: each one
+// restarts the agent's capture pipeline, so a flood is a restart flood.
+func (s *Server) allowDifferentialToggle(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":diff"
+	return s.remoteInputLimiter.allow(key, MaxKeysTogglesPerWindow, KeysToggleRateWindow, time.Now())
+}
+
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1194,6 +1208,28 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				state = "on"
 			}
 			s.LogAuditRecord(c, "remote_keys", "agent", sess.AgentID, "live keystroke feed "+state, true, nil)
+		case "differential":
+			// Live switch of the change-only capture mode. It restarts the
+			// agent's pipeline, so it is rate-limited like the key feed toggle.
+			if msg.Enabled == nil {
+				sess.sendToOperator(gin.H{"type": "differential", "enabled": false, "reason": "enabled is required"})
+				continue
+			}
+			if !s.allowDifferentialToggle(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "differential", "enabled": false, "reason": "differential toggle rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "differential", "enabled": *msg.Enabled})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
 		case "control":
 			switch strings.ToLower(strings.TrimSpace(msg.Action)) {
 			case "take":
@@ -1333,6 +1369,12 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 			// Live keystroke delta. The agent batches ~4 KiB; a larger frame is
 			// not keystrokes and is dropped rather than relayed.
 			if len(raw) > MaxWebRTCKeysFrameBytes {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "differential":
+			// Confirmation of the change-only mode (advisory, tiny frame).
+			if len(raw) > 512 {
 				continue
 			}
 			sess.sendRawToOperator(raw)
