@@ -89,9 +89,184 @@ func TestRDWebRTCSignalRequiresSessionAndOwnership(t *testing.T) {
 	}
 }
 
-// TestRDWebRTCSignalOperatorLoop drives the signaling loop: ping is answered,
-// an unknown type is reported, an offer is buffered until the agent attaches,
-// an empty offer is rejected and stop ends the session.
+// TestRDWebRTCInputRelayCarriesExtendedFields proves the live signaling relay
+// forwards the whole input contract, not just move/left-click: the console's
+// right click, click count, wheel delta and modifier chord must reach the agent
+// unchanged (normalised), and an invalid event must be answered rather than
+// silently dropped.
+func TestRDWebRTCInputRelayCarriesExtendedFields(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-input", TenantID: 1, Hostname: "input", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, _, err := s.webRTCHub().createSession("rd-input", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.end("test")
+
+	// A real paired socket stands in for the agent's signaling connection, so
+	// the relay's write path is the one under test.
+	agentSide, agentPeer := newTestWSPair(t)
+	if _, ok := sess.attachAgent(agentSide); !ok {
+		t.Fatal("attachAgent refused a fresh socket")
+	}
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleRDWebRTCSignal(c)
+	})
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, raw, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("read opening frame: %v", err)
+	} else if !strings.Contains(string(raw), "agent_ready") {
+		t.Fatalf("opening frame = %s, want agent_ready", raw)
+	}
+
+	agentPeer.SetReadDeadline(time.Now().Add(5 * time.Second))
+	readAgentInput := func() map[string]any {
+		t.Helper()
+		_, raw, err := agentPeer.ReadMessage()
+		if err != nil {
+			t.Fatalf("agent read: %v", err)
+		}
+		var frame struct {
+			Type  string          `json:"type"`
+			Event json.RawMessage `json:"event"`
+		}
+		if err := json.Unmarshal(raw, &frame); err != nil {
+			t.Fatalf("decode relayed frame %s: %v", raw, err)
+		}
+		if frame.Type != "input" {
+			t.Fatalf("relayed frame type = %q, want input (%s)", frame.Type, raw)
+		}
+		var ev map[string]any
+		if err := json.Unmarshal(frame.Event, &ev); err != nil {
+			t.Fatalf("decode event %s: %v", frame.Event, err)
+		}
+		return ev
+	}
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+
+	send(`{"type":"input","event":{"type":"CLICK_RIGHT","x":640,"y":360,"count":2,"mods":["CTRL","shift"]}}`)
+	ev := readAgentInput()
+	if ev["type"] != "click_right" {
+		t.Fatalf("relayed type = %v, want click_right", ev["type"])
+	}
+	if ev["count"] != float64(2) || ev["x"] != float64(640) || ev["y"] != float64(360) {
+		t.Fatalf("relayed event lost count/coords: %+v", ev)
+	}
+	mods, _ := ev["mods"].([]any)
+	if len(mods) != 2 || mods[0] != "ctrl" || mods[1] != "shift" {
+		t.Fatalf("relayed mods = %v, want [ctrl shift]", ev["mods"])
+	}
+
+	send(`{"type":"input","event":{"type":"wheel","x":10,"y":20,"delta":-3}}`)
+	ev = readAgentInput()
+	if ev["type"] != "wheel" || ev["delta"] != float64(-3) {
+		t.Fatalf("relayed wheel = %+v", ev)
+	}
+
+	// An invalid event is answered with input_rejected instead of being
+	// dropped at a bare continue (the operator used to see nothing happen).
+	send(`{"type":"input","event":{"type":"key","key":"a","mods":["hyper"]}}`)
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read rejection: %v", err)
+	}
+	if !strings.Contains(string(raw), "input_rejected") {
+		t.Fatalf("invalid event answer = %s, want input_rejected", raw)
+	}
+}
+
+// TestRDWebRTCInputRelayRateLimitsActions proves the live path uses the action
+// budget: a flood of clicks is refused with input_rejected once the window is
+// spent, rather than injecting an unbounded stream into the target.
+func TestRDWebRTCInputRelayRateLimitsActions(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-flood", TenantID: 1, Hostname: "flood", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, _, err := s.webRTCHub().createSession("rd-flood", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.end("test")
+
+	agentSide, agentPeer := newTestWSPair(t)
+	if _, ok := sess.attachAgent(agentSide); !ok {
+		t.Fatal("attachAgent refused a fresh socket")
+	}
+	// Drain the relayed events on a goroutine so the write never blocks.
+	go func() {
+		for {
+			if _, _, err := agentPeer.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		s.handleRDWebRTCSignal(c)
+	})
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, _, err := conn.ReadMessage(); err != nil { // agent_ready
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	rejected := false
+	for i := 0; i < MaxRemoteInputEventsPerWindow+5; i++ {
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"input","event":{"type":"click","x":1,"y":2}}`)); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+	// The refusals arrive after the accepted events; read until one is seen.
+	for i := 0; i < 6; i++ {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		if strings.Contains(string(raw), "rate limit") {
+			rejected = true
+			break
+		}
+	}
+	if !rejected {
+		t.Fatalf("no rate-limit rejection among %d clicks (budget %d)", MaxRemoteInputEventsPerWindow+5, MaxRemoteInputEventsPerWindow)
+	}
+}
 func TestRDWebRTCSignalOperatorLoop(t *testing.T) {
 	s := mustTenantServer(t)
 	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
