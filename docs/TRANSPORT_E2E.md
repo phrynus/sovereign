@@ -241,6 +241,27 @@ Pass criteria:
   entries expire after 30 s and are swept periodically even when traffic stops.
 - Unfragmented datagrams are byte-identical to the old transport.
 
+## Link-quality adaptation (beacon cadence)
+
+The agent samples one RTT per beacon exchange (no extra packets): an 8-entry
+RTT ring plus an EWMA loss ratio. A pure 0–100 score maps median RTT and loss
+into a sleep multiplier in [0.85, 1.75].
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Fresh agent with configured interval; observe first beacons | |
+| 2 | No samples -> sleep unchanged (scale exactly 1.0) | |
+| 3 | Low-latency network; after 8 successes the interval tightens ~15% | |
+| 4 | Add 100 ms artificial latency/loss; after ~8 beacons the interval lengthens | |
+| 5 | Remove the impairment; cadence recovers without restarting the agent | |
+
+Pass criteria:
+
+- The multiplier is bounded and never negative; fast mode and explicit sleep
+  modes still win (the factor is applied before jitter, once per sleep).
+- Failures are measured at the transport layer only; a reached-but-rejected
+  envelope is not counted as packet loss.
+
 ## Sign-off
 
 | Transport | Date | Operator | Result | Notes |

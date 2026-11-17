@@ -116,6 +116,10 @@ func computeSleepDuration() time.Duration {
 	// console, lengthen it after a long idle stretch. This avoids a fixed
 	// clock that stands out against real user-driven traffic.
 	base = time.Duration(float64(base) * userActivityMultiplier())
+	// Measured link quality: a slow/lossy C2 path lengthens the interval, a
+	// fast one tightens it modestly. The score is neutral before the first
+	// beacon, so this cannot change a fresh agent's configured cadence.
+	base = time.Duration(float64(base) * currentLinkScale())
 	jit := schedule.Jitter
 	variation := time.Duration(float64(base) * jit * (rng.Float64()*2 - 1))
 	duration := base + variation
