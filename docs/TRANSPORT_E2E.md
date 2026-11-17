@@ -273,8 +273,8 @@ Pass criteria:
 
 | Step | Action | Pass? |
 |------|--------|-------|
-| 1 | Queue a migration for an online agent; confirm the audit row | |
-| 2 | Next beacon response carries `transport_migrate` (inside the AEAD frame) | |
+| 1 | Open the agent detail page -> Transport migration card; queue `{transport:"tcp", c2_url:"tcp://host:4444"}` and confirm the audit row | |
+| 2 | The next beacon response carries `transport_migrate` (inside the AEAD frame) | |
 | 3 | Following beacon arrives over the new transport with the SAME session | |
 | 4 | No re-registration, no sequence reset, no duplicate/lost results | |
 | 5 | Queue with an unsupported scheme -> 400; viewer -> 403 | |

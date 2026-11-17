@@ -43,6 +43,7 @@ import QuickShellSection from "./components/QuickShellSection";
 import { AISuggestCard } from "./components/AISuggestCard";
 import NotesTagsSection from "./components/NotesTagsSection";
 import BeaconOperationsSection from "./components/BeaconOperationsSection";
+import TransportMigrateCard from "./components/TransportMigrateCard";
 // Below-fold sections load on demand so the detail chunk parses faster.
 const ProcessSection = lazy(() => import("./components/ProcessSection"));
 const ConnectionLogSection = lazy(() => import("./components/ConnectionLogSection"));
@@ -586,6 +587,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
             </TabsList>
 
             <TabsContent value="overview">
+              <TransportMigrateCard agentId={id} online={status === "online"} />
               <div className="flex gap-2 mb-4">
                 <Button size="sm" variant="outline" onClick={handleDiagnose} disabled={diagnosing || status !== "online"}>{diagnosing ? t("agents.detail_diagnosing") : t("agents.detail_diagnose")}</Button>
                 <span className="text-xs text-muted-foreground self-center">{t("agents.detail_diagnose_hint")}</span>

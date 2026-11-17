@@ -47,6 +47,8 @@ export const paths = {
     screenStop: (id: string) => `/agents/${id}/screen/stop`,
     webrtcStart: (id: string) => `/agents/${id}/webrtc/start`,
     webrtcStop: (id: string) => `/agents/${id}/webrtc/stop`,
+    /** Queue a one-shot transport migration for the next encrypted beacon. */
+    transport: (id: string) => `/agents/${id}/transport`,
     remoteInput: (id: string) => `/api/agents/${id}/input`,
     /** Generic `/agents/:id/...` builder (suffix may omit leading /). */
     cmd: (id: string, suffix: string) => {
