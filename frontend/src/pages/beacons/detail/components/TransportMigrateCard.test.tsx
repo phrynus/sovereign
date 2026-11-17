@@ -2,10 +2,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import TransportMigrateCard, { validateTransportSelection } from "./TransportMigrateCard";
 
-const postJson = vi.fn(async () => ({}));
+const mocks = vi.hoisted(() => ({ postJson: vi.fn() }));
 
 vi.mock("@/lib/api", () => ({
-  api: { postJson: (...args: unknown[]) => postJson(...args) },
+  api: { postJson: mocks.postJson },
   formatThrownError: (err: unknown) => String(err),
 }));
 vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
@@ -37,14 +37,14 @@ describe("validateTransportSelection", () => {
 });
 
 describe("TransportMigrateCard", () => {
-  beforeEach(() => postJson.mockClear());
+  beforeEach(() => mocks.postJson.mockClear());
 
   it("posts the selected transport and URL to the agent migration route", async () => {
     render(<TransportMigrateCard agentId="agent-9" online />);
     fireEvent.change(screen.getByLabelText("agents.detail_transport_select"), { target: { value: "tcp" } });
     fireEvent.change(screen.getByLabelText("agents.detail_transport_url"), { target: { value: "tcp://host:4444" } });
     fireEvent.click(screen.getByRole("button", { name: "agents.detail_transport_queue" }));
-    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/agents/agent-9/transport", {
+    await waitFor(() => expect(mocks.postJson).toHaveBeenCalledWith("/agents/agent-9/transport", {
       transport: "tcp",
       c2_url: "tcp://host:4444",
     }));
@@ -55,7 +55,7 @@ describe("TransportMigrateCard", () => {
     render(<TransportMigrateCard agentId="agent-9" online />);
     fireEvent.change(screen.getByLabelText("agents.detail_transport_url"), { target: { value: "https://c2.example" } });
     fireEvent.click(screen.getByRole("button", { name: "agents.detail_transport_queue" }));
-    expect(postJson).not.toHaveBeenCalled();
+    expect(mocks.postJson).not.toHaveBeenCalled();
   });
 
   it("disables queueing for an offline agent", () => {
