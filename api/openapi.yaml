@@ -13632,6 +13632,17 @@ paths:
                     and is refused with an actionable error when none exists.
                     The console asks the agent for `audio_devices` (a signal, not
                     an HTTP route) to render the names.
+                audio_quality:
+                  type: string
+                  enum: [voice, standard, high]
+                  description: >
+                    Opus tier, mono either way. voice = 24 kbps lowdelay,
+                    standard = 32 kbps lowdelay (default, historical behaviour),
+                    high = 64 kbps with Opus audio mode for music and video
+                    soundtracks. Measured on a real microphone over 2 s:
+                    voice 98 packets / 5,403 B (~21.6 kbps), standard 100 / 6,652
+                    (~26.6 kbps), high 100 / 11,913 (~47.7 kbps) — Opus is VBR,
+                    so the configured bitrate is a ceiling.
                 source:
                   type: string
                   enum: [screen, webcam]

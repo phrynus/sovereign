@@ -107,6 +107,9 @@ type webrtcStartOptions struct {
 	// among the devices of that mode.
 	AudioMode   string `json:"audio_mode,omitempty"`
 	AudioDevice int    `json:"audio_device,omitempty"`
+	// AudioQuality is voice (24 kbps), standard (32 kbps, default) or high
+	// (64 kbps, Opus audio mode).
+	AudioQuality string `json:"audio_quality,omitempty"`
 	// Region streams change-only 64 px tiles over the signaling socket instead
 	// of H.264 video: bandwidth tracks the changed area, not the frame size.
 	Region bool `json:"region,omitempty"`
@@ -705,6 +708,7 @@ type webrtcStartRequest struct {
 	Audio        bool   `json:"audio"`
 	AudioMode    string `json:"audio_mode"`
 	AudioDevice  int    `json:"audio_device"`
+	AudioQuality string `json:"audio_quality"`
 	Region       bool   `json:"region"`
 	Source       string `json:"source"`
 	WebcamDevice int    `json:"webcam_device"`
@@ -722,6 +726,7 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 		Audio:        req.Audio,
 		AudioMode:    strings.ToLower(strings.TrimSpace(req.AudioMode)),
 		AudioDevice:  req.AudioDevice,
+		AudioQuality: strings.ToLower(strings.TrimSpace(req.AudioQuality)),
 		Region:       req.Region,
 		Source:       strings.ToLower(strings.TrimSpace(req.Source)),
 		WebcamDevice: req.WebcamDevice,
@@ -731,6 +736,12 @@ func normalizeWebRTCStart(req webrtcStartRequest) (webrtcStartOptions, error) {
 	}
 	if opts.AudioDevice < 0 || opts.AudioDevice > MaxWebRTCAudioDevice {
 		return opts, fmt.Errorf("audio_device must be 0-%d", MaxWebRTCAudioDevice)
+	}
+	if opts.AudioQuality == "" {
+		opts.AudioQuality = "standard"
+	}
+	if opts.AudioQuality != "voice" && opts.AudioQuality != "standard" && opts.AudioQuality != "high" {
+		return opts, errors.New("audio_quality must be voice, standard or high")
 	}
 	if opts.Source == "" {
 		opts.Source = "screen"
@@ -956,6 +967,8 @@ type webrtcSignal struct {
 	// Audio source selection: mode is mic|speaker, device is a 0-based index.
 	Mode   string `json:"mode,omitempty"`
 	Device *int   `json:"device,omitempty"`
+	// Quality is the audio tier: voice|standard|high.
+	Quality string `json:"quality,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -1401,6 +1414,11 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "device must be 0-15"})
 				continue
 			}
+			quality := strings.ToLower(strings.TrimSpace(msg.Quality))
+			if quality != "" && quality != "voice" && quality != "standard" && quality != "high" {
+				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "quality must be voice, standard or high"})
+				continue
+			}
 			if !s.allowAudioToggle(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
 				sess.sendToOperator(gin.H{"type": "audio", "enabled": false, "reason": "audio toggle rate limit exceeded"})
 				continue
@@ -1415,6 +1433,9 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			if msg.Device != nil {
 				forwardPayload["device"] = *msg.Device
+			}
+			if quality != "" {
+				forwardPayload["quality"] = quality
 			}
 			forward, marshalErr := json.Marshal(forwardPayload)
 			if marshalErr != nil {

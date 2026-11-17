@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_AUDIO_VOLUME, clampAudioVolume, nextDeviceForMode } from "./RdpAudio";
+import { AUDIO_QUALITY_BITRATES, DEFAULT_AUDIO_VOLUME, clampAudioVolume, nextDeviceForMode } from "./RdpAudio";
 
 describe("clampAudioVolume", () => {
   it("keeps a valid value", () => {
@@ -13,6 +13,16 @@ describe("clampAudioVolume", () => {
     expect(clampAudioVolume(4)).toBe(1);
     expect(clampAudioVolume(Number.NaN)).toBe(DEFAULT_AUDIO_VOLUME);
     expect(clampAudioVolume(Number.POSITIVE_INFINITY)).toBe(DEFAULT_AUDIO_VOLUME);
+  });
+});
+
+describe("AUDIO_QUALITY_BITRATES", () => {
+  it("pins the three tiers the agent maps to Opus bitrate", () => {
+    expect(AUDIO_QUALITY_BITRATES).toEqual({
+      voice: "24 kbps",
+      standard: "32 kbps",
+      high: "64 kbps",
+    });
   });
 });
 

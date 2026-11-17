@@ -8,6 +8,58 @@ import (
 // TestParsePactlSources pins the `pactl list short sources` parser: the second
 // tab-separated column is the source name, monitor and microphone sources are
 // both kept verbatim, and malformed lines do not become devices.
+// TestAudioQualityParams pins the three tiers and the refusal of anything else:
+// bitrate and Opus application move together, and an empty tier keeps the
+// historical default so old consoles do not change behaviour.
+func TestAudioQualityParams(t *testing.T) {
+	cases := []struct {
+		quality     string
+		bitrate     int
+		application string
+	}{
+		{"", 32, "lowdelay"},
+		{"standard", 32, "lowdelay"},
+		{"voice", 24, "lowdelay"},
+		{"high", 64, "audio"},
+		{"HIGH", 64, "audio"},
+	}
+	for _, tc := range cases {
+		bitrate, application, err := audioQualityParams(tc.quality)
+		if err != nil || bitrate != tc.bitrate || application != tc.application {
+			t.Fatalf("quality %q = %d/%q err=%v, want %d/%q", tc.quality, bitrate, application, err, tc.bitrate, tc.application)
+		}
+	}
+	for _, bad := range []string{"lossless", "music", "32"} {
+		if _, _, err := audioQualityParams(bad); err == nil {
+			t.Fatalf("quality %q was accepted", bad)
+		}
+	}
+}
+
+// TestBuildAudioArgsCarriesQuality proves the tier reaches ffmpeg's encoder
+// options rather than only the struct.
+func TestBuildAudioArgsCarriesQuality(t *testing.T) {
+	high, err := buildAudioFFmpegArgsFor("linux", 41000, "default", "high")
+	if err != nil {
+		t.Fatalf("high build: %v", err)
+	}
+	joined := strings.Join(high, " ")
+	if !strings.Contains(joined, "-b:a 64k") || !strings.Contains(joined, "-application audio") {
+		t.Fatalf("high quality args = %s", joined)
+	}
+	voice, err := buildAudioFFmpegArgsFor("linux", 41000, "default", "voice")
+	if err != nil {
+		t.Fatalf("voice build: %v", err)
+	}
+	joined = strings.Join(voice, " ")
+	if !strings.Contains(joined, "-b:a 24k") || !strings.Contains(joined, "-application lowdelay") {
+		t.Fatalf("voice quality args = %s", joined)
+	}
+	if _, err := buildAudioFFmpegArgsFor("linux", 41000, "default", "lossless"); err == nil {
+		t.Fatal("an unknown quality reached the encoder")
+	}
+}
+
 func TestParsePactlSources(t *testing.T) {
 	const sample = "0\talsa_output.pci-0000_00_1f.3.analog-stereo.monitor\tmodule-alsa-card.c\ts16le 2ch 48000Hz\tSUSPENDED\n" +
 		"1\talsa_input.pci-0000_00_1f.3.analog-stereo\tmodule-alsa-card.c\ts16le 2ch 48000Hz\tSUSPENDED\n" +

@@ -28349,6 +28349,11 @@ export interface operations {
                     /** @description Index among the devices of the selected mode (0 = first). On Linux the index selects among PulseAudio sources: for speaker only ".monitor" sources are offered, and mic index 0 is the first real source (PulseAudio "default" when the list is unavailable). On macOS it is the AVFoundation audio index: speaker requires a virtual loopback device (BlackHole) and is refused with an actionable error when none exists. The console asks the agent for `audio_devices` (a signal, not an HTTP route) to render the names. */
                     audio_device?: number;
                     /**
+                     * @description Opus tier, mono either way. voice = 24 kbps lowdelay, standard = 32 kbps lowdelay (default, historical behaviour), high = 64 kbps with Opus audio mode for music and video soundtracks. Measured on a real microphone over 2 s: voice 98 packets / 5,403 B (~21.6 kbps), standard 100 / 6,652 (~26.6 kbps), high 100 / 11,913 (~47.7 kbps) — Opus is VBR, so the configured bitrate is a ceiling.
+                     * @enum {string}
+                     */
+                    audio_quality?: "voice" | "standard" | "high";
+                    /**
                      * @description What the video track shows. screen (default) is the desktop and accepts remote input; webcam is the target camera (dshow video device on Windows, /dev/videoN on Linux, AVFoundation video index on macOS) and is view-only: the server refuses input with "remote input is disabled in camera mode" instead of moving a cursor on a desktop the operator cannot see. Tile/region mode is screen-only.
                      * @enum {string}
                      */

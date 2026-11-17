@@ -73,6 +73,9 @@ type webRTCSettings struct {
 	// machine plays); AudioDevice picks among the devices of that mode.
 	AudioMode   string `json:"audio_mode,omitempty"`
 	AudioDevice int    `json:"audio_device,omitempty"`
+	// AudioQuality is voice (24 kbps), standard (32 kbps, default) or high
+	// (64 kbps, Opus audio mode); mono either way.
+	AudioQuality string `json:"audio_quality,omitempty"`
 	// Region switches the capture to change-only tiles over the signaling
 	// socket: only changed 64 px blocks are encoded and sent.
 	Region bool `json:"region,omitempty"`
@@ -113,6 +116,8 @@ type webRTCSignal struct {
 	// Audio source selection: mode is mic|speaker, device is a 0-based index.
 	Mode   string `json:"mode,omitempty"`
 	Device *int   `json:"device,omitempty"`
+	// Quality is the audio tier: voice|standard|high.
+	Quality string `json:"quality,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -887,7 +892,7 @@ func (s *agentWebRTCSession) readLoop() {
 			if msg.Enabled == nil {
 				continue
 			}
-			s.setAudio(*msg.Enabled, msg.Mode, msg.Device)
+			s.setAudio(*msg.Enabled, msg.Mode, msg.Device, msg.Quality)
 		case "audio_devices":
 			mode := msg.Mode
 			go func() {

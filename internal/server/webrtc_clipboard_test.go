@@ -390,7 +390,7 @@ func TestWebRTCStartCarriesAudio(t *testing.T) {
 		s.handleWebRTCStart(c)
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/rd-audio-start/webrtc/start",
-		strings.NewReader(`{"width":1280,"height":720,"fps":30,"audio":true,"audio_mode":"speaker","audio_device":1}`))
+		strings.NewReader(`{"width":1280,"height":720,"fps":30,"audio":true,"audio_mode":"speaker","audio_device":1,"audio_quality":"high"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
@@ -409,9 +409,10 @@ func TestWebRTCStartCarriesAudio(t *testing.T) {
 	}
 	var payload struct {
 		Settings struct {
-			Audio       bool   `json:"audio"`
-			AudioMode   string `json:"audio_mode"`
-			AudioDevice int    `json:"audio_device"`
+			Audio        bool   `json:"audio"`
+			AudioMode    string `json:"audio_mode"`
+			AudioDevice  int    `json:"audio_device"`
+			AudioQuality string `json:"audio_quality"`
 		} `json:"settings"`
 	}
 	if err := json.Unmarshal([]byte(task.Data), &payload); err != nil {
@@ -420,9 +421,9 @@ func TestWebRTCStartCarriesAudio(t *testing.T) {
 	if !payload.Settings.Audio {
 		t.Fatal("audio flag did not survive into the agent payload")
 	}
-	if payload.Settings.AudioMode != "speaker" || payload.Settings.AudioDevice != 1 {
-		t.Fatalf("audio source did not survive: mode=%q device=%d",
-			payload.Settings.AudioMode, payload.Settings.AudioDevice)
+	if payload.Settings.AudioMode != "speaker" || payload.Settings.AudioDevice != 1 || payload.Settings.AudioQuality != "high" {
+		t.Fatalf("audio source did not survive: mode=%q device=%d quality=%q",
+			payload.Settings.AudioMode, payload.Settings.AudioDevice, payload.Settings.AudioQuality)
 	}
 
 	// Invalid source selections are refused before a task is issued.
@@ -433,6 +434,7 @@ func TestWebRTCStartCarriesAudio(t *testing.T) {
 	for _, body := range []string{
 		`{"width":1280,"height":720,"audio":true,"audio_mode":"line"}`,
 		`{"width":1280,"height":720,"audio":true,"audio_device":99}`,
+		`{"width":1280,"height":720,"audio":true,"audio_quality":"lossless"}`,
 	} {
 		bad := httptest.NewRequest(http.MethodPost, "/api/agents/rd-audio-start/webrtc/start", strings.NewReader(body))
 		bad.Header.Set("Content-Type", "application/json")
@@ -515,9 +517,9 @@ func TestRDWebRTCAudioToggle(t *testing.T) {
 		}
 	}
 
-	send(`{"type":"audio","enabled":true,"mode":"speaker","device":1}`)
+	send(`{"type":"audio","enabled":true,"mode":"speaker","device":1,"quality":"high"}`)
 	on := readJSON(agentPeer, "audio", 3*time.Second)
-	if on["enabled"] != true || on["mode"] != "speaker" || on["device"] != float64(1) {
+	if on["enabled"] != true || on["mode"] != "speaker" || on["device"] != float64(1) || on["quality"] != "high" {
 		t.Fatalf("audio toggle = %+v", on)
 	}
 	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(`{"type":"audio","enabled":true,"mode":"speaker","device":1,"source":"alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"}`)); err != nil {

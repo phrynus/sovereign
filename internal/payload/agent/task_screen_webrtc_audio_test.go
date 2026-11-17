@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildAudioFFmpegArgs(t *testing.T) {
-	args, err := buildAudioFFmpegArgs(40000, "Microphone (Realtek)")
+	args, err := buildAudioFFmpegArgs(40000, "Microphone (Realtek)", "")
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestBuildAudioFFmpegArgs(t *testing.T) {
 			t.Fatalf("windows capture missing: %s", joined)
 		}
 		// A Windows build without a device name cannot guess one.
-		if _, err := buildAudioFFmpegArgs(40000, "   "); err == nil {
+		if _, err := buildAudioFFmpegArgs(40000, "   ", ""); err == nil {
 			t.Fatal("an empty dshow device was accepted")
 		}
 	case "linux":
@@ -38,7 +38,7 @@ func TestBuildAudioFFmpegArgs(t *testing.T) {
 			t.Fatalf("darwin capture missing: %s", joined)
 		}
 	}
-	if _, err := buildAudioFFmpegArgs(0, "dev"); err == nil {
+	if _, err := buildAudioFFmpegArgs(0, "dev", ""); err == nil {
 		t.Fatal("invalid port must fail")
 	}
 }
@@ -53,7 +53,7 @@ func TestBuildAudioFFmpegArgs(t *testing.T) {
 func TestBuildAudioFFmpegArgsForPlatforms(t *testing.T) {
 	monitor := "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"
 
-	linux, err := buildAudioFFmpegArgsFor("linux", 41000, monitor)
+	linux, err := buildAudioFFmpegArgsFor("linux", 41000, monitor, "")
 	if err != nil {
 		t.Fatalf("linux build: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestBuildAudioFFmpegArgsForPlatforms(t *testing.T) {
 		t.Fatalf("an explicit monitor source was replaced by default: %s", joined)
 	}
 
-	linuxDefault, err := buildAudioFFmpegArgsFor("linux", 41000, "  ")
+	linuxDefault, err := buildAudioFFmpegArgsFor("linux", 41000, "  ", "")
 	if err != nil {
 		t.Fatalf("linux default build: %v", err)
 	}
@@ -73,34 +73,34 @@ func TestBuildAudioFFmpegArgsForPlatforms(t *testing.T) {
 		t.Fatalf("linux default source missing: %v", linuxDefault)
 	}
 
-	windows, err := buildAudioFFmpegArgsFor("windows", 41000, "Microphone (Realtek)")
+	windows, err := buildAudioFFmpegArgsFor("windows", 41000, "Microphone (Realtek)", "")
 	if err != nil || !strings.Contains(strings.Join(windows, " "), `-f dshow -i audio=Microphone (Realtek)`) {
 		t.Fatalf("windows build = %v err=%v", windows, err)
 	}
-	if _, err := buildAudioFFmpegArgsFor("windows", 41000, ""); err == nil {
+	if _, err := buildAudioFFmpegArgsFor("windows", 41000, "", ""); err == nil {
 		t.Fatal("an empty dshow device was accepted")
 	}
 
-	darwin, err := buildAudioFFmpegArgsFor("darwin", 41000, "")
+	darwin, err := buildAudioFFmpegArgsFor("darwin", 41000, "", "")
 	if err != nil || !strings.Contains(strings.Join(darwin, " "), "-f avfoundation -i :0") {
 		t.Fatalf("darwin build = %v err=%v", darwin, err)
 	}
 	// A loopback device is addressed by its AVFoundation audio index.
-	darwinLoopback, err := buildAudioFFmpegArgsFor("darwin", 41000, "2")
+	darwinLoopback, err := buildAudioFFmpegArgsFor("darwin", 41000, "2", "")
 	if err != nil || !strings.Contains(strings.Join(darwinLoopback, " "), "-f avfoundation -i :2") {
 		t.Fatalf("darwin loopback build = %v err=%v", darwinLoopback, err)
 	}
 	// A non-numeric index must not become an ffmpeg option.
 	for _, bad := range []string{"BlackHole 2ch", "-1", "1:0"} {
-		if _, err := buildAudioFFmpegArgsFor("darwin", 41000, bad); err == nil {
+		if _, err := buildAudioFFmpegArgsFor("darwin", 41000, bad, ""); err == nil {
 			t.Fatalf("darwin accepted %q as an audio index", bad)
 		}
 	}
 
-	if _, err := buildAudioFFmpegArgsFor("plan9", 41000, ""); err == nil {
+	if _, err := buildAudioFFmpegArgsFor("plan9", 41000, "", ""); err == nil {
 		t.Fatal("an unsupported platform was accepted")
 	}
-	if _, err := buildAudioFFmpegArgsFor("linux", 0, ""); err == nil {
+	if _, err := buildAudioFFmpegArgsFor("linux", 0, "", ""); err == nil {
 		t.Fatal("invalid port must fail")
 	}
 }

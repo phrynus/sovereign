@@ -1,1 +1,0 @@
-import{r as e,t}from"./agents-A0iRs9DS.js";import{n}from"./useCachedData-BFOGefwU.js";import{h as r}from"./utils-QcndG3pE.js";function i(i={}){let{t:a}=r(),{data:o,loading:s,error:c,refresh:l}=n(t,{fetcher:e,enabled:i.enabled,ttlMs:6e4});return{agents:o??[],loading:s,error:c?a(`error.agents_load_failed`):null,refresh:l}}export{i as t};

@@ -13,19 +13,39 @@ import (
 
 const (
 	audioSampleRate = 48000
-	// audioBitrateKbps is voice-grade mono Opus. The desktop video stream is
-	// the bandwidth consumer; audio is for "what is being said / played", not
-	// for music production.
-	audioBitrateKbps = 32
-	audioFrameMs     = 20
+	audioFrameMs    = 20
 )
+
+// Audio quality tiers. "high" also switches Opus out of low-delay mode, which
+// is what makes music and video soundtracks hold up; mono stays fixed because
+// changing the channel count would require renegotiating the m-line.
+const (
+	AudioQualityVoice    = "voice"
+	AudioQualityStandard = "standard"
+	AudioQualityHigh     = "high"
+)
+
+// audioQualityParams maps a quality tier to its Opus bitrate and application.
+// An empty tier is the historical default (voice-grade standard).
+func audioQualityParams(quality string) (bitrateKbps int, application string, err error) {
+	switch strings.ToLower(strings.TrimSpace(quality)) {
+	case "", AudioQualityStandard:
+		return 32, "lowdelay", nil
+	case AudioQualityVoice:
+		return 24, "lowdelay", nil
+	case AudioQualityHigh:
+		return 64, "audio", nil
+	default:
+		return 0, "", fmt.Errorf("audio quality must be voice, standard or high")
+	}
+}
 
 // buildAudioFFmpegArgs builds the capture → Opus → RTP chain that feeds the
 // WebRTC audio track. The input side is the only platform-specific part; the
 // encoder settings are fixed so the browser's Opus decoder (48 kHz mono,
 // 20 ms frames) is always satisfied.
-func buildAudioFFmpegArgs(rtpPort int, device string) ([]string, error) {
-	return buildAudioFFmpegArgsFor(runtime.GOOS, rtpPort, device)
+func buildAudioFFmpegArgs(rtpPort int, device, quality string) ([]string, error) {
+	return buildAudioFFmpegArgsFor(runtime.GOOS, rtpPort, device, quality)
 }
 
 // buildAudioFFmpegArgsFor is buildAudioFFmpegArgs with the platform injected,
@@ -33,9 +53,13 @@ func buildAudioFFmpegArgs(rtpPort int, device string) ([]string, error) {
 // PulseAudio SOURCE name: a ".monitor" source captures what the machine plays,
 // an empty name means the default source. On macOS `device` is the
 // AVFoundation AUDIO index (the number inside ":N"); empty means 0.
-func buildAudioFFmpegArgsFor(goos string, rtpPort int, device string) ([]string, error) {
+func buildAudioFFmpegArgsFor(goos string, rtpPort int, device, quality string) ([]string, error) {
 	if rtpPort <= 0 || rtpPort > 65535 {
 		return nil, fmt.Errorf("invalid RTP port")
+	}
+	bitrateKbps, application, qualErr := audioQualityParams(quality)
+	if qualErr != nil {
+		return nil, qualErr
 	}
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
 	switch goos {
@@ -73,10 +97,10 @@ func buildAudioFFmpegArgsFor(goos string, rtpPort int, device string) ([]string,
 	}
 	args = append(args,
 		"-c:a", "libopus",
-		"-b:a", fmt.Sprintf("%dk", audioBitrateKbps),
+		"-b:a", fmt.Sprintf("%dk", bitrateKbps),
 		"-ar", fmt.Sprintf("%d", audioSampleRate),
 		"-ac", "1",
-		"-application", "lowdelay",
+		"-application", application,
 		"-frame_duration", fmt.Sprintf("%d", audioFrameMs),
 		"-f", "rtp",
 		fmt.Sprintf("rtp://127.0.0.1:%d", rtpPort),
@@ -579,7 +603,7 @@ func (s *agentWebRTCSession) startAudioPipeline() error {
 	if err != nil {
 		return fmt.Errorf("audio RTP listener: %w", err)
 	}
-	args, err := buildAudioFFmpegArgs(conn.LocalAddr().(*net.UDPAddr).Port, device)
+	args, err := buildAudioFFmpegArgs(conn.LocalAddr().(*net.UDPAddr).Port, device, settings.AudioQuality)
 	if err != nil {
 		_ = conn.Close()
 		return err
@@ -670,7 +694,7 @@ func (s *agentWebRTCSession) audioSourceSnapshot() string {
 // setAudio enables, disables or reconfigures live audio. Video keeps running in
 // every case. A mode/device change while audio is on restarts only the capture
 // process; the Opus track and its negotiated m-line are untouched.
-func (s *agentWebRTCSession) setAudio(enabled bool, mode string, device *int) {
+func (s *agentWebRTCSession) setAudio(enabled bool, mode string, device *int, quality string) {
 	s.settingsMu.Lock()
 	changed := s.settings.Audio != enabled
 	curMode := s.settings.AudioMode
@@ -685,23 +709,31 @@ func (s *agentWebRTCSession) setAudio(enabled bool, mode string, device *int) {
 		s.settings.AudioDevice = *device
 		changed = true
 	}
+	curQuality := s.settings.AudioQuality
+	if strings.TrimSpace(quality) != "" {
+		curQuality = strings.ToLower(strings.TrimSpace(quality))
+		if s.settings.AudioQuality != curQuality {
+			s.settings.AudioQuality = curQuality
+			changed = true
+		}
+	}
 	s.settings.Audio = enabled
 	curDevice := s.settings.AudioDevice
 	s.settingsMu.Unlock()
 
 	if !enabled {
 		s.stopAudio()
-		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "mode": curMode, "device": curDevice})
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "mode": curMode, "device": curDevice, "quality": curQuality})
 		return
 	}
 	if !changed {
 		// Already running with this mode/device: just confirm, naming the source
 		// that is actually being captured.
-		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true, "mode": curMode, "device": curDevice, "source": s.audioSourceSnapshot()})
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": true, "mode": curMode, "device": curDevice, "quality": curQuality, "source": s.audioSourceSnapshot()})
 		return
 	}
 	s.stopAudio()
 	if err := s.startAudioPipeline(); err != nil {
-		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "mode": curMode, "device": curDevice, "reason": err.Error()})
+		_ = s.sendJSON(map[string]any{"type": "audio", "enabled": false, "mode": curMode, "device": curDevice, "quality": curQuality, "reason": err.Error()})
 	}
 }

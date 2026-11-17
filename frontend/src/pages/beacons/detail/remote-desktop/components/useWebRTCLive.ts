@@ -88,6 +88,9 @@ export interface ClipboardHistoryItem {
 /** What the live video track shows. Camera mode is view-only. */
 export type VideoSource = "screen" | "webcam";
 
+/** Audio quality tiers the agent maps to Opus bitrate/application. */
+export type AudioQuality = "voice" | "standard" | "high";
+
 /** Remote input targets a desktop, so only screen capture accepts it. */
 export function sourceAllowsInput(source: VideoSource): boolean {
   return source === "screen";
@@ -278,6 +281,7 @@ export function useWebRTCLive(agentId: string) {
   // The capture source the agent actually resolved (a dshow device or a
   // PulseAudio source name), so "speaker" is verifiable and not just a flag.
   const [audioSource, setAudioSource] = useState("");
+  const [audioQuality, setAudioQuality] = useState<AudioQuality>("standard");
   // Device names the agent enumerated for the current mode; empty until the
   // first list arrives (then the console offers names instead of an index).
   const [audioDevices, setAudioDevices] = useState<AudioDeviceInfo[]>([]);
@@ -476,7 +480,7 @@ export function useWebRTCLive(agentId: string) {
     setAudioError("");
     setAudioOn(enabled);
     if (enabled) setAudioMuted(false);
-    sendSignal({ type: "audio", enabled, mode: audioMode, device: audioDevice });
+    sendSignal({ type: "audio", enabled, mode: audioMode, device: audioDevice, quality: audioQuality });
   }, [sendSignal, audioMode, audioDevice]);
 
   // A source change while audio is running restarts only the capture process;
@@ -484,13 +488,22 @@ export function useWebRTCLive(agentId: string) {
   const selectAudioSource = useCallback((mode: "mic" | "speaker", device: number) => {
     setAudioMode(mode);
     setAudioDevice(device);
-    if (audioOn) sendSignal({ type: "audio", enabled: true, mode, device });
+    if (audioOn) sendSignal({ type: "audio", enabled: true, mode, device, quality: audioQuality });
     // The candidate list is per mode (microphones vs loopback devices), so a
     // mode change must ask the target again.
     setAudioDevicesAt(Date.now());
     setAudioDevicesMode(mode);
     sendSignal({ type: "audio_devices", mode });
-  }, [sendSignal, audioOn]);
+  }, [sendSignal, audioOn, audioQuality]);
+
+  // A quality change while audio is running restarts only the capture process
+  // (the Opus track and its negotiated m-line are untouched).
+  const selectAudioQuality = useCallback((quality: AudioQuality) => {
+    setAudioQuality(quality);
+    if (audioOn) {
+      sendSignal({ type: "audio", enabled: true, mode: audioMode, device: audioDevice, quality });
+    }
+  }, [sendSignal, audioOn, audioMode, audioDevice]);
 
   const requestAudioDevices = useCallback((mode: "mic" | "speaker", force = false) => {
     // The list is per mode and ages out: only re-enumerate when the operator
@@ -621,6 +634,7 @@ export function useWebRTCLive(agentId: string) {
           audio: audioEnabled,
           audio_mode: audioMode,
           audio_device: audioDevice,
+          audio_quality: audioQuality,
           region: regionMode,
           source,
           webcam_device: webcamDevice,
@@ -965,6 +979,8 @@ export function useWebRTCLive(agentId: string) {
     audioMode,
     audioDevice,
     audioSource,
+    audioQuality,
+    selectAudioQuality,
     audioDevices,
     requestAudioDevices,
     selectAudioSource,

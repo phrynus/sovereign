@@ -2,11 +2,18 @@ import { memo, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Mic, MicOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
-import type { AudioDeviceInfo } from "./useWebRTCLive";
+import type { AudioDeviceInfo, AudioQuality } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
 export const DEFAULT_AUDIO_VOLUME = 0.7;
+
+/** What each tier costs on the wire (Opus mono); shown next to the label. */
+export const AUDIO_QUALITY_BITRATES: Record<AudioQuality, string> = {
+  voice: "24 kbps",
+  standard: "32 kbps",
+  high: "64 kbps",
+};
 /** Clamps a slider/volume value into 0..1 (NaN becomes the default). */
 export function clampAudioVolume(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_AUDIO_VOLUME;
@@ -36,10 +43,12 @@ interface RdpAudioProps {
   source: string;
   /** Devices the agent enumerated for the current mode (names + indices). */
   devices: AudioDeviceInfo[];
+  quality: AudioQuality;
   audioRef: RefObject<HTMLAudioElement | null>;
   onToggle: (enabled: boolean) => void;
   onSource: (mode: "mic" | "speaker", device: number) => void;
   onRefresh: (mode: "mic" | "speaker", force?: boolean) => void;
+  onQuality: (quality: AudioQuality) => void;
   onMute: (muted: boolean) => void;
   onVolume: (volume: number) => void;
 }
@@ -50,7 +59,7 @@ interface RdpAudioProps {
  * unmutes. Volume is clamped before it reaches the element.
  */
 export default memo(function RdpAudio({
-  t, enabled, muted, volume, error, mode, device, source, devices, audioRef, onToggle, onSource, onRefresh, onMute, onVolume,
+  t, enabled, muted, volume, error, mode, device, source, devices, quality, audioRef, onToggle, onSource, onRefresh, onQuality, onMute, onVolume,
 }: RdpAudioProps) {
   return (
     <Card className="mt-3 rounded-lg px-3 py-2 shadow-sm">
@@ -111,6 +120,20 @@ export default memo(function RdpAudio({
         >
           <RefreshCw className="size-3.5" />
         </Button>
+        <select
+          className="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+          value={quality}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next === "voice" || next === "standard" || next === "high") onQuality(next);
+          }}
+          aria-label={t("agents.rdp_audio_quality")}
+          title={`${t("agents.rdp_audio_quality")} — ${AUDIO_QUALITY_BITRATES[quality]}`}
+        >
+          <option value="voice">{t("agents.rdp_audio_quality_voice")}</option>
+          <option value="standard">{t("agents.rdp_audio_quality_standard")}</option>
+          <option value="high">{t("agents.rdp_audio_quality_high")}</option>
+        </select>
         <Button
           variant={enabled ? "destructive" : "outline"}
           size="sm"
