@@ -2,6 +2,8 @@ package server
 
 import (
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
 // Local copies of protocol types (agent package is not importable as it is package main + build constrained)
@@ -96,8 +98,10 @@ type relayedTask struct {
 type beaconResponse struct {
 	Tasks []task `json:"tasks"`
 	// Compression advertises the peer's inbound gzip capability ("gzip").
-	Compression     string `json:"comp,omitempty"`
-	ProtocolVersion uint   `json:"pv,omitempty"`
+	Compression string `json:"comp,omitempty"`
+	// TransportMigrate is a one-shot switch attached to the next encrypted reply.
+	TransportMigrate *protocol.TransportMigration `json:"transport_migrate,omitempty"`
+	ProtocolVersion  uint                         `json:"pv,omitempty"`
 	// Tenant attribution is server-internal telemetry metadata. It lets the
 	// HTTP traffic accumulator remain tenant-aware without another DB lookup
 	// on every successful beacon.

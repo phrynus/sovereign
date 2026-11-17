@@ -11019,6 +11019,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{id}/transport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a one-shot transport migration for the agent's next beacon
+         * @description The switch is attached to the next AEAD-authenticated beacon response and consumed once (5-minute TTL). The agent keeps its ECDH session, frame sequence and queued results, so migration is a routing change, not a re-enrollment. An expired command is dropped instead of delivered late.
+         */
+        post: operations["agentTransportMigrate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ws/rd/operator": {
         parameters: {
             query?: never;
@@ -28470,6 +28490,56 @@ export interface operations {
             };
             /** @description Invalid action */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentTransportMigrate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    transport: "http" | "https" | "tcp" | "tls" | "udp" | "quic" | "icmp" | "ws" | "wss" | "grpc" | "grpcs" | "ssh" | "mtls" | "h2c" | "dns" | "smb";
+                    /** @description Optional absolute URL; its scheme must be dialable by the chosen transport. */
+                    c2_url?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Migration queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported transport or mismatched/invalid c2_url */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operator permission required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

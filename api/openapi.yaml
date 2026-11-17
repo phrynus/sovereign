@@ -13728,6 +13728,38 @@ paths:
         '200': {description: The new holder (or an empty holder after release)}
         '400': {description: Invalid action}
         '404': {description: Agent not visible to this tenant}
+  /agents/{id}/transport:
+    post:
+      tags: [Agents]
+      summary: Queue a one-shot transport migration for the agent's next beacon
+      description: >
+        The switch is attached to the next AEAD-authenticated beacon response and
+        consumed once (5-minute TTL). The agent keeps its ECDH session, frame
+        sequence and queued results, so migration is a routing change, not a
+        re-enrollment. An expired command is dropped instead of delivered late.
+      operationId: agentTransportMigrate
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transport]
+              properties:
+                transport:
+                  type: string
+                  enum: [http, https, tcp, tls, udp, quic, icmp, ws, wss, grpc, grpcs, ssh, mtls, h2c, dns, smb]
+                c2_url:
+                  type: string
+                  description: Optional absolute URL; its scheme must be dialable by the chosen transport.
+      responses:
+        '200': {description: Migration queued}
+        '400': {description: Unsupported transport or mismatched/invalid c2_url}
+        '403': {description: Operator permission required}
+        '404': {description: Agent not visible to this tenant}
   /ws/rd/operator:
     get:
       tags: [RemoteDesktop]

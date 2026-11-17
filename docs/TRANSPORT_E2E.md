@@ -267,6 +267,25 @@ Pass criteria:
 - Failures are measured at the transport layer only; a reached-but-rejected
   envelope is not counted as packet loss.
 
+## Explicit transport migration
+
+`POST /agents/:id/transport` with `{"transport":"tcp","c2_url":"tcp://host:4444"}`.
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Queue a migration for an online agent; confirm the audit row | |
+| 2 | Next beacon response carries `transport_migrate` (inside the AEAD frame) | |
+| 3 | Following beacon arrives over the new transport with the SAME session | |
+| 4 | No re-registration, no sequence reset, no duplicate/lost results | |
+| 5 | Queue with an unsupported scheme -> 400; viewer -> 403 | |
+| 6 | Leave the agent offline past 5 min: the command expires and is never delivered | |
+
+Pass criteria:
+
+- One-shot and bounded (10 000 keys); expired commands are dropped, not applied late.
+- A supplied URL becomes the primary endpoint while the failover chain survives.
+- The agent refuses a command naming a transport it has no endpoint for.
+
 ## Sign-off
 
 | Transport | Date | Operator | Result | Notes |

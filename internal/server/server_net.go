@@ -24,6 +24,7 @@ var udpFragments = protocol.NewDatagramAssembler()
 func (s *Server) runPeriodicCleanup() {
 	s.cleanupOldData()
 	udpFragments.GC()
+	gcTransportMigrations()
 	ticker := time.NewTicker(PeriodicCleanupInterval)
 	fragTicker := time.NewTicker(protocol.ICMPFragTTL)
 	defer ticker.Stop()
@@ -37,6 +38,7 @@ func (s *Server) runPeriodicCleanup() {
 			// 30 s TTL: sweep far more often than the 24 h general cleanup,
 			// otherwise a stopped fragment flood pins its tables for a day.
 			udpFragments.GC()
+			gcTransportMigrations()
 		case <-ticker.C:
 			s.cleanupOldData()
 		}

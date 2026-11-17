@@ -279,6 +279,11 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 		if req.Compression == "gzip" {
 			result.Compression = "gzip"
 		}
+		// One-shot operator command: attach to the next encrypted reply, not
+		// to a later beacon that might already be on a different transport.
+		if migration := takePendingTransportMigration(req.UUID); migration != nil {
+			result.TransportMigrate = migration
+		}
 	}()
 	now := time.Now()
 

@@ -116,6 +116,8 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/shell", s.handleSendCommand)
 		// Exclusive-control lease: take (explicit, audited) or release.
 		agentCmd.POST("/control", s.handleAgentControl)
+		// One-shot explicit transport migration for the next encrypted beacon.
+		agentCmd.POST("/transport", s.handleAgentTransportMigration)
 		agentCmd.GET("/screenshot", s.handleGetAgentScreenshot)
 		agentCmd.POST("/screenshot", s.handleRequestScreenshot)
 		agentCmd.POST("/screenshot_window", s.handleRequestScreenshotWindow)

