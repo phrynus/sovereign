@@ -197,6 +197,21 @@ func (a *ICMPAssembler) GC() {
 	a.gcLocked()
 }
 
+// DatagramFrag* are transport-neutral names for the same 12-byte framing used
+// by ICMP and UDP beacons. Both links have a small MTU and no ordering; the
+// assembler caps keep either one from being a remote memory-exhaustion vector.
+const DatagramFragMaxPayload = ICMPFragMaxPayload
+
+func DatagramFragSplit(body []byte) [][]byte { return ICMPFragSplit(body) }
+
+func DatagramFragParse(p []byte) (msgID uint32, total, index int, payload []byte, ok bool) {
+	return ICMPFragParse(p)
+}
+
+func DatagramMaybePlain(p []byte) bool { return ICMPMaybePlain(p) }
+
+func NewDatagramAssembler() *ICMPAssembler { return NewICMPAssembler() }
+
 // ICMPMaybePlain returns p unchanged when it is not an FC2I fragment, so
 // un-fragmented (tiny) beacons still work.
 func ICMPMaybePlain(p []byte) bool {

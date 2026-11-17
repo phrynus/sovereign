@@ -219,6 +219,28 @@ Pass criteria:
   arbitrary memory.
 - Measured: 9,323 B request → 179 B; 10,875 B response → 152 B.
 
+## UDP fragmentation (beacons larger than one MTU)
+
+UDP previously required the whole v2 envelope to fit one datagram; the FC2I
+framing already used by ICMP is now shared with UDP (transport-neutral helpers
+in `pkg/protocol`).
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Generate a UDP-protocol agent; queue a task whose output is >2 KiB | |
+| 2 | Capture the beacon: multiple datagrams, each with the 12-byte FC2I header | |
+| 3 | Deliver them out of order / drop one part and replay it | |
+| 4 | Agent appears online and the result arrives exactly once (gRPC/HTTP task view) | |
+| 5 | Force a large task list (many queued tasks): the response arrives as several parts and the agent reassembles it | |
+
+Pass criteria:
+
+- Parts carry a random 32-bit message id, a total count and a 0-based index;
+  a partial set never reaches the beacon parser (no half-envelope errors).
+- Per-key assembly is capped at 256 KiB, 256 parts and 1024 concurrent keys;
+  entries expire after 30 s and are swept periodically even when traffic stops.
+- Unfragmented datagrams are byte-identical to the old transport.
+
 ## Sign-off
 
 | Transport | Date | Operator | Result | Notes |

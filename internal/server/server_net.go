@@ -10,19 +10,33 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
+
+// udpFragments reassembles fragmented UDP beacons. Keys are the peer address
+// plus the random per-message id, so a spoofed source can only fill its own
+// key; the assembler's cardinality/byte caps bound the whole table. It is
+// swept from runPeriodicCleanup so a stopped flood cannot pin entries forever.
+var udpFragments = protocol.NewDatagramAssembler()
 
 // ── Periodic sweeps, port utils, raw TCP/UDP transports ───────────────────
 
 func (s *Server) runPeriodicCleanup() {
 	s.cleanupOldData()
+	udpFragments.GC()
 	ticker := time.NewTicker(PeriodicCleanupInterval)
+	fragTicker := time.NewTicker(protocol.ICMPFragTTL)
 	defer ticker.Stop()
+	defer fragTicker.Stop()
 
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
+		case <-fragTicker.C:
+			// 30 s TTL: sweep far more often than the 24 h general cleanup,
+			// otherwise a stopped fragment flood pins its tables for a day.
+			udpFragments.GC()
 		case <-ticker.C:
 			s.cleanupOldData()
 		}
@@ -263,11 +277,11 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 }
 
 // startUDPListener starts a connectionless UDP datagram transport for agents
-// using Protocol=udp. Each beacon is a single datagram carrying the same raw
-// v2 envelope as the TCP transport; the server replies with one datagram.
-// Payloads must fit within the link MTU (the agent caps sends at 16MiB but
-// real-world UDP is limited by Path MTU — large results should use a
-// connection-oriented transport).
+// using Protocol=udp. Each beacon is one or more datagrams carrying the same
+// raw v2 envelope as TCP; the server answers with datagrams in kind. Bodies
+// above protocol.DatagramFragMaxPayload use the transport-neutral FC2I framing
+// shared with ICMP, so large results no longer need a connection-oriented
+// transport. Partial streams stay in a capped, TTL-swept assembler.
 func (s *Server) startUDPListener() { // config-lock: boot listener start, no reload can overlap yet
 	pc, err := net.ListenPacket("udp", s.cfg.Server.UDPAddr)
 	if err != nil {
@@ -306,8 +320,13 @@ func (s *Server) startUDPListener() { // config-lock: boot listener start, no re
 			if len(resp) == 0 {
 				continue
 			}
-			if _, err := pc.WriteTo(resp, addr); err != nil {
-				slog.Error("UDP write error", "remote", addr.String(), "err", err)
+			// A reply that exceeds one datagram is fragmented with the same
+			// FC2I framing; the agent reassembles before parsing the envelope.
+			for _, frag := range protocol.DatagramFragSplit(resp) {
+				if _, err := pc.WriteTo(frag, addr); err != nil {
+					slog.Error("UDP write error", "remote", addr.String(), "err", err)
+					break
+				}
 			}
 		}
 	}()
@@ -317,6 +336,21 @@ func (s *Server) startUDPListener() { // config-lock: boot listener start, no re
 // datagram bytes (or nil to send nothing). It reuses the shared raw-listener
 // beacon core so UDP behaves identically to TCP/ICMP at the envelope level.
 func (s *Server) handleUDPBeacon(data []byte, addr net.Addr) []byte {
+	// A body larger than one datagram arrives as FC2I parts. Reassemble per
+	// (peer, random msg id) before the envelope parser sees it; a partial reply
+	// is normal (wait for the remaining fragments) and never yields a response.
+	if !protocol.DatagramMaybePlain(data) {
+		msgID, total, index, payload, ok := protocol.DatagramFragParse(data)
+		if !ok {
+			return nil
+		}
+		key := addr.String() + "/" + strconv.FormatUint(uint64(msgID), 10)
+		full, err := udpFragments.Add(key, total, index, payload)
+		if err != nil || full == nil {
+			return nil
+		}
+		data = full
+	}
 	resp := s.handleListenerBeacon("udp", "", data, SocksLowMTUFrameSize, SocksLowMTUBudget)
 	if len(resp) == 0 {
 		return nil
@@ -376,7 +410,9 @@ func (s *Server) startExtraUDPListener(key string) error {
 			if len(resp) == 0 {
 				continue
 			}
-			_, _ = pc.WriteTo(resp, raddr)
+			for _, frag := range protocol.DatagramFragSplit(resp) {
+				_, _ = pc.WriteTo(frag, raddr)
+			}
 		}
 	}()
 	slog.Info("Extra UDP listener started", "addr", addr, "key", key)
