@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIVE_PRESETS, buildOperatorWsUrl, getLivePreset, parseDisplayState, parseTileFrame, sourceAllowsInput } from "./useWebRTCLive";
+import { DEVICE_LIST_TTL_MS, LIVE_PRESETS, buildOperatorWsUrl, deviceListStale, getLivePreset, parseDisplayState, parseTileFrame, sourceAllowsInput } from "./useWebRTCLive";
 
 describe("WebRTC live helpers", () => {
   it("builds the authenticated operator signaling URL for both schemes", () => {
@@ -31,6 +31,24 @@ describe("sourceAllowsInput", () => {
   it("allows input only for screen capture", () => {
     expect(sourceAllowsInput("screen")).toBe(true);
     expect(sourceAllowsInput("webcam")).toBe(false);
+  });
+});
+
+describe("deviceListStale", () => {
+  const now = 1_000_000;
+
+  it("treats a never-fetched list as stale", () => {
+    expect(deviceListStale(0, now)).toBe(true);
+  });
+
+  it("keeps a list fetched within the TTL", () => {
+    expect(deviceListStale(now - 1, now)).toBe(false);
+    expect(deviceListStale(now - DEVICE_LIST_TTL_MS + 1, now)).toBe(false);
+  });
+
+  it("expires a list at the TTL boundary", () => {
+    expect(deviceListStale(now - DEVICE_LIST_TTL_MS, now)).toBe(true);
+    expect(deviceListStale(now - DEVICE_LIST_TTL_MS - 5_000, now)).toBe(true);
   });
 });
 

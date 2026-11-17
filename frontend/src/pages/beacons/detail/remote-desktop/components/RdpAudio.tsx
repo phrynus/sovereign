@@ -7,7 +7,6 @@ import type { AudioDeviceInfo } from "./useWebRTCLive";
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
 export const DEFAULT_AUDIO_VOLUME = 0.7;
-
 /** Clamps a slider/volume value into 0..1 (NaN becomes the default). */
 export function clampAudioVolume(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_AUDIO_VOLUME;
@@ -40,7 +39,7 @@ interface RdpAudioProps {
   audioRef: RefObject<HTMLAudioElement | null>;
   onToggle: (enabled: boolean) => void;
   onSource: (mode: "mic" | "speaker", device: number) => void;
-  onRefresh: (mode: "mic" | "speaker") => void;
+  onRefresh: (mode: "mic" | "speaker", force?: boolean) => void;
   onMute: (muted: boolean) => void;
   onVolume: (volume: number) => void;
 }
@@ -79,6 +78,7 @@ export default memo(function RdpAudio({
             className="h-7 max-w-56 rounded-md border border-border bg-background px-1.5 text-xs"
             value={device}
             onChange={(e) => onSource(mode, Number(e.target.value))}
+            onFocus={() => onRefresh(mode)}
             aria-label={t("agents.rdp_audio_device")}
             title={t("agents.rdp_audio_device")}
           >
@@ -106,7 +106,7 @@ export default memo(function RdpAudio({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onRefresh(mode)}
+          onClick={() => onRefresh(mode, true)}
           title={t("agents.rdp_audio_refresh")}
         >
           <RefreshCw className="size-3.5" />

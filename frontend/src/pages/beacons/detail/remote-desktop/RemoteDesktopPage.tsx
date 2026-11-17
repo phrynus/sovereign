@@ -128,7 +128,7 @@ export default function RemoteDesktopPage() {
                 device={rdp.audioDevice}
                 source={rdp.audioSource}
                 devices={rdp.audioDevices}
-                onRefresh={rdp.requestAudioDevices}
+                onRefresh={(mode, force) => rdp.requestAudioDevices(mode, force)}
                 audioRef={rdp.audioRef}
                 onToggle={rdp.toggleAudio}
                 onSource={rdp.selectAudioSource}

@@ -93,6 +93,21 @@ export function sourceAllowsInput(source: VideoSource): boolean {
   return source === "screen";
 }
 
+/** How long an enumerated device list is trusted before it is re-requested. */
+export const DEVICE_LIST_TTL_MS = 30_000;
+
+/**
+ * A cached device list older than the TTL is stale: the target may have gained
+ * or lost a camera/microphone since it was enumerated (hotplug, virtual driver
+ * installed, USB device unplugged). Callers re-request on the next interaction
+ * rather than polling, so a probe only runs when the operator is about to use
+ * the list.
+ */
+export function deviceListStale(fetchedAt: number, now: number, ttlMs = DEVICE_LIST_TTL_MS): boolean {
+  if (!fetchedAt) return true;
+  return now - fetchedAt >= ttlMs;
+}
+
 /** One camera, as enumerated by the agent (index is webcam_device). */
 export interface VideoDeviceInfo {
   index: number;
@@ -266,6 +281,10 @@ export function useWebRTCLive(agentId: string) {
   // Device names the agent enumerated for the current mode; empty until the
   // first list arrives (then the console offers names instead of an index).
   const [audioDevices, setAudioDevices] = useState<AudioDeviceInfo[]>([]);
+  // Freshness of each list, so opening a picker re-enumerates only when the
+  // target may have changed (see deviceListStale).
+  const [audioDevicesAt, setAudioDevicesAt] = useState(0);
+  const [audioDevicesMode, setAudioDevicesMode] = useState<"mic" | "speaker">("mic");
   // Region mode replaces H.264 video with change-only tiles drawn on a canvas:
   // bandwidth tracks the changed area instead of the frame size, and no media
   // plane is used at all (useful on TCP-only or ffmpeg-less targets).
@@ -273,6 +292,7 @@ export function useWebRTCLive(agentId: string) {
   const [videoSource, setVideoSource] = useState<VideoSource>("screen");
   const [webcamDevice, setWebcamDevice] = useState(0);
   const [videoDevices, setVideoDevices] = useState<VideoDeviceInfo[]>([]);
+  const [videoDevicesAt, setVideoDevicesAt] = useState(0);
   const [regionOn, setRegionOn] = useState(false);
   const [tileFrame, setTileFrame] = useState<TileFrame | null>(null);
   const [regionError, setRegionError] = useState("");
@@ -467,22 +487,38 @@ export function useWebRTCLive(agentId: string) {
     if (audioOn) sendSignal({ type: "audio", enabled: true, mode, device });
     // The candidate list is per mode (microphones vs loopback devices), so a
     // mode change must ask the target again.
+    setAudioDevicesAt(Date.now());
+    setAudioDevicesMode(mode);
     sendSignal({ type: "audio_devices", mode });
   }, [sendSignal, audioOn]);
 
-  const requestAudioDevices = useCallback((mode: "mic" | "speaker") => {
+  const requestAudioDevices = useCallback((mode: "mic" | "speaker", force = false) => {
+    // The list is per mode and ages out: only re-enumerate when the operator
+    // asked, switched mode, or the cached list is stale.
+    if (!force && mode === audioDevicesMode && !deviceListStale(audioDevicesAt, Date.now())) {
+      return;
+    }
+    setAudioDevicesAt(Date.now());
+    setAudioDevicesMode(mode);
     sendSignal({ type: "audio_devices", mode });
-  }, [sendSignal]);
+  }, [sendSignal, audioDevicesMode, audioDevicesAt]);
 
-  const requestVideoDevices = useCallback(() => {
+  const requestVideoDevices = useCallback((force = false) => {
+    if (!force && !deviceListStale(videoDevicesAt, Date.now())) {
+      return;
+    }
+    setVideoDevicesAt(Date.now());
     sendSignal({ type: "video_devices" });
-  }, [sendSignal]);
+  }, [sendSignal, videoDevicesAt]);
 
   // Switching to the camera asks for its device list: the index the operator
   // picks must exist on the target before the session starts.
   const selectVideoSource = useCallback((source: VideoSource) => {
     setVideoSource(source);
-    if (source === "webcam") sendSignal({ type: "video_devices" });
+    if (source === "webcam") {
+      setVideoDevicesAt(Date.now());
+      sendSignal({ type: "video_devices" });
+    }
   }, [sendSignal]);
 
   const toggleRegion = useCallback((enabled: boolean) => {
@@ -671,6 +707,8 @@ export function useWebRTCLive(agentId: string) {
             pendingLocalCandidatesRef.current = [];
             // Ask for the target's capture devices so the audio strip can show
             // names (a macOS loopback index is otherwise undiscoverable).
+            setAudioDevicesAt(Date.now());
+            setVideoDevicesAt(Date.now());
             ws.send(JSON.stringify({ type: "audio_devices", mode: audioMode }));
             ws.send(JSON.stringify({ type: "video_devices" }));
             clearAnswerTimer();

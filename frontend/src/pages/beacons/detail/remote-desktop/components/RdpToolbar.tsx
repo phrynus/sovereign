@@ -27,7 +27,7 @@ interface RdpToolbarProps {
   videoDevices: VideoDeviceInfo[];
   webcamDevice: number;
   onSelectWebcamDevice: (index: number) => void;
-  onRefreshVideoDevices: () => void;
+  onRefreshVideoDevices: (force?: boolean) => void;
   livePreset: LivePreset["value"];
   setLivePreset: (preset: LivePreset["value"]) => void;
   displays: DisplayInfo[];
@@ -141,6 +141,7 @@ export default memo(function RdpToolbar({
             <>
               <Select
                 value={String(webcamDevice)}
+                onOpenChange={(open) => { if (open) onRefreshVideoDevices(); }}
                 onValueChange={(v) => {
                   const index = Number(v);
                   if (Number.isInteger(index) && index >= 0) onSelectWebcamDevice(index);
@@ -165,7 +166,7 @@ export default memo(function RdpToolbar({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onRefreshVideoDevices}
+                onClick={() => onRefreshVideoDevices(true)}
                 disabled={active}
                 title={t("agents.rdp_camera_refresh")}
               >
