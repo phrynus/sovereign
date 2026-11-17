@@ -28353,7 +28353,7 @@ export interface operations {
                      * @enum {string}
                      */
                     source?: "screen" | "webcam";
-                    /** @description Index among the platform's camera devices (0 = first). */
+                    /** @description Index among the platform's camera devices (0 = first). The console asks the agent for `video_devices` (a signal, not an HTTP route) and shows the names, so the index is always one the target enumerated. */
                     webcam_device?: number;
                     /** @description Stream change-only 64 px tiles over the operator socket instead of H.264 video. Only changed blocks are encoded, so bandwidth tracks the changed area; measured on synthetic 1280x720 content, a 120x40 moving box cost 4 tiles (~4.2 KB/tick, ~41 KiB/s at 10 fps) versus a full frame (~20.7 KB/tick, ~202 KiB/s), and a static screen sends nothing after the first frame. Uses no media plane, so it works on TCP-only or ffmpeg-less targets. */
                     region?: boolean;

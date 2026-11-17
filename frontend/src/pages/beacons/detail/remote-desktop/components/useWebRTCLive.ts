@@ -93,6 +93,12 @@ export function sourceAllowsInput(source: VideoSource): boolean {
   return source === "screen";
 }
 
+/** One camera, as enumerated by the agent (index is webcam_device). */
+export interface VideoDeviceInfo {
+  index: number;
+  name: string;
+}
+
 /** One selectable capture device, as enumerated by the agent. */
 export interface AudioDeviceInfo {
   index: number;
@@ -265,6 +271,8 @@ export function useWebRTCLive(agentId: string) {
   // plane is used at all (useful on TCP-only or ffmpeg-less targets).
   // screen = the desktop (interactive); webcam = the target camera (view-only).
   const [videoSource, setVideoSource] = useState<VideoSource>("screen");
+  const [webcamDevice, setWebcamDevice] = useState(0);
+  const [videoDevices, setVideoDevices] = useState<VideoDeviceInfo[]>([]);
   const [regionOn, setRegionOn] = useState(false);
   const [tileFrame, setTileFrame] = useState<TileFrame | null>(null);
   const [regionError, setRegionError] = useState("");
@@ -466,6 +474,17 @@ export function useWebRTCLive(agentId: string) {
     sendSignal({ type: "audio_devices", mode });
   }, [sendSignal]);
 
+  const requestVideoDevices = useCallback(() => {
+    sendSignal({ type: "video_devices" });
+  }, [sendSignal]);
+
+  // Switching to the camera asks for its device list: the index the operator
+  // picks must exist on the target before the session starts.
+  const selectVideoSource = useCallback((source: VideoSource) => {
+    setVideoSource(source);
+    if (source === "webcam") sendSignal({ type: "video_devices" });
+  }, [sendSignal]);
+
   const toggleRegion = useCallback((enabled: boolean) => {
     setRegionError("");
     setRegionOn(enabled);
@@ -568,6 +587,7 @@ export function useWebRTCLive(agentId: string) {
           audio_device: audioDevice,
           region: regionMode,
           source,
+          webcam_device: webcamDevice,
         });
       } catch (err) {
         setStatus("error");
@@ -652,6 +672,7 @@ export function useWebRTCLive(agentId: string) {
             // Ask for the target's capture devices so the audio strip can show
             // names (a macOS loopback index is otherwise undiscoverable).
             ws.send(JSON.stringify({ type: "audio_devices", mode: audioMode }));
+            ws.send(JSON.stringify({ type: "video_devices" }));
             clearAnswerTimer();
             answerTimerRef.current = setTimeout(() => {
               if (activeRef.current && pc.remoteDescription === null) {
@@ -769,6 +790,19 @@ export function useWebRTCLive(agentId: string) {
             if (typeof message.source === "string" && message.source) setAudioSource(message.source);
             if (message.enabled === false) setAudioSource("");
             break;
+          case "video_devices": {
+            const items = Array.isArray(message.items) ? message.items : [];
+            setVideoDevices(
+              items
+                .filter((item): item is VideoDeviceInfo =>
+                  typeof item === "object" && item !== null &&
+                  typeof (item as VideoDeviceInfo).index === "number" &&
+                  typeof (item as VideoDeviceInfo).name === "string")
+                .map((item) => ({ index: Number(item.index), name: String(item.name) })),
+            );
+            setError(typeof message.reason === "string" ? message.reason : "");
+            break;
+          }
           case "audio_devices": {
             const items = Array.isArray(message.items) ? message.items : [];
             setAudioDevices(
@@ -897,7 +931,11 @@ export function useWebRTCLive(agentId: string) {
     requestAudioDevices,
     selectAudioSource,
     videoSource,
-    setVideoSource,
+    setVideoSource: selectVideoSource,
+    webcamDevice,
+    setWebcamDevice,
+    videoDevices,
+    requestVideoDevices,
     regionOn,
     regionError,
     tileFrame,

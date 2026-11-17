@@ -62,6 +62,10 @@ WebRTC 视频轨：摄像头 → H.264 → RTP，缩放/编码/码率**与屏幕
 | Linux | `-f v4l2 -i /dev/videoN` |
 | macOS | `-f avfoundation -i <索引>:none` |
 
+控制台通过 `video_devices` 信令拿到**设备名列表**（与 `audio_devices` 同一模式）：Windows 列表位置、
+Linux `/dev/video*` 排序位置、macOS 的 AVFoundation 视频索引。列表在连接建立时与切换到摄像头时请求，
+可手动刷新；请求限流 20 次/10 秒、按 `video_devices` 审计、中继帧上限 16 KiB。
+
 摄像头模式是**只读**的：摄像头画面没有桌面可点，服务端对输入直接回
 `input_rejected: remote input is disabled in camera mode`（不会转发给 Agent），控制台隐藏交互提示并显示
 "摄像头画面仅可查看"。区域（瓦片）模式只支持屏幕，摄像头+region 在启动参数校验阶段就返回 400。

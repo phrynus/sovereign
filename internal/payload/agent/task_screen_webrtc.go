@@ -898,6 +898,15 @@ func (s *agentWebRTCSession) readLoop() {
 				}
 				_ = s.sendJSON(map[string]any{"type": "audio_devices", "mode": mode, "items": devices})
 			}()
+		case "video_devices":
+			go func() {
+				devices, err := s.videoDevices()
+				if err != nil {
+					_ = s.sendJSON(map[string]any{"type": "video_devices", "items": []any{}, "reason": err.Error()})
+					return
+				}
+				_ = s.sendJSON(map[string]any{"type": "video_devices", "items": devices})
+			}()
 		case "region":
 			if msg.Enabled == nil {
 				continue

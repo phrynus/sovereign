@@ -57,8 +57,8 @@ const (
 	// MaxWebRTCTilesFrameBytes bounds one region tile frame relayed to the
 	// browser (the agent budgets its own payload below this).
 	MaxWebRTCTilesFrameBytes = 400 * 1024
-	// MaxAudioDevicesFrameBytes bounds a relayed capture-device list.
-	MaxAudioDevicesFrameBytes = 16 * 1024
+	// MaxCaptureDevicesFrameBytes bounds a relayed capture-device list (audio or video).
+	MaxCaptureDevicesFrameBytes = 16 * 1024
 	// MaxClipboardHistory is the bounded ring the agent keeps; the list frame
 	// carries previews only, so its size stays a few KiB.
 	MaxClipboardHistory = 20
@@ -1052,6 +1052,12 @@ func (s *Server) allowAudioDevices(operatorID, agentID string) bool {
 	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
 }
 
+// allowVideoDevices throttles camera enumeration (same cost profile as audio).
+func (s *Server) allowVideoDevices(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":vdev"
+	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
+}
+
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1452,6 +1458,25 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			s.LogAuditRecord(c, "audio_devices", "agent", sess.AgentID,
 				"capture device list requested (mode="+mode+")", true, nil)
+		case "video_devices":
+			// Camera list: the console needs names before it can pick a
+			// webcam_device index that exists on the target.
+			if !s.allowVideoDevices(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "video_devices", "items": []any{}, "reason": "camera list rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{"type": "video_devices"})
+			if marshalErr != nil {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			s.LogAuditRecord(c, "video_devices", "agent", sess.AgentID, "camera list requested", true, nil)
 		case "region":
 			// Live switch to change-only tiles (or back to H.264).
 			if msg.Enabled == nil {
@@ -1637,7 +1662,13 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 		case "audio_devices":
 			// Capture-device list (names + indices). Bounded: a host cannot
 			// force a large frame through the operator socket.
-			if len(raw) > MaxAudioDevicesFrameBytes {
+			if len(raw) > MaxCaptureDevicesFrameBytes {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "video_devices":
+			// Camera list: names + the indices webcam_device accepts, same bound.
+			if len(raw) > MaxCaptureDevicesFrameBytes {
 				continue
 			}
 			sess.sendRawToOperator(raw)

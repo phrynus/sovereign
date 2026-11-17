@@ -43,6 +43,24 @@ func TestParseAVFoundationVideoDevices(t *testing.T) {
 	}
 }
 
+// TestIndexVideoDevices pins the numbering the console sends back: a listed
+// index is a position in the platform list, never the name itself.
+func TestIndexVideoDevices(t *testing.T) {
+	devices := indexVideoDevices([]string{"ASUS FHD webcam", "OBS Virtual Camera"})
+	if len(devices) != 2 {
+		t.Fatalf("devices = %+v", devices)
+	}
+	if devices[0].Index != 0 || devices[0].Name != "ASUS FHD webcam" {
+		t.Fatalf("first = %+v", devices[0])
+	}
+	if devices[1].Index != 1 || devices[1].Name != "OBS Virtual Camera" {
+		t.Fatalf("second = %+v", devices[1])
+	}
+	if got := indexVideoDevices(nil); len(got) != 0 {
+		t.Fatalf("nil list = %+v", got)
+	}
+}
+
 func TestSelectIndexedDevice(t *testing.T) {
 	devices := []string{"cam0", "cam1"}
 	if got, err := selectIndexedDevice(devices, 1, "camera"); err != nil || got != "cam1" {

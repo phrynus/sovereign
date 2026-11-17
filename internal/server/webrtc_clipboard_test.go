@@ -917,7 +917,7 @@ func TestRDWebRTCAudioDevicesRelay(t *testing.T) {
 
 	// An oversized list is not relayed to the browser.
 	huge := fmt.Sprintf(`{"type":"audio_devices","mode":"mic","items":[{"index":0,"name":%q,"loopback":false}]}`,
-		strings.Repeat("d", MaxAudioDevicesFrameBytes))
+		strings.Repeat("d", MaxCaptureDevicesFrameBytes))
 	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(huge)); err != nil {
 		t.Fatalf("agent write huge: %v", err)
 	}
@@ -1060,6 +1060,108 @@ func TestWebRTCCameraMode(t *testing.T) {
 	_ = agentPeer.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
 	if _, raw, err := agentPeer.ReadMessage(); err == nil {
 		t.Fatalf("camera session forwarded input to the agent: %s", raw)
+	}
+}
+
+// TestRDWebRTCVideoDevicesRelay drives the camera list: the request reaches the
+// agent, the names reach the console (so webcam_device is discoverable), and an
+// oversized list is dropped.
+func TestRDWebRTCVideoDevicesRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-vdev", TenantID: 1, Hostname: "vdev", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-vdev", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-vdev", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	send := func(payload string) {
+		t.Helper()
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+			t.Fatalf("operator write: %v", err)
+		}
+	}
+	readJSON := func(c *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for {
+			_ = c.SetReadDeadline(deadline)
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", wantType, err)
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(raw, &frame); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if frame["type"] == wantType {
+				return frame
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s frame (last: %s)", wantType, raw)
+			}
+		}
+	}
+
+	send(`{"type":"video_devices"}`)
+	request := readJSON(agentPeer, "video_devices", 3*time.Second)
+	if _, present := request["items"]; present {
+		t.Fatalf("request carried items: %+v", request)
+	}
+
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"video_devices","items":[{"index":0,"name":"ASUS FHD webcam"},{"index":1,"name":"OBS Virtual Camera"}]}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	list := readJSON(conn, "video_devices", 3*time.Second)
+	items, _ := list["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("camera list = %+v", list)
+	}
+	if item, _ := items[1].(map[string]any); item["name"] != "OBS Virtual Camera" || item["index"] != float64(1) {
+		t.Fatalf("second camera = %+v", item)
+	}
+
+	// An oversized list is not relayed to the browser.
+	huge := fmt.Sprintf(`{"type":"video_devices","items":[{"index":0,"name":%q}]}`,
+		strings.Repeat("c", MaxCaptureDevicesFrameBytes))
+	if err := agentPeer.WriteMessage(websocket.TextMessage, []byte(huge)); err != nil {
+		t.Fatalf("agent write huge: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(400 * time.Millisecond))
+	if _, raw, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("an oversized camera list was relayed: %d bytes", len(raw))
 	}
 }
 

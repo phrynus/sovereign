@@ -1,0 +1,1 @@
+import{t as e}from"./utils-QcndG3pE.js";import{Zn as t}from"./vendor-baseui-CwyjHJmy.js";var n=t();function r({id:t,children:r,className:i}){return r?(0,n.jsx)(`p`,{id:t,role:`alert`,className:e(`text-xs text-destructive-ink mt-1`,i),children:r}):null}export{r as t};

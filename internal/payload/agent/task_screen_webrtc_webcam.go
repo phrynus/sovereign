@@ -162,3 +162,46 @@ func (s *agentWebRTCSession) webcamDeviceFor(index int) (string, error) {
 		return "", fmt.Errorf("unsupported platform %s", runtime.GOOS)
 	}
 }
+
+// videoDeviceInfo is one selectable camera, as sent to the console. Index is
+// the value webcam_device expects for that platform's list.
+type videoDeviceInfo struct {
+	Index int    `json:"index"`
+	Name  string `json:"name"`
+}
+
+// indexVideoDevices numbers a device list in order. The index IS the
+// audio/webcam selector value for Windows and Linux, where the agent enumerates
+// the platform list again at start time.
+func indexVideoDevices(names []string) []videoDeviceInfo {
+	out := make([]videoDeviceInfo, 0, len(names))
+	for i, name := range names {
+		out = append(out, videoDeviceInfo{Index: i, Name: name})
+	}
+	return out
+}
+
+// videoDevices enumerates the cameras the agent would accept for webcam_device,
+// so the console offers names instead of an index the operator has to guess.
+// macOS reports AVFoundation's own video indices, which is what -i <n>:none
+// expects.
+func (s *agentWebRTCSession) videoDevices() ([]videoDeviceInfo, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return indexVideoDevices(listDShowVideoDevices(s.ffmpeg)), nil
+	case "linux":
+		return indexVideoDevices(listLinuxCameraDevices()), nil
+	case "darwin":
+		devices, err := listAVFoundationVideoDevices(s.ffmpeg)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]videoDeviceInfo, 0, len(devices))
+		for _, device := range devices {
+			out = append(out, videoDeviceInfo(device))
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported platform %s", runtime.GOOS)
+	}
+}

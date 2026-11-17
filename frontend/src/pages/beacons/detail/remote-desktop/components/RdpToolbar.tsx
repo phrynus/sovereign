@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { WorkspaceToolbar } from "@/components/ui/workspace-toolbar";
-import { Compass, Expand, Gauge, LayoutGrid, Maximize2, Monitor, Play, Square, Users } from "lucide-react";
+import { Compass, Expand, Gauge, LayoutGrid, Maximize2, Monitor, Play, RefreshCw, Square, Users } from "lucide-react";
 import { isExperimentalDesktop } from "../../components/session-quality";
 import type { ResolutionOption } from "./useRemoteDesktop";
-import type { DisplayInfo, LivePreset, VideoSource } from "./useWebRTCLive";
+import type { DisplayInfo, LivePreset, VideoDeviceInfo, VideoSource } from "./useWebRTCLive";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
@@ -24,6 +24,10 @@ interface RdpToolbarProps {
   livePresets: Array<LivePreset & { label: string }>;
   videoSource: VideoSource;
   onSelectVideoSource: (source: VideoSource) => void;
+  videoDevices: VideoDeviceInfo[];
+  webcamDevice: number;
+  onSelectWebcamDevice: (index: number) => void;
+  onRefreshVideoDevices: () => void;
   livePreset: LivePreset["value"];
   setLivePreset: (preset: LivePreset["value"]) => void;
   displays: DisplayInfo[];
@@ -45,6 +49,7 @@ interface RdpToolbarProps {
 export default memo(function RdpToolbar({
   t, agentId, nativeWidth, nativeHeight, resolutions, resolution, setResolution,
   mode, setMode, livePresets, livePreset, setLivePreset, videoSource, onSelectVideoSource,
+  videoDevices, webcamDevice, onSelectWebcamDevice, onRefreshVideoDevices,
   displays, selectedDisplay, onSelectDisplay,
   differential, onToggleDifferential, regionOn, onToggleRegion,
   active, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
@@ -131,6 +136,42 @@ export default memo(function RdpToolbar({
                 <SelectItem value="webcam">{t("agents.rdp_source_webcam")}</SelectItem>
               </SelectContent>
             </Select>
+          )}
+          {mode === "live" && videoSource === "webcam" && (
+            <>
+              <Select
+                value={String(webcamDevice)}
+                onValueChange={(v) => {
+                  const index = Number(v);
+                  if (Number.isInteger(index) && index >= 0) onSelectWebcamDevice(index);
+                }}
+                disabled={active}
+              >
+                <SelectTrigger className="w-[190px]" aria-label={t("agents.rdp_camera_device")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {videoDevices.length === 0 ? (
+                    <SelectItem value="0">{t("agents.rdp_camera_default")}</SelectItem>
+                  ) : (
+                    videoDevices.map((device) => (
+                      <SelectItem key={device.index} value={String(device.index)}>
+                        {device.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRefreshVideoDevices}
+                disabled={active}
+                title={t("agents.rdp_camera_refresh")}
+              >
+                <RefreshCw className="size-3.5" />
+              </Button>
+            </>
           )}
           {mode === "live" && videoSource === "screen" && (
             <Select

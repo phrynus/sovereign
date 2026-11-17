@@ -46,6 +46,10 @@ export default function RemoteDesktopPage() {
         onSelectDisplay={rdp.selectDisplay}
         videoSource={rdp.videoSource}
         onSelectVideoSource={rdp.setVideoSource}
+        videoDevices={rdp.videoDevices}
+        webcamDevice={rdp.webcamDevice}
+        onSelectWebcamDevice={rdp.setWebcamDevice}
+        onRefreshVideoDevices={rdp.requestVideoDevices}
         differential={rdp.differential}
         onToggleDifferential={rdp.toggleDifferential}
         regionOn={rdp.regionOn}

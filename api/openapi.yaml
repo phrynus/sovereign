@@ -13647,7 +13647,11 @@ paths:
                   type: integer
                   minimum: 0
                   maximum: 7
-                  description: Index among the platform's camera devices (0 = first).
+                  description: >
+                    Index among the platform's camera devices (0 = first). The
+                    console asks the agent for `video_devices` (a signal, not an
+                    HTTP route) and shows the names, so the index is always one
+                    the target enumerated.
                 region:
                   type: boolean
                   description: >
