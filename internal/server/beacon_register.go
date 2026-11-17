@@ -330,6 +330,12 @@ func (s *Server) buildBeaconResponse(agentID string, seq uint64, resp beaconResp
 	if !ok {
 		return nil, false
 	}
+	// Compress the PLAINTEXT before AEAD: ciphertext is incompressible. The
+	// agent sees the gzip magic only after a successful authenticated decrypt,
+	// and a peer that never advertised "gzip" never receives a compressed frame.
+	if compressed, used := protocol.CompressBeacon(respBytes, resp.Compression == "gzip"); used {
+		respBytes = compressed
+	}
 	cipherB64, err := s.sessionManager.EncryptB64WithAAD(agentID, respBytes, []byte(agentID+"\x00"+strconv.FormatUint(seq, 10)))
 	if err != nil {
 		slog.Error("ECDH response encryption failed", "agent_id", agentID, "err", err)

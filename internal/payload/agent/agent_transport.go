@@ -28,6 +28,9 @@ const maxBeaconResponseBytes = 16 << 20 // 16 MiB
 var (
 	lastHTTPStatus        atomic.Int32 // 0 = no response, otherwise last HTTP status
 	lastHTTPRetryDeadline atomic.Int64 // UnixNano; 0 = none
+	// peerCanInflate is learned from the server's authenticated response. Only
+	// after that arrives does the agent gzip its own beacon plaintexts.
+	peerCanInflate atomic.Bool
 )
 
 const maxHTTPRetryAfter = 5 * time.Minute

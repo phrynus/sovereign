@@ -14,11 +14,13 @@ type BeaconRequest struct {
 	TS              int64             `json:"ts,omitempty"`
 	Info            map[string]string `json:"info,omitempty"`
 	Results         []TaskResult      `json:"results,omitempty"`
-	ResultIDs       []string          `json:"result_ids,omitempty"`
-	AckTaskIDs      []uint            `json:"acks,omitempty"`
-	TaskCapacity    *int              `json:"task_capacity,omitempty"`
-	SocksData       []SocksFrame      `json:"socks_data,omitempty"`
-	Relayed         []RelayedData     `json:"relayed,omitempty"`
+	// Compression advertises the inbound gzip capability ("gzip") to the peer.
+	Compression  string        `json:"comp,omitempty"`
+	ResultIDs    []string      `json:"result_ids,omitempty"`
+	AckTaskIDs   []uint        `json:"acks,omitempty"`
+	TaskCapacity *int          `json:"task_capacity,omitempty"`
+	SocksData    []SocksFrame  `json:"socks_data,omitempty"`
+	Relayed      []RelayedData `json:"relayed,omitempty"`
 	// RelayedFrames carries opaque v2 beacon envelopes from P2P children. The
 	// parent never inspects or decrypts them: the envelope is authenticated
 	// end-to-end against the server with the child's own session key.
@@ -85,6 +87,8 @@ type TaskResult struct {
 
 // BeaconResponse is sent by server to agent in reply to a check-in.
 type BeaconResponse struct {
+	// Compression advertises the inbound gzip capability ("gzip") to the peer.
+	Compression     string `json:"comp,omitempty"`
 	Tasks           []Task `json:"tasks"`
 	ProtocolVersion uint   `json:"pv,omitempty"`
 	// ProtocolDeprecated tells the agent that the server is serving it on a

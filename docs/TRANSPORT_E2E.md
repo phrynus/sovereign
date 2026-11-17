@@ -193,6 +193,32 @@ Notes:
 | 3 | Implant check-in via DNS (or DoH fallback) | |
 | 4 | Task round-trip | |
 
+## Beacon plaintext compression (negotiated, gzip)
+
+Both peers advertise `"comp":"gzip"` in their authenticated plaintext. A peer
+compresses only after seeing the other's advertisement, so this is wire-compatible
+with an older agent or server (no version bump, no plaintext fallback removal).
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | New agent checks in against this server; capture a beacon body | |
+| 2 | Body carries `comp:gzip` in the decrypted request | |
+| 3 | Queue a task producing >1 KiB of repetitive output; capture the next request | |
+| 4 | Its decrypted plaintext begins with `FCZ1` and inflates to the same `BeaconRequest` | |
+| 5 | Server's encrypted response also begins with `FCZ1` and inflates to the tasks | |
+| 6 | Pair an old server (no `comp` in response) with the new agent: next request is plain JSON with `comp:gzip` present | |
+
+Pass criteria:
+
+- gzip is applied **before** AES-GCM; the `FCZ1` prefix is inside the ciphertext
+  bound to `uuid || seq`, so a MITM cannot switch compression on or off.
+- Frames <512 B or with <5 % savings stay byte-identical; an incompressible
+  frame is not wrapped in a gzip header.
+- Inflate is capped at 16 MiB; a corrupt gzip header or an expansion bomb is
+  rejected as a beacon failure (results remain queued) instead of allocating
+  arbitrary memory.
+- Measured: 9,323 B request → 179 B; 10,875 B response → 152 B.
+
 ## Sign-off
 
 | Transport | Date | Operator | Result | Notes |

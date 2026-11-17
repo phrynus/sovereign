@@ -272,7 +272,14 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 // datagram transports (frameSize/budget<=0 drains everything). Relayed
 // children inherit the parent's budget: their replies nest inside the
 // parent's single response datagram.
-func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, frameSize, budget int) beaconResponse {
+func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, frameSize, budget int) (result beaconResponse) {
+	// Echo the peer's capability on the response: buildBeaconResponse compresses
+	// the plaintext before AEAD only after the peer said it can inflate.
+	defer func() {
+		if req.Compression == "gzip" {
+			result.Compression = "gzip"
+		}
+	}()
 	now := time.Now()
 
 	// Dedup: skip recently processed identical beacons

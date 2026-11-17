@@ -22,8 +22,11 @@ type beaconRequest struct {
 	DroppedResults int `json:"dropped_results,omitempty"`
 
 	// ECDH + AES-256-GCM fields (forward-secret encryption)
-	ECDHPub   string `json:"ecdh_pub,omitempty"` // base64-encoded X25519 public key
-	CipherB64 string `json:"c,omitempty"`        // base64(nonce + AES-256-GCM ciphertext)
+	// Compression advertises the peer's inbound gzip capability. Set on a
+	// parsed request and echoed on the response before encryption.
+	Compression string `json:"comp,omitempty"`
+	ECDHPub     string `json:"ecdh_pub,omitempty"` // base64-encoded X25519 public key
+	CipherB64   string `json:"c,omitempty"`        // base64(nonce + AES-256-GCM ciphertext)
 }
 
 type relayedData struct {
@@ -91,7 +94,9 @@ type relayedTask struct {
 }
 
 type beaconResponse struct {
-	Tasks           []task `json:"tasks"`
+	Tasks []task `json:"tasks"`
+	// Compression advertises the peer's inbound gzip capability ("gzip").
+	Compression     string `json:"comp,omitempty"`
 	ProtocolVersion uint   `json:"pv,omitempty"`
 	// Tenant attribution is server-internal telemetry metadata. It lets the
 	// HTTP traffic accumulator remain tenant-aware without another DB lookup

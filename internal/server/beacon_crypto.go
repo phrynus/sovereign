@@ -425,6 +425,14 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 			return envelope, beaconRequest{}, frameRejected
 		}
 
+		// A peer that advertised gzip sends FCZ1-prefixed plaintext. The prefix
+		// is inside the AEAD ciphertext, so only a holder of the session key
+		// can set or clear it; decompress from one place for every transport.
+		plaintext, err = protocol.DecompressBeacon(plaintext)
+		if err != nil {
+			slog.Warn("Beacon decompression failed", "agent_id", envelope.UUID, "err", err)
+			return beaconEnvelope{}, beaconRequest{}, frameRejected
+		}
 		maxPayload := s.effectiveMaxPayload()
 		if len(plaintext) > maxPayload {
 			slog.Warn("Beacon decrypted payload too large", "agent_id", envelope.UUID, "size", len(plaintext), "max", maxPayload)
