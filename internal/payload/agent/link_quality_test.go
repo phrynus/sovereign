@@ -93,3 +93,33 @@ func TestObserveBeaconResultAdapts(t *testing.T) {
 		t.Fatalf("link did not recover: scale=%v", recovered)
 	}
 }
+
+func TestUDPFragmentPayloadFromLink(t *testing.T) {
+	resetLinkState()
+	t.Cleanup(resetLinkState)
+
+	// No evidence: stay at the conservative default.
+	if got := udpFragmentPayload(snapshotLink()); got != udpFragSmall {
+		t.Fatalf("no-sample size = %d, want %d", got, udpFragSmall)
+	}
+	for i := 0; i < linkQualitySamples; i++ {
+		observeBeaconResult(60*time.Millisecond, true)
+	}
+	if got := udpFragmentPayload(snapshotLink()); got != udpFragLarge {
+		t.Fatalf("healthy link size = %d, want %d", got, udpFragLarge)
+	}
+	// A middle-aged link (median ~2 s, no loss) uses the medium part size.
+	for i := 0; i < linkQualitySamples; i++ {
+		observeBeaconResult(2*time.Second, true)
+	}
+	if got := udpFragmentPayload(snapshotLink()); got != udpFragMedium {
+		t.Fatalf("medium link size = %d, want %d", got, udpFragMedium)
+	}
+	// A degraded link drops back to 512 B parts.
+	for i := 0; i < linkQualitySamples; i++ {
+		observeBeaconResult(9*time.Second, i%2 == 0)
+	}
+	if got := udpFragmentPayload(snapshotLink()); got != udpFragSmall {
+		t.Fatalf("degraded link size = %d, want %d", got, udpFragSmall)
+	}
+}

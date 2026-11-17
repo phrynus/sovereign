@@ -27,24 +27,53 @@ const (
 	ICMPFragTTL        = 30 * time.Second
 )
 
-// ICMPFragSplit chops body into on-wire ICMP payloads.
+// ICMPFragSplit chops body into on-wire ICMP payloads using the conservative
+// 512-byte default.
 func ICMPFragSplit(body []byte) [][]byte {
+	return DatagramFragSplitWithSize(body, ICMPFragMaxPayload)
+}
+
+// DatagramFragSplitWithSize is the transport-neutral splitter. `desired` is the
+// payload size a congestion-aware caller wants; it is clamped to [64,1400]
+// (safe even on IPv6's 1280-byte minimum MTU). The wire header's total is
+// validated against the assembler's 256-part cap, so a large body automatically
+// uses bigger parts instead of emitting fragments the peer is forced to reject.
+func DatagramFragSplitWithSize(body []byte, desired int) [][]byte {
 	if len(body) == 0 {
 		return nil
 	}
+	const (
+		minPart  = 64
+		maxPart  = 1400
+		maxParts = 256
+	)
+	size := desired
+	if size < minPart {
+		size = minPart
+	}
+	if size > maxPart {
+		size = maxPart
+	}
+	if need := (len(body) + maxParts - 1) / maxParts; size < need {
+		size = need
+	}
+	// A body that cannot be carried in 256 parts of at most 1400 bytes cannot
+	// use this framing at all; the caller must treat that as a send failure
+	// instead of emitting a stream no assembler will accept.
+	if size > maxPart {
+		return nil
+	}
+
 	var msgID uint32
 	_ = binary.Read(rand.Reader, binary.LittleEndian, &msgID)
 	if msgID == 0 {
 		msgID = uint32(time.Now().UnixNano())
 	}
-	n := (len(body) + ICMPFragMaxPayload - 1) / ICMPFragMaxPayload
-	if n == 0 {
-		n = 1
-	}
+	n := (len(body) + size - 1) / size
 	out := make([][]byte, 0, n)
 	for i := 0; i < n; i++ {
-		start := i * ICMPFragMaxPayload
-		end := start + ICMPFragMaxPayload
+		start := i * size
+		end := start + size
 		if end > len(body) {
 			end = len(body)
 		}

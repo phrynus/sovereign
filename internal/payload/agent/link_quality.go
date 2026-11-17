@@ -137,3 +137,28 @@ func linkQualityScale(score int) float64 {
 func currentLinkScale() float64 {
 	return linkQualityScale(linkQualityScore(snapshotLink()))
 }
+
+// UDP fragment sizes chosen from the same link evidence. Small parts are the
+// safe default (and the only choice before enough samples exist): a lossy link
+// benefits from smaller datagrams. A consistently healthy link uses larger
+// parts to cut per-fragment overhead; a degraded one drops back to 512 B.
+// Values stay under a conservative path MTU even with IPv6 headers.
+const (
+	udpFragSmall  = 512
+	udpFragMedium = 768
+	udpFragLarge  = 1200
+)
+
+func udpFragmentPayload(stats linkStats) int {
+	if stats.Samples < linkQualitySamples {
+		return udpFragSmall
+	}
+	switch score := linkQualityScore(stats); {
+	case score >= 85:
+		return udpFragLarge
+	case score >= 55:
+		return udpFragMedium
+	default:
+		return udpFragSmall
+	}
+}

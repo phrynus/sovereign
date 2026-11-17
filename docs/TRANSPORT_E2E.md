@@ -240,6 +240,11 @@ Pass criteria:
 - Per-key assembly is capped at 256 KiB, 256 parts and 1024 concurrent keys;
   entries expire after 30 s and are swept periodically even when traffic stops.
 - Unfragmented datagrams are byte-identical to the old transport.
+- Healthy link (8+ fast samples) uses 1200 B parts, medium 768 B, degraded/no
+  data 512 B; every size reassembles to the same body.
+- A body needing >256 parts is split with larger parts automatically; a body
+  beyond the framing's capacity is refused (beacon stays queued) instead of
+  emitting parts the peer is forced to reject.
 
 ## Link-quality adaptation (beacon cadence)
 

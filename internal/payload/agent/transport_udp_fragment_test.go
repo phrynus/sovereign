@@ -26,13 +26,21 @@ func TestUDPBeaconFragmentation(t *testing.T) {
 
 	const requestMarker = "REQUEST-MARKER-"
 	const replyMarker = "REPLY-MARKER-"
-	request := []byte(strings.Repeat(requestMarker, 60)) // ~900 B -> 2+ fragments
-	reply := []byte(strings.Repeat(replyMarker, 80))     // ~1040 B -> 2+ fragments
+	request := []byte(strings.Repeat(requestMarker, 200)) // ~3 KiB -> 3 parts at 1200 B
+	reply := []byte(strings.Repeat(replyMarker, 80))      // ~1040 B -> 2+ fragments
 	if len(protocol.DatagramFragSplit(request)) < 2 || len(protocol.DatagramFragSplit(reply)) < 2 {
 		t.Fatal("test fixtures must exceed one fragment")
 	}
 
+	resetLinkState()
+	t.Cleanup(resetLinkState)
+	// A healthy link makes the agent choose larger datagram parts.
+	for i := 0; i < linkQualitySamples; i++ {
+		observeBeaconResult(50*time.Millisecond, true)
+	}
+
 	gotRequest := make(chan []byte, 1)
+	partSizes := make(chan int, 1)
 	go func() {
 		asm := protocol.NewDatagramAssembler()
 		buf := make([]byte, 8192)
@@ -45,12 +53,16 @@ func TestUDPBeaconFragmentation(t *testing.T) {
 			peer = addr
 			data := append([]byte(nil), buf[:n]...)
 			if protocol.DatagramMaybePlain(data) {
+				partSizes <- len(data)
 				gotRequest <- data
 				break
 			}
 			id, total, index, payload, ok := protocol.DatagramFragParse(data)
 			if !ok {
 				continue
+			}
+			if index == 0 {
+				partSizes <- len(data)
 			}
 			full, asmErr := asm.Add(strconv.FormatUint(uint64(id), 10), total, index, payload)
 			if asmErr != nil || full == nil {
@@ -77,5 +89,13 @@ func TestUDPBeaconFragmentation(t *testing.T) {
 	}
 	if !bytes.Equal(got, reply) {
 		t.Fatalf("agent returned %d bytes, want reassembled %d-byte reply", len(got), len(reply))
+	}
+	select {
+	case size := <-partSizes:
+		if want := protocol.ICMPFragHeaderSize + udpFragLarge; size != want {
+			t.Fatalf("healthy-link part = %d bytes, want %d", size, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no part size was captured")
 	}
 }
