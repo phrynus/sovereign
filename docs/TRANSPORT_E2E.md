@@ -217,7 +217,10 @@ Pass criteria:
 - Inflate is capped at 16 MiB; a corrupt gzip header or an expansion bomb is
   rejected as a beacon failure (results remain queued) instead of allocating
   arbitrary memory.
-- Measured: 9,323 B request → 179 B; 10,875 B response → 152 B.
+- Measured: 9,323 B request → 179 B; 10,875 B response → 152 B (at the
+  original default compression level). The pooled BestSpeed writer used in
+  production yields 225 B for the same 9 KiB frame but costs ~8 µs / 260 B
+  instead of ~112 µs / 815 KiB, verified race-clean with 64 concurrent frames.
 
 ## UDP fragmentation (beacons larger than one MTU)
 

@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"sync"
 )
 
 // Beacon payload compression runs BEFORE AEAD encryption (ciphertext is not
@@ -25,6 +26,26 @@ const (
 	minCompressionSavingsPct   = 5
 )
 
+// beaconGzipPool reuses the flate state between beacons. gzip.NewWriter
+// allocates several hundred KiB of compression tables per call; on a busy
+// server that dominated the cost of compressing a 9 KiB envelope. The writer
+// is Reset() against a fresh per-call buffer, so no compressed bytes escape
+// through the pool.
+var beaconGzipPool = sync.Pool{New: func() any {
+	p := &pooledGzip{}
+	p.w, _ = gzip.NewWriterLevel(&p.buf, beaconGzipLevel)
+	return p
+}}
+
+type pooledGzip struct {
+	buf bytes.Buffer
+	w   *gzip.Writer
+}
+
+// Beacon payloads are latency-sensitive and highly repetitive. BestSpeed cuts
+// CPU sharply with only a small size penalty on the measured corpus.
+const beaconGzipLevel = gzip.BestSpeed
+
 // CompressBeacon gzip-compresses a plaintext beacon frame and prefixes it with
 // compressionMagic. It returns (original, false) when disabled, too small, or
 // when compression would not save at least minCompressionSavingsPct.
@@ -32,24 +53,25 @@ func CompressBeacon(plain []byte, enabled bool) ([]byte, bool) {
 	if !enabled || len(plain) < minCompressibleBeaconBytes {
 		return plain, false
 	}
-	var buf bytes.Buffer
-	zw := gzip.NewWriter(&buf)
-	if _, err := zw.Write(plain); err != nil {
+	p := beaconGzipPool.Get().(*pooledGzip)
+	p.buf.Reset()
+	p.w.Reset(&p.buf)
+	_, writeErr := p.w.Write(plain)
+	closeErr := p.w.Close()
+	if writeErr != nil || closeErr != nil {
+		beaconGzipPool.Put(p)
 		return plain, false
 	}
-	if err := zw.Close(); err != nil {
-		return plain, false
-	}
-	out := buf.Bytes()
+	out := make([]byte, 0, len(compressionMagic)+p.buf.Len())
+	out = append(out, compressionMagic...)
+	out = append(out, p.buf.Bytes()...)
+	beaconGzipPool.Put(p)
 	// Require a real win: gzip of incompressible bytes expands slightly, and
 	// paying for a header to send more data is worse than no compression.
 	if len(out)*100 >= len(plain)*(100-minCompressionSavingsPct) {
 		return plain, false
 	}
-	result := make([]byte, 0, len(compressionMagic)+len(out))
-	result = append(result, compressionMagic...)
-	result = append(result, out...)
-	return result, true
+	return out, true
 }
 
 // DecompressBeacon inflates a frame produced by CompressBeacon. Frames without

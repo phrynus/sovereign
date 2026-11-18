@@ -5,8 +5,61 @@ import (
 	"encoding/json"
 	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 )
+
+// TestBeaconCompressionConcurrent proves the writer pool never mixes buffers:
+// every goroutine gets its own compressed bytes back, and inflating them yields
+// exactly the payload that went in.
+func TestBeaconCompressionConcurrent(t *testing.T) {
+	payloads := [][]byte{
+		[]byte(strings.Repeat("alpha-telemetry ", 300)),
+		[]byte(strings.Repeat("beta-result-row ", 280)),
+		[]byte(strings.Repeat("gamma-socks-frame ", 260)),
+	}
+	errs := make(chan string, 64)
+	var wg sync.WaitGroup
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			plain := payloads[i%len(payloads)]
+			compressed, ok := CompressBeacon(plain, true)
+			if !ok {
+				errs <- "payload was not compressed"
+				return
+			}
+			got, err := DecompressBeacon(compressed)
+			if err != nil {
+				errs <- err.Error()
+				return
+			}
+			if !bytes.Equal(got, plain) {
+				errs <- "concurrent compression mixed payloads"
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for msg := range errs {
+		t.Fatal(msg)
+	}
+}
+
+func BenchmarkCompressBeacon(b *testing.B) {
+	plain := []byte(`{"success":true,"data":{"tasks":[
+[{"id":1,"type":"shell","command":"echo hello world and a somewhat long command line"},
+{"id":2,"type":"find","command":"/tmp/fixture"}]
+]}}` + strings.Repeat("repetitive telemetry payload ", 300))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, ok := CompressBeacon(plain, true); !ok {
+			b.Fatal("benchmark payload did not compress")
+		}
+	}
+}
 
 // TestBeaconCompressionRoundTrip pins the FCZ1 framing and proves a realistic
 // beacon frame actually shrinks (the whole point of the transport change).
