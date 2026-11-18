@@ -24,13 +24,12 @@
   "newComponents": [
     "avatar",
     "breadcrumb",
-    "menubar",
-    "toast",
     "status-indicator",
+    "status-dot",
+    "stage-status",
+    "meta-chip",
     "icon-badge",
     "animated-stat-card",
-    "page-section",
-    "data-state",
-    "skeletons"
+    "data-state"
   ]
 }

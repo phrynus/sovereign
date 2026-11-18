@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SafeImg } from "@/components/ui/safe-img";
 import { Spinner } from "@/components/ui/spinner";
+import { StageStatus } from "@/components/ui/stage-status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Clock, Monitor, TriangleAlert, Zap } from "lucide-react";
 import { ScreenVideoPlayer } from "@/components/ScreenVideoPlayer";
@@ -34,12 +35,12 @@ export default memo(function ScreenViewer({
   onOpenModal, onActivatePreview,
 }: ScreenViewerProps) {
   const indicator = (() => {
-    if (status === "capturing") return { color: "bg-warning", text: t("screen.capturing"), icon: <Spinner size="xs" /> };
-    if (status === "error") return { color: "bg-destructive", text: t("screen.error"), icon: <TriangleAlert className="size-3" /> };
+    if (status === "capturing") return { tone: "warning" as const, label: t("screen.capturing"), icon: <Spinner size="xs" /> };
+    if (status === "error") return { tone: "destructive" as const, label: t("screen.error"), icon: <TriangleAlert className="size-3" /> };
     if (monitoring && monitoringStatus === "connected") {
-      return { color: "bg-success", text: t("agents.rdp_connected"), icon: <span className="size-1.5 rounded-full bg-current" /> };
+      return { tone: "success" as const, label: t("agents.rdp_connected"), icon: undefined };
     }
-    return { color: "bg-muted-foreground", text: t("agents.rdp_standby"), icon: <span className="size-1.5 rounded-full bg-current" /> };
+    return { tone: "muted" as const, label: t("agents.rdp_standby"), icon: undefined };
   })();
   const capturing = busyAction === "capture" || busyAction === "window";
 
@@ -51,11 +52,7 @@ export default memo(function ScreenViewer({
           <span className="text-sm font-medium text-foreground">{t("agents.screen_live_view")}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive-ink" : ""}`}>
-            <span className={`size-2 rounded-full ${indicator.color}`} aria-hidden="true" />
-            {indicator.icon}
-            {indicator.text}
-          </span>
+          <StageStatus tone={indicator.tone} label={indicator.label} icon={indicator.icon} />
           <span className="hidden items-center gap-1 sm:flex">
             <Clock className="size-3.5" aria-hidden="true" />
             {lastUpdate}

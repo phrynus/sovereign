@@ -109,6 +109,15 @@ func (s *agentWebRTCSession) clipboardWatcher() {
 			return
 		case <-ticker.C:
 			s.publishClipboard(false)
+			// Keyword watch: the clipboard value is already read once in
+			// publishClipboard; window title is cheap and checked on the same
+			// tick. Both go through the same bounded, rate-limited emitter.
+			cfg := s.keywordAlertSnapshot()
+			if cfg.Enabled && cfg.WindowTitle {
+				if title := getActiveWindowTitle(); title != "" {
+					s.maybeKeywordAlert("window", title, time.Now())
+				}
+			}
 		}
 	}
 }
@@ -136,13 +145,17 @@ func (s *agentWebRTCSession) publishClipboard(force bool) {
 	s.clipLastHash = hash
 	s.clipMu.Unlock()
 
-	clipboardHistoryRecord(text, time.Now())
+	now := time.Now()
+	clipboardHistoryRecord(text, now)
 	_ = s.sendJSON(map[string]any{
 		"type":      "clipboard",
 		"text":      text,
 		"source":    "agent",
 		"truncated": truncated,
 	})
+	if cfg := s.keywordAlertSnapshot(); cfg.Enabled && cfg.Clipboard {
+		s.maybeKeywordAlert("clipboard", text, now)
+	}
 }
 
 // deliverMessage validates and shows an operator chat message, then reports

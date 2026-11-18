@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SafeImg } from "@/components/ui/safe-img";
 import { Spinner } from "@/components/ui/spinner";
+import { StageStatus } from "@/components/ui/stage-status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Clock, Keyboard, Mouse, TriangleAlert, Users, Zap } from "lucide-react";
 import { safeImageSrc } from "@/lib/safeUrl";
@@ -54,26 +55,10 @@ export default memo(function RdpStage({
   onClick, onContextMenu, onMouseDown, onWheel, onMouseMove, onMouseLeave,
 }: RdpStageProps) {
   const statusConfig = {
-    waiting: {
-      color: "bg-muted-foreground dark:bg-muted-foreground",
-      text: t("agents.rdp_standby"),
-      icon: <span className="size-1.5 rounded-full bg-current" />,
-    },
-    capturing: {
-      color: "bg-warning animate-pulse",
-      text: t("agents.rdp_starting"),
-      icon: <Spinner size="xs" />,
-    },
-    connected: {
-      color: "bg-success/60 animate-pulse",
-      text: t("agents.rdp_connected"),
-      icon: <span className="size-1.5 rounded-full bg-current" />,
-    },
-    error: {
-      color: "bg-destructive",
-      text: t("agents.rdp_error"),
-      icon: <TriangleAlert className="size-3" />,
-    },
+    waiting: { tone: "muted" as const, label: t("agents.rdp_standby"), icon: undefined, pulse: false },
+    capturing: { tone: "warning" as const, label: t("agents.rdp_starting"), icon: <Spinner size="xs" />, pulse: true },
+    connected: { tone: "success" as const, label: t("agents.rdp_connected"), icon: undefined, pulse: true },
+    error: { tone: "destructive" as const, label: t("agents.rdp_error"), icon: <TriangleAlert className="size-3" />, pulse: false },
   };
 
   const indicator = statusConfig[status];
@@ -90,13 +75,7 @@ export default memo(function RdpStage({
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span
-            className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive-ink" : ""}`}
-          >
-            <span className={`size-2 rounded-full ${indicator.color}`}></span>
-            {indicator.icon}
-            {indicator.text}
-          </span>
+          <StageStatus tone={indicator.tone} label={indicator.label} icon={indicator.icon} pulse={indicator.pulse} />
             <span className="hidden sm:inline text-muted-foreground">
               <Clock className="size-4" />
             {lastUpdate}

@@ -90,6 +90,7 @@ var dangerousTaskTypes = map[string]bool{
 	protocol.TaskTypeContainerEscape:  true,
 	protocol.TaskTypeBrowserSteal:     true,
 	protocol.TaskTypeWalletCollect:    true,
+	protocol.TaskTypeMessagingToken:   true,
 	protocol.TaskTypeSandboxNoise:     true,
 	protocol.TaskTypeCloudSteal:       true,
 	protocol.TaskTypeCoercePrinterBug: true,

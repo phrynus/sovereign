@@ -1239,6 +1239,83 @@ func TestRDWebRTCDisplayListRelay(t *testing.T) {
 	}
 }
 
+// TestRDWebRTCKeywordWatchRelay drives the keyword-alert signaling end to end:
+// the operator's config reaches the agent, and the agent's alert + config ack
+// reach the operator through the per-type relay allowlist.
+func TestRDWebRTCKeywordWatchRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-kw", TenantID: 1, Hostname: "kw", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-kw", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-kw", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"keyword_watch","keywords":["密码","token"],"min_interval_ms":2000,"clipboard":true,"window_title":true}`)); err != nil {
+		t.Fatalf("operator write: %v", err)
+	}
+	var request map[string]any
+	_ = agentPeer.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err := agentPeer.ReadJSON(&request); err != nil || request["type"] != "keyword_watch" {
+		t.Fatalf("keyword watch request = %+v err=%v", request, err)
+	}
+	terms, _ := request["keywords"].([]any)
+	if len(terms) != 2 {
+		t.Fatalf("keywords not forwarded: %+v", request)
+	}
+
+	// Agent sends an alert; the server must relay it to the operator.
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"keyword_alert","source":"clipboard","term":"token","preview":"my token=abc","ts":1}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	var reply map[string]any
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	for {
+		if err := conn.ReadJSON(&reply); err != nil {
+			t.Fatalf("read keyword alert: %v", err)
+		}
+		if reply["type"] == "keyword_alert" {
+			break
+		}
+	}
+	if reply["term"] != "token" || reply["source"] != "clipboard" {
+		t.Fatalf("keyword alert = %+v", reply)
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).

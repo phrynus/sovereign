@@ -5,6 +5,7 @@ import { runTask, ApiError, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { TASK_HARD_TIMEOUT_MS } from "@/lib/task-poll";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
+import { copyText } from "@/lib/clipboard";
 import { getCompletions } from "@/lib/completions";
 import { highlightOutput } from "@/lib/highlight";
 import { Spinner } from "@/components/ui/spinner";
@@ -403,12 +404,11 @@ export default function ShellTerminal({
 
   const handleCopyLast = async () => {
     if (!lastOutput) return;
-    try {
-      await navigator.clipboard.writeText(lastOutput);
+    if (await copyText(lastOutput)) {
       setCopyFlash(true);
       if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current);
       copyFlashTimerRef.current = setTimeout(() => setCopyFlash(false), 1200);
-    } catch { /* ignore */ }
+    }
   };
 
   const handleClear = () => {

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { CopyButton } from "@/components/ui/copy-button";
+import { MetaChip } from "@/components/ui/meta-chip";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Spinner } from "@/components/ui/spinner";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
@@ -123,50 +124,29 @@ export default memo(function AgentHeader({
                   )}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.col_ip")}</span>
-                    <span className="font-mono text-foreground">{ip}</span>
-                    <CopyButton text={ip} label={t("agents.col_ip")} />
-                  </span>
+                  <MetaChip label={t("agents.col_ip")} valueClass="font-mono">
+                    {ip}<CopyButton text={ip} label={t("agents.col_ip")} />
+                  </MetaChip>
                   {publicIP && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.header_wan")}</span>
-                      <span className="font-mono text-foreground">{publicIP}</span>
-                      <CopyButton text={publicIP} label={t("agents.stats_public_ip")} />
-                    </span>
+                    <MetaChip label={t("agents.header_wan")} valueClass="font-mono">
+                      {publicIP}<CopyButton text={publicIP} label={t("agents.stats_public_ip")} />
+                    </MetaChip>
                   )}
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.header_user")}</span>
-                    <span className="text-foreground">{username}</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.col_os")}</span>
-                    <span className="text-foreground">{os} {arch}</span>
-                  </span>
-                  {domain && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">{t("agents.header_domain")}</span>
-                      <span className="text-foreground">{domain}</span>
-                    </span>
-                  )}
+                  <MetaChip label={t("agents.header_user")}>{username}</MetaChip>
+                  <MetaChip label={t("agents.col_os")}>{os} {arch}</MetaChip>
+                  {domain && <MetaChip label={t("agents.header_domain")}>{domain}</MetaChip>}
                   {avProducts.length > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2.5 py-1">
-                      <Shield className="size-3 text-success-ink" />
-                      <span className="text-micro-sm uppercase tracking-wide text-success-ink">AV</span>
-                      <span className="text-foreground">{avProducts.join(", ")}</span>
-                    </span>
+                    <MetaChip label="AV" tone="success" icon={<Shield className="size-3 text-success-ink" />}>
+                      {avProducts.join(", ")}
+                    </MetaChip>
                   ) : status === "online" && avStatus === "empty" ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <Shield className="size-3 text-muted-foreground" />
-                      <span className="text-micro-sm uppercase tracking-wide text-muted-foreground">AV</span>
-                      <span className="text-muted-foreground text-xs">{t("hostinfo.no_security_products")}</span>
-                    </span>
+                    <MetaChip label="AV" icon={<Shield className="size-3 text-muted-foreground" />} valueClass="text-muted-foreground">
+                      {t("hostinfo.no_security_products")}
+                    </MetaChip>
                   ) : status === "online" ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/25 bg-warning/10 px-2.5 py-1">
-                      <Shield className="size-3 text-warning-ink" />
-                      <span className="text-micro-sm uppercase tracking-wide text-warning-ink">AV</span>
-                      <span className="text-warning-ink text-xs">{t("hostinfo.av_status_unknown")}</span>
-                    </span>
+                    <MetaChip label="AV" tone="warning" icon={<Shield className="size-3 text-warning-ink" />} valueClass="text-warning-ink">
+                      {t("hostinfo.av_status_unknown")}
+                    </MetaChip>
                   ) : null}
                 </div>
                 {country && (

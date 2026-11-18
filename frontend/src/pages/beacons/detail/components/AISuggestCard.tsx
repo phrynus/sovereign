@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { copyTextAsync } from "@/lib/clipboard";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -117,7 +118,7 @@ export function AISuggestCard({ agentId, online }: { agentId: string; online: bo
                         variant="ghost"
                         size="icon-xs"
                         aria-label={t("common.copy")}
-                        onClick={() => { navigator.clipboard.writeText(sg.command_hint); toast.success(t("ai.copied")); }}
+                        onClick={() => { void copyTextAsync(sg.command_hint).then((ok) => ok ? toast.success(t("ai.copied")) : toast.error(t("common.copy_failed"))); }}
                       >
                         <Copy className="size-3.5" />
                       </Button>

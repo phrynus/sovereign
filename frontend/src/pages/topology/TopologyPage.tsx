@@ -194,7 +194,7 @@ function TopologySidebar({
                   <span className="text-xs text-muted-foreground">{t("topology.edge_p2p")}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="w-6 h-0.5 border-t-2 border-dotted border-orange-400"></span>
+                  <span className="w-6 h-0.5 border-t-2 border-dotted border-warning"></span>
                   <span className="text-xs text-muted-foreground">{t("topology.edge_proxy")}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-2">

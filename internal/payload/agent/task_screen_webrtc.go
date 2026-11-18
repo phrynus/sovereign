@@ -118,6 +118,11 @@ type webRTCSignal struct {
 	Device *int   `json:"device,omitempty"`
 	// Quality is the audio tier: voice|standard|high.
 	Quality string `json:"quality,omitempty"`
+	// Keyword watch config: operator configures terms / interval / sources.
+	Keywords      []string `json:"keywords,omitempty"`
+	MinIntervalMs int      `json:"min_interval_ms,omitempty"`
+	Clipboard     *bool    `json:"clipboard,omitempty"`
+	WindowTitle   *bool    `json:"window_title,omitempty"`
 }
 
 type webRTCInputEvent struct {
@@ -168,6 +173,15 @@ type agentWebRTCSession struct {
 	clipMu       sync.Mutex
 	clipWatch    bool
 	clipLastHash string
+
+	// Keyword alert watcher (config from the `keyword_watch` signal). The
+	// signaling read loop is the only writer; the clipboard watcher reads a
+	// snapshot under kwMu.
+	kwMu       sync.Mutex
+	kwConfig   keywordConfig
+	kwLastAt   time.Time
+	kwLastTerm string
+	kwLastSrc  string
 
 	// Live audio: the Opus track is always negotiated so enabling audio later
 	// needs no renegotiation; audioCmd is the capture process, when running,
@@ -883,6 +897,8 @@ func (s *agentWebRTCSession) readLoop() {
 				continue
 			}
 			s.setKeyFeed(*msg.Enabled)
+		case "keyword_watch":
+			s.setKeywordWatch(msg.Keywords, msg.MinIntervalMs, msg.Clipboard, msg.WindowTitle)
 		case "differential":
 			if msg.Enabled == nil {
 				continue

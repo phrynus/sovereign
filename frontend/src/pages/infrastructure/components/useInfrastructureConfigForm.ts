@@ -4,6 +4,7 @@ import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
+import { copyText } from "@/lib/clipboard";
 import { DEFAULT_LISTENER_ADDR } from "@/lib/constants";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
@@ -111,11 +112,12 @@ backend c2_backend
   const copyConfig = useCallback(async () => {
     // Local clipboard capability failure, not an API error: stays a direct
     // translated toast (the normalizer has no DOMException mapping).
-    try {
-      await navigator.clipboard.writeText(configOutput);
+    if (await copyText(configOutput)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { toast.error(t("infrastructure.toast.copy_config_failed")); }
+    } else {
+      toast.error(t("infrastructure.toast.copy_config_failed"));
+    }
   }, [configOutput, t]);
 
   const downloadConfig = useCallback(() => {

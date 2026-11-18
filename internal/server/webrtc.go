@@ -969,6 +969,11 @@ type webrtcSignal struct {
 	Device *int   `json:"device,omitempty"`
 	// Quality is the audio tier: voice|standard|high.
 	Quality string `json:"quality,omitempty"`
+	// Keyword watch config (operator -> agent). Enabled toggles the watcher.
+	Keywords      []string `json:"keywords,omitempty"`
+	MinIntervalMs int      `json:"min_interval_ms,omitempty"`
+	Clipboard     *bool    `json:"clipboard,omitempty"`
+	WindowTitle   *bool    `json:"window_title,omitempty"`
 }
 
 func parseWebRTCSignal(raw []byte) (webrtcSignal, error) {
@@ -1357,6 +1362,33 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 			}
 			s.LogAuditRecord(c, "remote_message", "agent", sess.AgentID,
 				fmt.Sprintf("operator message to target: %d bytes", len(text)), true, nil)
+		case "keyword_watch":
+			// Configure keyword alerting. Forwarded verbatim as a bounded
+			// signal; the agent normalizes terms/interval and reports the
+			// enabled state back. Rate-limited like other watch toggles.
+			if !s.allowDisplayList(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "keyword_watch", "enabled": false, "reason": "keyword watch rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			forward, marshalErr := json.Marshal(gin.H{
+				"type":            "keyword_watch",
+				"keywords":        msg.Keywords,
+				"min_interval_ms": msg.MinIntervalMs,
+				"clipboard":       msg.Clipboard,
+				"window_title":    msg.WindowTitle,
+			})
+			if marshalErr != nil || len(forward) > webrtcMaxSignalBytes {
+				continue
+			}
+			if !sess.sendRawToAgent(forward) {
+				return
+			}
+			s.LogAuditRecord(c, "keyword_watch", "agent", sess.AgentID,
+				fmt.Sprintf("keyword watch configured: %d terms", len(msg.Keywords)), true, nil)
 		case "keys":
 			if msg.Enabled == nil {
 				sess.sendToOperator(gin.H{"type": "keys", "enabled": false, "reason": "enabled is required"})
@@ -1673,6 +1705,13 @@ func (s *Server) handleRDWebRTCAgent(c *gin.Context) {
 			// Previews only; a frame larger than the list bound is not a
 			// history response and is dropped.
 			if len(raw) > MaxClipboardHistoryFrameBytes {
+				continue
+			}
+			sess.sendRawToOperator(raw)
+		case "keyword_watch", "keyword_alert":
+			// Watch config ack and keyword alerts. Both are tiny, bounded
+			// advisory frames (a short preview, never full clipboard content).
+			if len(raw) > 4096 {
 				continue
 			}
 			sess.sendRawToOperator(raw)

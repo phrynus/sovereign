@@ -3,10 +3,10 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 225
-- **Constants in tasks.go:** 226
+- **Task types:** 226
+- **Constants in tasks.go:** 227
 - **Aliases:** 3
-- **Approval-gated:** 59
+- **Approval-gated:** 60
 - **Parameters (total):** 81
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
@@ -15,7 +15,7 @@
 - [Execution](#execution) (30)
 - [Discovery](#discovery) (36)
 - [Collection](#collection) (18)
-- [Credential Access](#credential-access) (38)
+- [Credential Access](#credential-access) (39)
 - [Defense Evasion](#defense-evasion) (30)
 - [Lateral Movement](#lateral-movement) (10)
 - [Persistence](#persistence) (4)
@@ -153,6 +153,7 @@
 | `entra_prt` | Entra PRT Recon | no | — | — | dsregcmd / CloudAP recon. PRT blob dump needs SYSTEM; this reports join state. |
 | `golden_ticket` | Golden Ticket | **yes** | — | command:string* | Forge a Golden Ticket |
 | `kerberoast` | Kerberoast | **yes** | — | — | Request TGS for SPN accounts |
+| `messaging_token_collect` | Messaging Token Collect | **yes** | — | — | Exposure assessment of Discord/Telegram session stores: presence + count + redacted token previews only (no full tokens, no API enrichment) |
 | `mimikatz` | Mimikatz (scripted) | **yes** | — | command:string* | Scripted: requires Settings → Modules Invoke-Mimikatz.ps1 (no remote IEX) |
 | `ntlm_help` | NTLM Help | no | — | — | Show NTLM relay help |
 | `password_spray` | Password Spray | **yes** | — | command:string*, data:string* | Try a password against multiple AD accounts with lockout awareness |

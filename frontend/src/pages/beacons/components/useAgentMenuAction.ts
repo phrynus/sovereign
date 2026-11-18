@@ -3,6 +3,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { copyTextAsync } from "@/lib/clipboard";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useInteractStore } from "@/lib/interact-store";
 import type { Beacon } from "./types";
@@ -82,9 +83,8 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         navigate(`/beacons/${id}/screen`);
         break;
       case "copy_id":
-        navigator.clipboard.writeText(id)
-          .then(() => toast.success(t("agents.detail_copied")))
-          .catch(() => toast.error(t("agents.detail_copy_failed")));
+        void copyTextAsync(id)
+          .then((ok) => ok ? toast.success(t("agents.detail_copied")) : toast.error(t("agents.detail_copy_failed")));
         break;
       case "kill":
         setConfirm({ type: "kill", id, hostname: point.beacon.hostname || id });

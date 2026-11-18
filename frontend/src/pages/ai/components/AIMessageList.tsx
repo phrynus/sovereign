@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { formatDateTime, formatNumber, formatTimeOnly } from "@/lib/intl";
 import { CopyButton } from "@/components/ui/copy-button";
+import { copyTextAsync } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Activity, Bell, BookOpen, Bot, Brain, Check, CheckCircle2, ChevronDown, CircleAlert, Clock3, Copy, Database, FileJson2, GitBranch, Lightbulb, LoaderCircle, Radio, RotateCw, Shield, User, Wrench } from "lucide-react";
@@ -59,7 +60,7 @@ export function AIMessageList({
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Button variant="ghost" size="xs" onClick={() => setExpandAll(true)}>{t("ai.tool_expand_all")}</Button>
             <Button variant="ghost" size="xs" onClick={() => setExpandAll(false)}>{t("ai.tool_collapse_all")}</Button>
-            <Button variant="ghost" size="xs" onClick={() => { const all = toolMessages.map((m) => { try { return JSON.stringify(JSON.parse(m.content), null, 2); } catch { return m.content; } }).join("\n\n---\n\n"); navigator.clipboard.writeText(all).then(() => toast.success(t("ai.copied"))).catch(() => toast.error(t("ai.toast.copy_failed"))); }}>{t("ai.tool_copy_all")}</Button>
+            <Button variant="ghost" size="xs" onClick={() => { const all = toolMessages.map((m) => { try { return JSON.stringify(JSON.parse(m.content), null, 2); } catch { return m.content; } }).join("\n\n---\n\n"); void copyTextAsync(all).then((ok) => ok ? toast.success(t("ai.copied")) : toast.error(t("ai.toast.copy_failed"))); }}>{t("ai.tool_copy_all")}</Button>
           </div>
         )}
         {messages.length === 0 ? (

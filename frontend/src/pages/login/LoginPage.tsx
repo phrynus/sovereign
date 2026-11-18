@@ -134,7 +134,7 @@ function LoginForm() {
           </div>
           <div>
             <div className="text-lg font-bold tracking-tight">Forge<span className="text-primary">C2</span></div>
-            <div className="mono-eyebrow text-muted-foreground">Command platform</div>
+            <div className="mono-eyebrow text-muted-foreground">{t("login.subtitle")}</div>
           </div>
         </div>
         <div className="relative max-w-xl animate-fade-slide-up">

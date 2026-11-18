@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { downloadText } from "@/lib/download";
+import { copyText } from "@/lib/clipboard";
 import { toast } from "sonner";
 
 import { hueStyles, hueForTaskType } from "@/lib/ui/statusStyles";
@@ -280,10 +281,9 @@ export default memo(function AgentTaskList({
           const resultText = full?.result ?? task.result ?? "";
 
           const copyResult = async () => {
-            try {
-              await navigator.clipboard.writeText(resultText);
+            if (await copyText(resultText)) {
               toast.success(t("agents.detail_copied"));
-            } catch {
+            } else {
               toast.error(t("agents.detail_copy_failed"));
             }
           };

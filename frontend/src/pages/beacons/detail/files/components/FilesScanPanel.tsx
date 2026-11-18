@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Copy, FolderOpen, ShieldAlert } from "lucide-react";
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { copyText } from "@/lib/clipboard";
 import { DataError } from "@/components/ui/data-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -174,10 +175,9 @@ export default function FilesScanPanel({ t, agentId, rootPath, onReveal }: Files
   }
 
   async function copyFinding(key: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyText(value)) {
       setCopied(key);
-    } catch {
+    } else {
       setError(t("agents.files_scan_copy_failed"));
     }
   }

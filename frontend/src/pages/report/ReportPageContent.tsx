@@ -203,7 +203,7 @@ export default function ReportPage() {
       )}
 
       {previewPartial && !previewError && (
-        <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+        <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning-ink">
           <span className="font-medium">{t("report.partial_title")}</span>{" "}
           {t("report.partial_body", { sections: previewFailedSections.join(", ") })}
         </div>

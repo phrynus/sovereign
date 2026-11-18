@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
+import { copyText } from "@/lib/clipboard";
 
 export function CopyButton({ text, label, title, className, size = "icon-xs", children, onError }: {
   text: string;
@@ -27,44 +28,30 @@ export function CopyButton({ text, label, title, className, size = "icon-xs", ch
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
   }, []);
-  // G9 fix: add execCommand fallback for HTTP (non-secure context) where
-  // navigator.clipboard is unavailable, plus a toast fallback on failure.
-  const copy = async () => {
-    if (copyingRef.current) return;
-    copyingRef.current = true;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        const focused = document.activeElement;
-        document.body.appendChild(ta);
-        try {
-          ta.select();
-          if (!document.execCommand("copy")) throw new Error("Copy rejected");
-        } finally {
-          ta.remove();
-          if (focused instanceof HTMLElement && focused.isConnected) focused.focus();
-        }
-      }
-      if (!mountedRef.current) return;
+  // Clipboard mechanism lives in lib/clipboard so every copy action shares one
+  // implementation (async API + execCommand fallback). The toast stays here.
+  const finish = (ok: boolean) => {
+    if (!mountedRef.current) return;
+    if (ok) {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
       setCopied(true);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         setCopied(false);
       }, 1500);
-    } catch {
-      if (!mountedRef.current) return;
+    } else {
       setCopied(false);
       onError?.();
       toast.error(t("common.copy_failed"));
-    } finally {
-      copyingRef.current = false;
     }
+    copyingRef.current = false;
+  };
+  const copy = () => {
+    if (copyingRef.current) return;
+    copyingRef.current = true;
+    const result = copyText(text);
+    if (typeof result === "boolean") finish(result); // synchronous fallback path
+    else result.then(finish); // async Clipboard API path
   };
 
   const defaultIcon = copied

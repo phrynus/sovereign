@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
+import { StatusDot } from "@/components/ui/status-dot";
 import { PageContainer } from "@/components/ui/page-container";
 import { AlertCircle, AlertTriangle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -474,7 +475,7 @@ export default function AgentTokenPage() {
           </h2>          <div className="flex items-center gap-2">
             <div className="text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 bg-warning rounded-full animate-pulse"></span>                {tokenError ? "?" : tokens.filter(tok => tok.active).length} active
+                <StatusDot tone="warning" pulse /> {tokenError ? "?" : tokens.filter(tok => tok.active).length} {t("status.active")}
               </span>
             </div>
           </div>

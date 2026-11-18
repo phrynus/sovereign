@@ -36,6 +36,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
+import { copyText } from "@/lib/clipboard";
 import { formatThrownError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ProfileEditor, type ProfileEditorHandle } from "./components/ProfileEditor";
@@ -475,10 +476,9 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       toast.error(t("profiles.empty_editor"));
       return;
     }
-    try {
-      await navigator.clipboard.writeText(source);
+    if (await copyText(source)) {
       toast.success(t("profiles.copied"));
-    } catch {
+    } else {
       toast.error(t("profiles.copy_failed"));
     }
   };

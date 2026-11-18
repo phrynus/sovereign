@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
+import { copyText } from "@/lib/clipboard";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -434,10 +435,9 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
 
   const copyAllInfo = useCallback(async () => {
     if (!data) return;
-    try {
-      await navigator.clipboard.writeText(buildAgentCopyText(data));
+    if (await copyText(buildAgentCopyText(data))) {
       toast.success(t("agents.detail_copied"));
-    } catch {
+    } else {
       toast.error(t("agents.detail_copy_failed"));
     }
   }, [data, t]);

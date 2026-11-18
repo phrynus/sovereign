@@ -214,14 +214,14 @@ export default function DnsPage() {
       >
         <div className="space-y-2 max-h-64 overflow-y-auto p-(--card-spacing)">
           <div className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
-            <ArrowDown className="size-4 text-emerald-500 mt-0.5 shrink-0" />
+            <ArrowDown className="size-4 text-success-ink mt-0.5 shrink-0" />
             <div className="min-w-0">
               <code className="text-xs font-semibold text-foreground">{t("dns.query_hint")}</code>
               <p className="text-xs text-muted-foreground mt-0.5">{t("dns.desc_paragraph")}</p>
             </div>
           </div>
           <div className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
-            <ArrowUp className="size-4 text-amber-500 mt-0.5 shrink-0" />
+            <ArrowUp className="size-4 text-warning-ink mt-0.5 shrink-0" />
             <div className="min-w-0">
               <code className="text-xs font-semibold text-foreground">{t("dns.chunk_hint")}</code>
               <p className="text-xs text-muted-foreground mt-0.5">{t("dns.encoding_hint")}</p>

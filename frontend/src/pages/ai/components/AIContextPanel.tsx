@@ -175,12 +175,12 @@ export function AIContextPanel({
           const used = attachments.filter((a) => selectedAttachmentIds.includes(a.id)).reduce((s, a) => s + a.size, 0) + selectedCollectionIds.length * 8000;
           const budget = 48 * 1024;
           const pct = Math.min(100, Math.round((used / budget) * 100));
-          const tone = pct > 95 ? "bg-destructive" : pct > 80 ? "bg-amber-500" : "bg-primary";
+          const tone = pct > 95 ? "bg-destructive" : pct > 80 ? "bg-warning" : "bg-primary";
           return (
             <section className="space-y-1">
               <div className="flex justify-between text-xs text-muted-foreground"><span>{t("ai.context_budget")}</span><span>{pct}% · {formatBytes(used)}/{formatBytes(budget)}</span></div>
               <div className="h-1.5 w-full rounded-full bg-muted"><div className={`h-1.5 rounded-full ${tone}`} style={{ width: `${pct}%` }} /></div>
-              {pct > 80 && <p className="text-xs text-amber-600">{t("ai.context_budget_hint")}</p>}
+              {pct > 80 && <p className="text-xs text-warning-ink">{t("ai.context_budget_hint")}</p>}
             </section>
           );
         })()}
