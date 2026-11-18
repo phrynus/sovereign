@@ -44,6 +44,7 @@ export default function RemoteDesktopPage() {
         displays={rdp.displays}
         selectedDisplay={rdp.selectedDisplay}
         onSelectDisplay={rdp.selectDisplay}
+        onRefreshDisplays={rdp.requestDisplays}
         videoSource={rdp.videoSource}
         onSelectVideoSource={rdp.setVideoSource}
         videoDevices={rdp.videoDevices}

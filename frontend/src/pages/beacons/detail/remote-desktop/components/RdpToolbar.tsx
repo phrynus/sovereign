@@ -33,6 +33,7 @@ interface RdpToolbarProps {
   displays: DisplayInfo[];
   selectedDisplay: number;
   onSelectDisplay: (index: number) => void;
+  onRefreshDisplays: (force?: boolean) => void;
   differential: boolean;
   onToggleDifferential: (enabled: boolean) => void;
   regionOn: boolean;
@@ -50,7 +51,7 @@ export default memo(function RdpToolbar({
   t, agentId, nativeWidth, nativeHeight, resolutions, resolution, setResolution,
   mode, setMode, livePresets, livePreset, setLivePreset, videoSource, onSelectVideoSource,
   videoDevices, webcamDevice, onSelectWebcamDevice, onRefreshVideoDevices,
-  displays, selectedDisplay, onSelectDisplay,
+  displays, selectedDisplay, onSelectDisplay, onRefreshDisplays,
   differential, onToggleDifferential, regionOn, onToggleRegion,
   active, isFullscreen, onToggleFullscreen, versionBlocked, onStart, onStop,
 }: RdpToolbarProps) {
@@ -177,6 +178,7 @@ export default memo(function RdpToolbar({
           {mode === "live" && videoSource === "screen" && (
             <Select
               value={String(selectedDisplay)}
+              onOpenChange={(open) => { if (open) onRefreshDisplays(); }}
               onValueChange={(v) => {
                 const index = Number(v);
                 if (Number.isInteger(index) && index >= 0) onSelectDisplay(index);

@@ -247,6 +247,7 @@ export function useWebRTCLive(agentId: string) {
   // the desktop alive, otherwise one unsupported key would tear down a session.
   const [inputError, setInputError] = useState("");
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
+  const [displaysAt, setDisplaysAt] = useState(0);
   // 0 = all displays (the historical behaviour); 1..N = one monitor. The agent
   // announces the list on connect, so the picker appears without a restart.
   const [selectedDisplay, setSelectedDisplay] = useState(0);
@@ -524,6 +525,16 @@ export function useWebRTCLive(agentId: string) {
     sendSignal({ type: "video_devices" });
   }, [sendSignal, videoDevicesAt]);
 
+  // Monitor hotplug: re-enumerate when the picker is opened and the last
+  // announcement is older than the TTL (or the operator forces it).
+  const requestDisplays = useCallback((force = false) => {
+    if (!force && !deviceListStale(displaysAt, Date.now())) {
+      return;
+    }
+    setDisplaysAt(Date.now());
+    sendSignal({ type: "display_list" });
+  }, [sendSignal, displaysAt]);
+
   // Switching to the camera asks for its device list: the index the operator
   // picks must exist on the target before the session starts.
   const selectVideoSource = useCallback((source: VideoSource) => {
@@ -723,6 +734,7 @@ export function useWebRTCLive(agentId: string) {
             // names (a macOS loopback index is otherwise undiscoverable).
             setAudioDevicesAt(Date.now());
             setVideoDevicesAt(Date.now());
+            setDisplaysAt(Date.now());
             ws.send(JSON.stringify({ type: "audio_devices", mode: audioMode }));
             ws.send(JSON.stringify({ type: "video_devices" }));
             clearAnswerTimer();
@@ -990,6 +1002,7 @@ export function useWebRTCLive(agentId: string) {
     setWebcamDevice,
     videoDevices,
     requestVideoDevices,
+    requestDisplays,
     regionOn,
     regionError,
     tileFrame,

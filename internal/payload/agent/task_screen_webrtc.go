@@ -912,6 +912,26 @@ func (s *agentWebRTCSession) readLoop() {
 				}
 				_ = s.sendJSON(map[string]any{"type": "video_devices", "items": devices})
 			}()
+		case "display_list":
+			// Monitor hotplug: re-enumerate on demand instead of relying on the
+			// one announcement made when the signaling socket opened.
+			go func() {
+				rects := nativeScreenRects()
+				virtual, ok := s.captureSnapshot()
+				if !ok || len(rects) == 0 {
+					_ = s.sendJSON(map[string]any{"type": "state", "state": "displays", "displays": []any{}, "selected": s.settingsSnapshot().Display})
+					return
+				}
+				_ = s.sendJSON(map[string]any{
+					"type":     "state",
+					"state":    "displays",
+					"displays": displayDescriptors(rects),
+					"virtual": map[string]int{
+						"x": virtual.X, "y": virtual.Y, "width": virtual.Width, "height": virtual.Height,
+					},
+					"selected": s.settingsSnapshot().Display,
+				})
+			}()
 		case "region":
 			if msg.Enabled == nil {
 				continue

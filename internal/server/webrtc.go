@@ -1071,6 +1071,12 @@ func (s *Server) allowVideoDevices(operatorID, agentID string) bool {
 	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
 }
 
+// allowDisplayList throttles monitor re-enumeration (nativeScreenRects walks OS APIs).
+func (s *Server) allowDisplayList(operatorID, agentID string) bool {
+	key := operatorID + ":" + strings.ToLower(agentID) + ":dlist"
+	return s.remoteInputLimiter.allow(key, 20, ClipboardRateWindow, time.Now())
+}
+
 func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1498,6 +1504,21 @@ func (s *Server) handleRDWebRTCSignal(c *gin.Context) {
 				return
 			}
 			s.LogAuditRecord(c, "video_devices", "agent", sess.AgentID, "camera list requested", true, nil)
+		case "display_list":
+			// Monitor hotplug: ask the agent to re-enumerate displays. The reply
+			// is a normal `state: displays` frame, already relayed to the operator.
+			if !s.allowDisplayList(strconv.FormatUint(uint64(uid), 10), sess.AgentID) {
+				sess.sendToOperator(gin.H{"type": "error", "error": "display list rate limit exceeded"})
+				continue
+			}
+			if !sess.agentAttached() {
+				sess.sendToOperator(gin.H{"type": "waiting", "session_id": sess.ID})
+				continue
+			}
+			if !sess.sendRawToAgent([]byte(`{"type":"display_list"}`)) {
+				return
+			}
+			s.LogAuditRecord(c, "display_list", "agent", sess.AgentID, "display list requested", true, nil)
 		case "region":
 			// Live switch to change-only tiles (or back to H.264).
 			if msg.Enabled == nil {

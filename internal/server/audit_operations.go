@@ -97,7 +97,7 @@ var auditCategoryRules = []auditCategoryRule{
 			"batch_delete_agents", "batch_sleep_clamped", "tasks_rerun_by_signature",
 			"task_export", "timeline_export", "screenshot_request", "request_hostinfo",
 			"remote_desktop_open", "remote_desktop_close", "remote_input", "clipboard_sync", "remote_message", "remote_keys",
-			"remote_control_take", "remote_control_release", "remote_audio", "audio_devices", "video_devices", "transport_migrate", "clipboard_history",
+			"remote_control_take", "remote_control_release", "remote_audio", "audio_devices", "video_devices", "display_list", "transport_migrate", "clipboard_history",
 			"screen_monitor_start", "screen_monitor_stop", "run_evasion",
 			"spawn", "lateral", "privesc_check", "privilege_escalation_check",
 			"uac_bypass", "persistence_add", "persistence_list", "persistence_remove",

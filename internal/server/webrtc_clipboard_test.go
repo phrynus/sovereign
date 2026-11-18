@@ -1167,6 +1167,78 @@ func TestRDWebRTCVideoDevicesRelay(t *testing.T) {
 	}
 }
 
+// TestRDWebRTCDisplayListRelay drives monitor hotplug refresh: the operator's
+// request reaches the agent and the agent's re-enumerated display list reaches
+// the operator as a normal `state: displays` frame.
+func TestRDWebRTCDisplayListRelay(t *testing.T) {
+	s := mustTenantServer(t)
+	s.wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	if err := s.db.Create(&db.Implant{ID: "rd-dlist", TenantID: 1, Hostname: "dlist", Status: "online"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.WebRTC.Enabled = true
+	sess, token, err := s.webRTCHub().createSession("rd-dlist", 7, 1, webrtcStartOptions{}, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer sess.end("test")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/probe", func(c *gin.Context) {
+		c.Set("user_role", db.RoleAdmin)
+		c.Set("user_id", uint(7))
+		c.Set("user", "alice")
+		s.handleRDWebRTCSignal(c)
+	})
+	engine.GET("/agent", s.handleRDWebRTCAgent)
+	srv := httptest.NewServer(engine)
+	defer srv.Close()
+
+	agentPeer, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/agent?session="+sess.ID+"&token="+token+"&agent=rd-dlist", nil)
+	if err != nil {
+		t.Fatalf("dial agent: %v", err)
+	}
+	defer agentPeer.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/probe?session="+sess.ID, nil)
+	if err != nil {
+		t.Fatalf("dial operator: %v", err)
+	}
+	defer conn.Close()
+	if _, _, err := conn.ReadMessage(); err != nil {
+		t.Fatalf("opening frame: %v", err)
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"display_list"}`)); err != nil {
+		t.Fatalf("operator write: %v", err)
+	}
+	var request map[string]any
+	_ = agentPeer.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err := agentPeer.ReadJSON(&request); err != nil || request["type"] != "display_list" {
+		t.Fatalf("display list request = %+v err=%v", request, err)
+	}
+
+	if err := agentPeer.WriteMessage(websocket.TextMessage,
+		[]byte(`{"type":"state","state":"displays","selected":0,"displays":[{"index":1,"width":1920,"height":1080}]}`)); err != nil {
+		t.Fatalf("agent write: %v", err)
+	}
+	var reply map[string]any
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	for {
+		if err := conn.ReadJSON(&reply); err != nil {
+			t.Fatalf("read display reply: %v", err)
+		}
+		if reply["type"] == "state" && reply["state"] == "displays" {
+			break
+		}
+	}
+	displays, _ := reply["displays"].([]any)
+	if len(displays) != 1 {
+		t.Fatalf("display reply = %+v", reply)
+	}
+}
+
 // TestSanitizeClipboardPayload pins the server-side rules: NUL and invalid
 // UTF-8 are stripped, and an oversized PASTE is refused rather than truncated
 // (half a script pasted into a remote shell executes a command nobody wrote).
