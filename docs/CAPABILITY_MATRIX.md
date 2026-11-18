@@ -18,7 +18,7 @@
 | SSH | Yes (+ creds + host-key pin) | Yes | Yes | Hardened — host-key pin required (fails closed when absent), password/key auth with keyboard-interactive fallback, full-write delivery loop, 16 MiB response cap, 30 s dial/session/read deadlines |
 | ICMP | Yes | Yes (FC2I fragments) | Win/Linux | Hardened — envelopes split across Echo payloads |
 | UDP | Yes | Yes (`udp_enabled`) | Yes | Hardened — FC2I request/reply fragmentation, link-quality-aware part size (512/768/1200 B), 256-part/16 MiB/1024-key bounds, 30 s TTL sweep, bounded fragment-set retransmission (3 attempts) |
-| QUIC | Yes (experimental) | Yes (`quic_enabled`, TLS 1.3 ALPN h3/fc2) | Yes | Hardened — stream-framed v2 envelope; MaxIncomingStreams cap; path migration off; accept-loop backoff |
+| QUIC | Yes (experimental) | Yes (`quic_enabled`, TLS 1.3 ALPN h3/fc2) | Yes | Hardened — stream-framed v2 envelope; MaxIncomingStreams cap; path migration off; accept-loop backoff; persistent connection reuse with one-shot redial on stale/failed conn; 16 MiB response cap |
 | mTLS / h2c | Selector only | Partial | Code present | Experimental |
 | SMB P2P | P2P mode | Win pipe / Unix socket | Yes | Hardened |
 
