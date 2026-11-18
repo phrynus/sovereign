@@ -4,6 +4,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,6 +92,41 @@ func TestObserveBeaconResultAdapts(t *testing.T) {
 	}
 	if recovered := currentLinkScale(); recovered > 1 {
 		t.Fatalf("link did not recover: scale=%v", recovered)
+	}
+}
+
+func TestVideoBitrateForLink(t *testing.T) {
+	const base = 2500
+	// No evidence or a healthy link keeps the operator's preset.
+	if got := videoBitrateForLink(base, linkStats{}); got != base {
+		t.Fatalf("no-sample bitrate = %d, want %d", got, base)
+	}
+	if got := videoBitrateForLink(base, linkStats{Samples: 8, Median: 80 * time.Millisecond}); got != base {
+		t.Fatalf("healthy bitrate = %d, want %d", got, base)
+	}
+	medium := videoBitrateForLink(base, linkStats{Samples: 8, Median: 2 * time.Second})
+	if medium != 1875 { // 75% of 2500
+		t.Fatalf("medium bitrate = %d, want 1875", medium)
+	}
+	poor := videoBitrateForLink(base, linkStats{Samples: 8, Median: 9 * time.Second, LossEWMA: 0.5})
+	if poor != 1250 { // 50% of 2500
+		t.Fatalf("poor bitrate = %d, want 1250", poor)
+	}
+	if got := videoBitrateForLink(600, linkStats{Samples: 8, Median: 9 * time.Second}); got != 500 {
+		t.Fatalf("floor = %d, want 500", got)
+	}
+	if got := videoBitrateForLink(9000, linkStats{Samples: 8, Median: 100 * time.Millisecond}); got != 8000 {
+		t.Fatalf("ceiling = %d, want 8000", got)
+	}
+
+	// The adapted value actually reaches the encoder arguments.
+	settings := webRTCSettings{Width: 1280, Height: 720, FPS: 30, Encoder: "libx264", BitrateKbps: poor}
+	args, err := buildWebcamFFmpegArgsFor("linux", settings, 41000, "/dev/video0")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "-b:v 1250k") {
+		t.Fatalf("encoder did not get the adapted bitrate: %v", args)
 	}
 }
 

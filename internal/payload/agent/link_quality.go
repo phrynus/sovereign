@@ -138,7 +138,36 @@ func currentLinkScale() float64 {
 	return linkQualityScale(linkQualityScore(snapshotLink()))
 }
 
-// UDP fragment sizes chosen from the same link evidence. Small parts are the
+// videoBitrateForLink scales the configured encoder bitrate with measured link
+// quality. The preset remains the ceiling: a healthy (or not-yet-measured)
+// link uses it unchanged, while a degraded link sends less data so the stream
+// stays usable instead of stalling on a path that cannot carry it.
+func videoBitrateForLink(baseKbps int, stats linkStats) int {
+	if baseKbps <= 0 {
+		return baseKbps
+	}
+	if stats.Samples < linkQualitySamples {
+		return baseKbps
+	}
+	mult := 1.0
+	switch score := linkQualityScore(stats); {
+	case score >= 85:
+		// A healthy link keeps the configured ceiling.
+	case score >= 55:
+		mult = 0.75
+	default:
+		mult = 0.5
+	}
+	out := int(float64(baseKbps)*mult + 0.5)
+	if out < 500 {
+		return 500 // encoder's own minimum in normalizeWebRTCStart / agent validator
+	}
+	if out > 8000 {
+		return 8000
+	}
+	return out
+}
+
 // safe default (and the only choice before enough samples exist): a lossy link
 // benefits from smaller datagrams. A consistently healthy link uses larger
 // parts to cut per-fragment overhead; a degraded one drops back to 512 B.

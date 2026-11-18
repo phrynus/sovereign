@@ -1009,6 +1009,10 @@ func (s *agentWebRTCSession) startRTPPipeline() error {
 		return fmt.Errorf("WebRTC session is already closed")
 	}
 	settings := s.settingsSnapshot()
+	// Adapt the encoder ceiling to the measured link. A copy keeps the stored
+	// operator preset intact: when the link recovers, the next pipeline start
+	// uses the full configured bitrate again.
+	settings.BitrateKbps = videoBitrateForLink(settings.BitrateKbps, snapshotLink())
 	var args []string
 	if settings.Source == VideoSourceWebcam {
 		camera, camErr := s.webcamDeviceFor(settings.WebcamDevice)
