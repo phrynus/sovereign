@@ -659,17 +659,38 @@ func (s *Server) registerBuiltinAutomations() {
 		},
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
-	rules := s.loadAutomationRules()
-	exists := false
-	for _, r := range rules {
-		if r.ID == rule.ID {
-			exists = true
-			break
-		}
+	// auto_baseline_collection: on every check-in, queue a bounded "hostinfo"
+	// collection so a freshly-checked-in agent gets a structured fingerprint
+	// without an operator manually issuing it. This mirrors the in-the-wild
+	// "collect on each interaction" behaviour (火绒 2060) but stays quiet:
+	// hostinfo is an allowlisted, non-shell typed task, and the rule is created
+	// DISABLED by default so an operator opts in deliberately.
+	baseline := AutomationRule{
+		ID:        "auto_baseline_collection",
+		Name:      "Baseline collection on check-in",
+		Enabled:   false,
+		EventType: string(EventImplantCheckin),
+		Actions: []RuleAction{
+			{
+				Type:   ActionCreateTask,
+				Params: json.RawMessage(`{"type": "hostinfo", "command": ""}`),
+			},
+		},
+		CreatedAt: time.Now().Format(time.RFC3339),
 	}
-	if !exists {
-		if err := s.saveAutomationRule(rule); err != nil {
-			slog.Warn("Automation: failed to register builtin rule", "id", rule.ID, "error", err)
+	rules := s.loadAutomationRules()
+	for _, seed := range []AutomationRule{rule, baseline} {
+		exists := false
+		for _, r := range rules {
+			if r.ID == seed.ID {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			if err := s.saveAutomationRule(seed); err != nil {
+				slog.Warn("Automation: failed to register builtin rule", "id", seed.ID, "error", err)
+			}
 		}
 	}
 }

@@ -201,6 +201,7 @@ type ImplantConfig struct {
 	MalleableRequestHeaders map[string]string
 	Evasion                 bool   // Enable chunked sleep obfuscation (Windows EDR basics)
 	GhostMode               bool   // Enable ghost protocol (sandbox/anti-debug deep-hiding; opt-in, default off)
+	C2Resolver              string // Dead-drop C2 resolver JSON (chain eth_call / dga). Empty = compiled-in C2 list only.
 	Obfuscate               bool   // Enable garble build-time obfuscation (string/literal hiding)
 	DomainFront             string // CDN front domain for domain fronting ("" = disabled)
 	Architecture            string // "amd64" (default), "arm64", "arm"

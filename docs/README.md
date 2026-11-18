@@ -40,6 +40,7 @@ nobody reads.
 | [AUDIT_EXPORT.md](AUDIT_EXPORT.md) | Verifying an exported audit log |
 | [PLUGIN_AUTHORING.md](PLUGIN_AUTHORING.md) | Writing a plugin, and checking one you received |
 | [ANALYSIS-RAYBLOG.md](ANALYSIS-RAYBLOG.md) | A study of the Ray Blog's C2/RAT write-ups, and which remote-control capabilities that baseline exposed as gaps |
+| [ANALYSIS-HUORONG.md](ANALYSIS-HUORONG.md) | 火绒病毒报告的 RAT 能力对照：dead-drop C2、钱包采集、反沙箱噪声、自动采集与 AI 任务链的差距与落地 |
 
 ## Extending it
 

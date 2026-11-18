@@ -36,6 +36,7 @@ func TestUnscopedAIToolsAreGlobalOnly(t *testing.T) {
 	// Tools whose scoping lives in a helper they call. Each entry states where.
 	scopedElsewhere := map[string]string{
 		"get_situation": "collectAISituation(reqCtx) applies tenant scoping inside the collector",
+		"task_chain":    "aiTaskChainTool(reqCtx, ...) calls resolveAIAgentID(reqCtx, ...) so every step stays in the operator's tenant",
 	}
 
 	var leaked []string

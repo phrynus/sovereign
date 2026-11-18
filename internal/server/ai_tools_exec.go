@@ -203,6 +203,9 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		}
 		return string(b)
 
+	case "task_chain":
+		return s.aiTaskChainTool(reqCtx, argsJSON)
+
 	case "get_agent_tasks":
 		aid := s.resolveAIAgentID(reqCtx, args["agent_id"])
 		if aid == "" {

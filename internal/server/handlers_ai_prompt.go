@@ -32,6 +32,7 @@ Useful starting tools:
 - get_coverage_gaps / query_bloodhound: what to do next
 - queue_collection: screenshot/ps/netstat/av/users/drives/services/beacon_now (typed, quieter than freeform shell)
 - execute_command / set_sleep: only after the operator asks
+- task_chain: when the next step depends on an earlier result (e.g. hostinfo, then ps only if it looks interesting). Max 5 quiet typed steps, stops on failure. Sensitive types (shell/creds/persistence) are refused in a chain and still need direct operator approval.
 
 Writing plugins:
 - create_plugin writes a package (manifest + entry file) and registers it; run_plugin checks it actually works; update_plugin iterates on YOUR plugin with a patch bump; delete_plugin removes it.

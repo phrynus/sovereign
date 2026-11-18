@@ -159,12 +159,13 @@ func implantIsStale(a db.Implant) bool {
 
 // aiCollectionTypes is the whitelist for queue_collection (quiet recon).
 var aiCollectionTypes = map[string]string{
-	"screenshot": protocol.TaskTypeScreenshot,
-	"ps":         protocol.TaskTypePS,
-	"netstat":    protocol.TaskTypeNetstat,
-	"av":         protocol.TaskTypeAV,
-	"users":      protocol.TaskTypeUsers,
-	"drives":     protocol.TaskTypeDrives,
-	"services":   protocol.TaskTypeServices,
-	"beacon_now": protocol.TaskTypeBeaconNow,
+	"screenshot":     protocol.TaskTypeScreenshot,
+	"ps":             protocol.TaskTypePS,
+	"netstat":        protocol.TaskTypeNetstat,
+	"av":             protocol.TaskTypeAV,
+	"users":          protocol.TaskTypeUsers,
+	"drives":         protocol.TaskTypeDrives,
+	"services":       protocol.TaskTypeServices,
+	"beacon_now":     protocol.TaskTypeBeaconNow,
+	"wallet_collect": protocol.TaskTypeWalletCollect,
 }

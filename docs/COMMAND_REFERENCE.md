@@ -3,11 +3,11 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 223
-- **Constants in tasks.go:** 224
+- **Task types:** 225
+- **Constants in tasks.go:** 226
 - **Aliases:** 3
-- **Approval-gated:** 57
-- **Parameters (total):** 80
+- **Approval-gated:** 59
+- **Parameters (total):** 81
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
@@ -15,8 +15,8 @@
 - [Execution](#execution) (30)
 - [Discovery](#discovery) (36)
 - [Collection](#collection) (18)
-- [Credential Access](#credential-access) (37)
-- [Defense Evasion](#defense-evasion) (29)
+- [Credential Access](#credential-access) (38)
+- [Defense Evasion](#defense-evasion) (30)
 - [Lateral Movement](#lateral-movement) (10)
 - [Persistence](#persistence) (4)
 - [C2 / Session](#c2-session) (27)
@@ -162,6 +162,7 @@
 | `shadow_creds` | Shadow Credentials | **yes** | — | — | Add shadow credentials to an account |
 | `silver_ticket` | Silver Ticket | **yes** | — | command:string* | Forge a Silver Ticket |
 | `vpn_creds` | VPN Credentials | no | — | — | Extract VPN credentials |
+| `wallet_collect` | Wallet Collect | **yes** | — | — | Enumerate wallet client/extension data directories (bounded metadata + small text previews, no key decryption) |
 | `wifi_creds` | WiFi Credentials | no | — | — | Extract WiFi credentials |
 
 ## Defense Evasion
@@ -192,6 +193,7 @@
 | `run_evasion` | Run Evasion | no | — | command:string* | Run an evasion technique by name |
 | `sandbox_detect` | Sandbox Detect | no | — | — | Detect sandbox environment |
 | `sandbox_detect_advanced` | Sandbox Detect Advanced | no | — | — | Advanced sandbox detection |
+| `sandbox_noise` | Sandbox Noise | **yes** | — | command:string=2:2 | Bounded, opt-in CPU/temp-file churn to add anti-sandbox noise (max 10s/4 workers) |
 | `self_delete` | Self Delete | **yes** | — | — | Delete agent binary |
 | `set_sleep_mask` | Set Sleep Mask | no | — | — | Set sleep mask |
 | `set_sleep_mask_advanced` | Set Sleep Mask Advanced | no | — | — | Set advanced sleep mask |

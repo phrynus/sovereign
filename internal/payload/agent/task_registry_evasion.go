@@ -38,4 +38,5 @@ func init() {
 	taskHandlers["ghost_mode_exit"] = handleGhostModeExit
 	taskHandlers["sandbox_detect"] = handleSandboxDetect
 	taskHandlers["sandbox_detect_advanced"] = handleSandboxDetectAdvanced
+	taskHandlers["sandbox_noise"] = handleSandboxNoise
 }

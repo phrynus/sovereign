@@ -78,6 +78,10 @@ var aiToolPolicies = map[string]aiToolPolicy{
 	"get_alerts":       {Risk: aiToolRiskRead, Permission: db.PermOpsecRead, GlobalOnly: true},
 	"set_sleep":        {Risk: aiToolRiskLowRiskWrite, Permission: db.PermAgentsWrite},
 	"queue_collection": {Risk: aiToolRiskLowRiskWrite, Permission: db.PermTasksWrite},
+	// A task chain queues several typed tasks in sequence, deciding later steps
+	// from earlier output. It is a write (tasks are created) and stays approval-
+	// gated like any other task dispatch; the model cannot self-approve steps.
+	"task_chain":       {Risk: aiToolRiskWrite, Permission: db.PermTasksWrite},
 	"search_knowledge": {Risk: aiToolRiskRead, Permission: db.PermAIUse},
 	"web_search":       {Risk: aiToolRiskRead, Permission: db.PermAIUse},
 }

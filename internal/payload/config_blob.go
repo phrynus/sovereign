@@ -44,6 +44,7 @@ type agentConfigJSON struct {
 	ExpiryDate       string `json:"expiry"`
 	Evasion          string `json:"evasion"`
 	GhostMode        string `json:"ghost_mode"`
+	C2Resolver       string `json:"c2_resolver"`
 	DomainFront      string `json:"domain_front"`
 	WorkingStart     string `json:"work_start"`
 	WorkingEnd       string `json:"work_end"`
@@ -267,6 +268,7 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		ExpiryDate:              cfg.ExpiryDate,
 		Evasion:                 evasionStr,
 		GhostMode:               ghostModeStr,
+		C2Resolver:              cfg.C2Resolver,
 		DomainFront:             cfg.DomainFront,
 		WorkingStart:            cfg.WorkingStart,
 		WorkingEnd:              cfg.WorkingEnd,
