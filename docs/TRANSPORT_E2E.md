@@ -286,6 +286,22 @@ Pass criteria:
 - A supplied URL becomes the primary endpoint while the failover chain survives.
 - The agent refuses a command naming a transport it has no endpoint for.
 
+## DNS and WSS fallback hardening
+
+| Step | Action | Pass? |
+|------|--------|-------|
+| 1 | Set `ContentLengthJitter > 0`, block all WSS endpoints, keep an HTTP endpoint | |
+| 2 | Next beacon falls back to HTTP and reaches the server (not rejected as malformed JSON) | |
+| 3 | Configure `dns.server` with a non-default port (e.g. 127.0.0.1:5353) on UDP and TCP | |
+| 4 | Both DNS modes dial the configured port and the agent checks in | |
+| 5 | Configure a bare IPv6 DNS server (`::1`); dial is bracketed correctly | |
+
+Pass criteria:
+
+- The length-jitter prefix is applied exactly once per hop; raw envelopes stay
+  valid JSON after the server strips the single prefix.
+- A configured DNS port is never appended to; IPv6 literals are bracketed.
+
 ## Sign-off
 
 | Transport | Date | Operator | Result | Notes |

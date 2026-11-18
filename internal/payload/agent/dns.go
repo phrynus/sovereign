@@ -151,12 +151,28 @@ func buildDNSQueryNames(uuidHex string, body []byte) []string {
 	return names
 }
 
+// dnsDialAddress normalizes an operator-supplied DNS server into a dialable
+// host:port. The old code appended ":53" unconditionally, so a perfectly valid
+// "127.0.0.1:5353" (common for local resolvers and test harnesses) became
+// "127.0.0.1:5353:53" and every DNS beacon failed to dial. Bare IPv6 literals
+// are bracketed by JoinHostPort.
+func dnsDialAddress(server string) string {
+	s := strings.TrimSpace(server)
+	if s == "" {
+		return ""
+	}
+	if _, _, err := net.SplitHostPort(s); err == nil {
+		return s
+	}
+	return net.JoinHostPort(s, "53")
+}
+
 // sendDNSUDP sends a DNS query via plain UDP.
 func sendDNSUDP(dnsServer, qname string) []byte {
 	qtype := dnsQueryType()
 	pkt := buildDNSQuery(qname, qtype)
 
-	conn, err := net.DialTimeout("udp", dnsServer+":53", 5*time.Second)
+	conn, err := net.DialTimeout("udp", dnsDialAddress(dnsServer), 5*time.Second)
 	if err != nil {
 		if Debug {
 			fmt.Printf("[!] DNS UDP dial failed: %v\n", err)
@@ -266,7 +282,7 @@ func sendDNSTCP(dnsServer, qname string) []byte {
 	qtype := dnsQueryType()
 	pkt := buildDNSQuery(qname, qtype)
 
-	conn, err := net.DialTimeout("tcp", dnsServer+":53", 5*time.Second)
+	conn, err := net.DialTimeout("tcp", dnsDialAddress(dnsServer), 5*time.Second)
 	if err != nil {
 		if Debug {
 			fmt.Printf("[!] DNS TCP dial failed: %v\n", err)
