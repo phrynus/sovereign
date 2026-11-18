@@ -17,7 +17,7 @@
 | gRPC | Yes (Beacon Transport) | Yes | Yes | Hardened — `grpcs://` TLS + keepalive/`MaxConnectionAge`; `grpc://` lab insecure only; mTLS when client CA set |
 | SSH | Yes (+ creds + host-key pin) | Yes | Yes | Experimental — host key pin via ldflag/auto server key; empty pin = lab ignore |
 | ICMP | Yes | Yes (FC2I fragments) | Win/Linux | Hardened — envelopes split across Echo payloads |
-| UDP | Yes (experimental) | Yes (`udp_enabled`) | Yes | Experimental — one datagram per beacon |
+| UDP | Yes | Yes (`udp_enabled`) | Yes | Hardened — FC2I request/reply fragmentation, link-quality-aware part size (512/768/1200 B), 256-part/16 MiB/1024-key bounds, 30 s TTL sweep, bounded fragment-set retransmission (3 attempts) |
 | QUIC | Yes (experimental) | Yes (`quic_enabled`, TLS 1.3 ALPN h3/fc2) | Yes | Hardened — stream-framed v2 envelope; MaxIncomingStreams cap; path migration off; accept-loop backoff |
 | mTLS / h2c | Selector only | Partial | Code present | Experimental |
 | SMB P2P | P2P mode | Win pipe / Unix socket | Yes | Hardened |

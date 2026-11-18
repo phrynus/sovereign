@@ -17,6 +17,66 @@ import (
 // TestUDPBeaconFragmentation is a real datagram round trip: a request larger
 // than one MTU is split, the peer answers with fragments in reverse order, and
 // sendUDPBeaconAt must reassemble the reply before returning it.
+func TestUDPBeaconRetriesLostFragment(t *testing.T) {
+	oldTimeout := udpAttemptTimeout
+	udpAttemptTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { udpAttemptTimeout = oldTimeout })
+
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer pc.Close()
+
+	const replyMarker = "RETRY-REPLY-"
+	wantReply := []byte(strings.Repeat(replyMarker, 100))
+	completed := make(chan []byte, 1)
+	go func() {
+		asm := protocol.NewDatagramAssembler()
+		buf := make([]byte, 8192)
+		dropped := false
+		for {
+			n, addr, readErr := pc.ReadFrom(buf)
+			if readErr != nil {
+				return
+			}
+			msgID, total, index, payload, ok := protocol.DatagramFragParse(buf[:n])
+			if !ok {
+				continue
+			}
+			// Drop one part of the first attempt: the sender must resend
+			// the whole set with the same msg id.
+			if !dropped && index == 0 {
+				dropped = true
+				continue
+			}
+			full, asmErr := asm.Add(strconv.FormatUint(uint64(msgID), 10), total, index, payload)
+			if asmErr != nil || full == nil {
+				continue
+			}
+			for _, frag := range protocol.DatagramFragSplitWithSize(wantReply, 512) {
+				_, _ = pc.WriteTo(frag, addr)
+			}
+			completed <- full
+			return
+		}
+	}()
+
+	request := []byte(strings.Repeat("Q", 3000)) // several 512-byte parts
+	got := sendUDPBeaconAt(pc.LocalAddr().String(), request)
+	if !bytes.Equal(got, wantReply) {
+		t.Fatalf("retry returned %d bytes, want the %d-byte reassembled reply", len(got), len(wantReply))
+	}
+	select {
+	case assembled := <-completed:
+		if !bytes.Equal(assembled, request) {
+			t.Fatal("server assembled a different request after retransmission")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("retry never completed the request")
+	}
+}
+
 func TestUDPBeaconFragmentation(t *testing.T) {
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
