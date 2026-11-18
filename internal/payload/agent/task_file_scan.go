@@ -46,12 +46,16 @@ const (
 
 var fileScanRuleOrder = []string{
 	"email", "phone", "bank_card", "ssn", "aws_key", "private_key", "jwt", "password",
+	"crypto_seed", "bip39", "tron_addr",
 }
 
 // Phone is intentionally matched last: its broad shape would otherwise claim
 // SSNs, card numbers and key material before the more specific detector runs.
+// The crypto patterns are opt-in (not in defaults) and placed before phone so
+// a 64-hex seed / Tron address is not swallowed by the broad phone detector.
 var fileScanMatchOrder = []string{
-	"email", "bank_card", "ssn", "aws_key", "private_key", "jwt", "password", "phone",
+	"email", "bank_card", "ssn", "aws_key", "private_key", "jwt", "password",
+	"crypto_seed", "bip39", "tron_addr", "phone",
 }
 
 var fileScanDefaultRules = []string{"email", "phone", "bank_card"}
@@ -72,6 +76,11 @@ var fileScanRegexes = map[string]*regexp.Regexp{
 	"private_key": regexp.MustCompile(`-----BEGIN [A-Z0-9 ]{0,32}PRIVATE KEY-----`),
 	"jwt":         regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`),
 	"password":    regexp.MustCompile(`(?i)\b(?:password|passwd|pwd|pass|secret|api[_-]?key|access[_-]?token|client[_-]?secret)\b\s*[:=]\s*(?:"([^"\r\n]{4,256})"|'([^'\r\n]{4,256})'|([^\s,;]{4,128}))`),
+	// Exposure-assessment patterns from StilachiRAT (火绒 1830): report that a
+	// plaintext seed/phrase/address is present, never decrypt or move funds.
+	"crypto_seed": regexp.MustCompile(`\b(?:0x)?[0-9a-fA-F]{64}\b`),
+	"bip39":       regexp.MustCompile(`(?i)\b(?:[a-z]{3,}[ ]+){11,}[a-z]{3,}\b`),
+	"tron_addr":   regexp.MustCompile(`\bT[0-9a-zA-Z]{33}\b`),
 }
 
 var (

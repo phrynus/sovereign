@@ -29,6 +29,7 @@ const (
 var fileScanAllowedRules = map[string]bool{
 	"email": true, "phone": true, "bank_card": true, "ssn": true,
 	"aws_key": true, "private_key": true, "jwt": true, "password": true,
+	"crypto_seed": true, "bip39": true, "tron_addr": true,
 }
 
 var fileScanDefaultRules = []string{"email", "phone", "bank_card"}
@@ -219,7 +220,7 @@ func normalizeServerFileScanRules(raw string) ([]string, error) {
 		return append([]string{}, fileScanDefaultRules...), nil
 	}
 	out := make([]string, 0, len(seen))
-	for _, rule := range []string{"email", "phone", "bank_card", "ssn", "aws_key", "private_key", "jwt", "password"} {
+	for _, rule := range []string{"email", "phone", "bank_card", "ssn", "aws_key", "private_key", "jwt", "password", "crypto_seed", "bip39", "tron_addr"} {
 		if seen[rule] {
 			out = append(out, rule)
 		}

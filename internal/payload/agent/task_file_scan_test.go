@@ -187,6 +187,54 @@ func TestRunFileScanOptInDetectors(t *testing.T) {
 	}
 }
 
+func TestRunFileScanCryptoExposureDetectors(t *testing.T) {
+	root := t.TempDir()
+	seed := strings.Repeat("ab", 32) // 64 hex chars
+	tron := "T" + strings.Repeat("9", 33)
+	mnemonic := strings.TrimSpace(strings.Repeat("abandon ", 11) + "about")
+	writeScanTestFile(t, root, "wallet.txt", []byte(strings.Join([]string{
+		"seed " + seed,
+		"tron " + tron,
+		"phrase " + mnemonic,
+	}, "\n")))
+
+	rules := []string{"crypto_seed", "tron_addr", "bip39"}
+	ruleMap := map[string]bool{}
+	for _, r := range rules {
+		ruleMap[r] = true
+	}
+	raw, err := runFileScan(fileScanOpts{
+		root:           root,
+		patterns:       []string{"*"},
+		rules:          ruleMap,
+		ruleList:       rules,
+		maxDepth:       8,
+		maxFiles:       100,
+		maxFileBytes:   fileScanDefaultMaxFileBytes,
+		maxTotalBytes:  fileScanDefaultMaxTotalBytes,
+		maxFindings:    100,
+		timeout:        fileScanDefaultTimeout,
+		maxResultBytes: fileScanMaxResultBytes,
+	})
+	if err != nil {
+		t.Fatalf("runFileScan: %v", err)
+	}
+	got := decodeFileScanResult(t, raw)
+	seen := map[string]string{}
+	for _, finding := range got.Findings {
+		seen[finding.Rule] = finding.Value
+	}
+	if seen["crypto_seed"] != seed {
+		t.Errorf("crypto_seed = %q, want the 64-hex seed", seen["crypto_seed"])
+	}
+	if seen["tron_addr"] != tron {
+		t.Errorf("tron_addr = %q, want %q", seen["tron_addr"], tron)
+	}
+	if !strings.Contains(seen["bip39"], "abandon") {
+		t.Errorf("bip39 = %q", seen["bip39"])
+	}
+}
+
 func TestRunFileScanUTF16AndLimits(t *testing.T) {
 	root := t.TempDir()
 	units := utf16.Encode([]rune("contact utf16@example.com\n"))

@@ -50,6 +50,12 @@ function ruleLabel(t: TKey, rule: string): string {
       return t("agents.files_scan_rule_jwt");
     case "password":
       return t("agents.files_scan_rule_password");
+    case "crypto_seed":
+      return t("agents.files_scan_rule_crypto_seed");
+    case "bip39":
+      return t("agents.files_scan_rule_bip39");
+    case "tron_addr":
+      return t("agents.files_scan_rule_tron_addr");
     default:
       return rule;
   }

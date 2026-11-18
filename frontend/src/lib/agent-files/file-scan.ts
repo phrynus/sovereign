@@ -16,6 +16,9 @@ export const FILE_SCAN_RULES = [
   "private_key",
   "jwt",
   "password",
+  "crypto_seed",
+  "bip39",
+  "tron_addr",
 ] as const;
 
 export type FileScanRule = (typeof FILE_SCAN_RULES)[number];

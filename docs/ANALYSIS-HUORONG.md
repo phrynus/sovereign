@@ -4,7 +4,8 @@
 > 绝大多数是投递链（ClickFix 钓鱼、仿冒下载站、GitHub 投毒、感染型病毒）与勒索/挖矿的事件复盘。
 > 本轮逐篇精读了目录首页 11 篇中与「远控服务端/受控端能力」直接相关的 9 篇，并把范围扩展到第 2 页
 > （OverLord 远控 2049、银狐/thumbs!Edge 56 指令 2021）、第 3 页（Cloudflare 隧道白利用 1981、
-> Electron 窃密 1969）与第 4 页（银狐 APC 注入 1917、DCRat 1869），把其中反复出现的
+> Electron 窃密 1969）、第 4 页（银狐 APC 注入 1917、DCRat 1869）与第 5 页（StilachiRAT 1830、
+> 以太坊 Node.js 远控 1842），把其中反复出现的
 > **受控端功能面**提炼成对照表，并记录 ForgeC2 已实现 / 未实现的部分，作为后续"完善远控核心功能"的选择依据。
 > 投递入口（HTA/SFX/钓鱼页/仓库投毒）与纯破坏性载荷（勒索、挖矿、自传播感染）不属于本仓库范围，
 > 只在"取舍"一节说明，不计入功能差距。
@@ -26,6 +27,8 @@
 | [层层伪装 暗藏玄机——银狐借正规驱动静默接管](https://www.huorong.cn/document/tech/vir_report/2021)（2026-07-30） | thumbs!Edge 56 指令（下载执行/插件加载/TCP 中继/键盘记录/清理）；BYOVD 内核终止 EDR；**RDTSC 反时序延迟门**；SYSTEM 每分钟计划任务；键盘记录带活动窗口标题上下文 |
 | [隧道藏暗控——Cloudflare 合法工具被黑产用于远程控制](https://www.huorong.cn/document/tech/vir_report/1981)（2026-05-25） | cloudflared 合法组件建反向 TCP 隧道（127.0.0.1:443 → 公网 hostname）；Task Scheduler COM 创建计划任务避免 schtasks 痕迹；守护自愈 + Critical Process 自保护（破坏性）；Exodus 助记词恢复 |
 | [秒盗账号钱包！伪装 Electron 程序暗藏后门窃取加密数据](https://www.huorong.cn/document/tech/vir_report/1969)（2026-05-08） | **Discord token 发现（leveldb .ldb/.log）+ Discord API 富化（支付方式/礼品码/好友/guild）**；钱包/扩展扫描；关闭分析工具释放 DB 锁；无头浏览器辅助链 |
+| [StilachiRAT后门静默植入防火墙规则，封锁杀软通信无声窃密](https://www.huorong.cn/document/tech/vir_report/1830)（2025-06-30） | 防火墙规则阻断杀软通信（破坏性）；WMI 检测虚拟机；Chrome/剪切板/键盘窃取；**64-hex 私钥 + BIP-39 助记词 + 波场地址正则匹配**；差分截屏 |
+| [远控服务器孕育 Node.js 恶意脚本，依托以太坊完成远程操控](https://www.huorong.cn/document/tech/vir_report/1842)（2025-08-26） | Node.js 远控 + **以太坊链上 C2**（已被 chain resolver 覆盖） |
 
 ## TTP → ForgeC2 覆盖对照
 
@@ -137,6 +140,21 @@ Critical Process 自保护/守护自愈属破坏性（蓝屏/反终止），超�
 
 **取舍**：Discord API 富化、Exodus 助记词恢复、关闭分析进程、Critical Process 自保护、cloudflared 安装链——
 分别属于账号接管、破坏性、投递链或已被隧道能力覆盖，均不实现。
+
+## 第五轮（2026-11-18，第 5 页）
+
+精读 StilachiRAT（1830）与以太坊 Node.js 远控（1842）。核对结果：
+
+| TTP | ForgeC2 现状 / 结论 |
+|---|---|
+| 依托**以太坊**完成远控（1842） | 已被 `c2_resolver` 的 chain `eth_call` dead-drop 覆盖 |
+| 傀儡进程 dllhost.exe + token 复制 + ZwMapViewOfSection + SetThreadContext 注入（1830） | 已有进程注入 / `migrate` / token steal / 反射加载 |
+| WMI 检测虚拟机、动态解密字符串/函数地址（1830） | 已有 `sandbox_detect` / API hashing |
+| Chrome 登录数据 / 剪切板 / 键盘 hook / 差分截屏（1830） | 已有 `browser_steal` / keylogger / mpdecimate 差分 |
+| SetTcpEntry 删连接 + FwpmFilterAdd0 防火墙阻断杀软通信（1830） | **破坏性网络对抗**（阻断安全软件通信），延续 BYOVD/Critical Process 的超范围取舍，不实现 |
+| **私钥/助记词/波场地址模式**（1830 的关键词+正则） | **真缺口 → 本轮补齐**：`file_scan` 原有 `private_key`(PEM)/`aws_key`/`jwt`/`password`，但无 64-hex 私钥、BIP-39 助记词、波场地址三种模式 |
+
+本轮落地：`file_scan` 新增三个**opt-in** 检测规则 `crypto_seed`（`\b(?:0x)?[0-9a-fA-F]{64}\b`）、`bip39`（11+ 词连续词组）、`tron_addr`（`T` + 33 位 base58）。非默认规则，操作员显式开启。同步更新前后端规则清单、双语文案、服务端校验与审计允许表。沿用"暴露面评估"边界——只报告命中位置/值，**服务端对所有 `file_scan` 结果统一脱敏**（AI/callback/export 拿不到原始值，规则无关），不解密私钥、不转移资金。证据：`TestRunFileScanCryptoExposureDetectors`（三种模式命中）+ 既有 `all` 规则数测试仍绿。
 
 ## 第四轮（2026-11-18，第 4 页）—— 无新增缺口
 

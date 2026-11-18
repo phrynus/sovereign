@@ -51,7 +51,7 @@ describe("FilesScanPanel", () => {
     render(<FilesScanPanel t={t} agentId="a1" rootPath={"C:\\Users\\alice"} onReveal={onReveal} />);
 
     const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(9);
+    expect(checkboxes).toHaveLength(12);
     expect(checkboxes[0].getAttribute("aria-checked")).toBe("true");
     expect(checkboxes[1].getAttribute("aria-checked")).toBe("true");
     expect(checkboxes[2].getAttribute("aria-checked")).toBe("true");
