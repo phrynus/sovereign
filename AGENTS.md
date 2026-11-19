@@ -37,12 +37,17 @@ criteria instead of vibes:
 | 6 | Demo image pin matches GHCR `edge` digest; boot log error patterns at 0; read-only boundary assertions green | yes |
 | 7 | Wiki / Pages / sitemap live with 200s | yes |
 | 8 | Knowledge search: recall@5 regression test green in CI over a 200-chunk corpus (SQLite path) | yes |
-| 9 | Demo backup restore drill: row counts match after a real restore | yes |
+| 9 | Demo backup restore drill: row counts match after a real restore; CI mirrors the dump → scratch restore → count check on PostgreSQL | yes (CI `backup-restore` job) |
 
 A round that leaves any of 1–9 red is not done; a round that holds all of
 them while shipping a feature or gate is on-goal, regardless of how many
 times the goal can be re-chosen. New criteria are added here when a new
 class of regression is worth gating.
+
+⑨ has two legs now: `deploy/demo/restore-drill.sh` on the demo host (sudo/postgres, real backup) and
+the CI `backup-restore` job running `scripts/ci-pg-restore-drill.sh` against a throwaway
+`postgres:16-alpine`. The CI leg compares the same six tables (`users`, `implants`, `tasks`,
+`tenants`, `agent_groups`, `agent_tags`) and seeds one row per table so an empty dump cannot pass.
 
 ## Project overview
 ForgeC2 is a mature Go (net/http + PostgreSQL) C2 server plus a Vite + React TypeScript frontend.
