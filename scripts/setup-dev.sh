@@ -124,10 +124,21 @@ cd "$ROOT_DIR"
 echo "  Frontend built"
 echo ""
 
-# Copy frontend to embedded dist
+# Copy frontend to embedded dist with the same contract as
+# scripts/build-embedded.ps1: staged swap + LF normalization. A raw cp leaves
+# CRLF in the committed bundle on Windows, which fails CI's byte-compare.
 echo "Copying frontend to embedded dist..."
+if [ ! -d frontend/out ] || [ -z "$(ls -A frontend/out)" ]; then
+  echo "frontend/out missing or empty after build — refusing to embed an empty bundle" >&2
+  exit 1
+fi
+rm -rf internal/webdist/dist.new
+mkdir -p internal/webdist/dist.new
+cp -r frontend/out/. internal/webdist/dist.new/
 rm -rf internal/webdist/dist
-cp -r frontend/out internal/webdist/dist
+mv internal/webdist/dist.new internal/webdist/dist
+node scripts/normalize-webdist.mjs
+node scripts/check-webdist.mjs
 echo "  Embedded dist ready"
 echo ""
 
