@@ -34,7 +34,7 @@ criteria instead of vibes:
 | 3 | Gosec at 0 findings (windows target 1 staticcheck headroom, linux 0) | yes (65 → 0) |
 | 4 | Go statement coverage ≥ 58% | 59.1% measured |
 | 5 | Frontend statements ≥ 39.5% | 40.26% measured |
-| 6 | Demo image pin matches GHCR `edge` digest; boot log error patterns at 0; read-only boundary assertions green | yes |
+| 6 | Demo image pin matches GHCR `edge` digest; boot log error patterns at 0; read-only boundary assertions green | yes (CI smoke scans the same three stale-driver patterns) |
 | 7 | Wiki / Pages / sitemap live with 200s | yes |
 | 8 | Knowledge search: recall@5 regression test green in CI over a 200-chunk corpus (SQLite path) | yes |
 | 9 | Demo backup restore drill: row counts match after a real restore; CI mirrors the dump → scratch restore → count check on PostgreSQL | yes (CI `backup-restore` job) |

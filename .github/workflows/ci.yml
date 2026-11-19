@@ -152,6 +152,19 @@ jobs:
             exit 1
           }
           kill $(cat /tmp/forgec2-smoke.pid) || true
+      - name: Boot log error patterns (PostgreSQL)
+        # Acceptance criterion 6 checks the demo host's boot log for stale
+        # driver errors. The smoke server boots the same code against
+        # PostgreSQL, so gate its boot log here too: SQLite-only FTS5 DDL, the
+        # removed hash_type column and ErrRecordNotFound leaking through the
+        # ERROR logger are the three patterns the current image must not log.
+        run: |
+          patterns='ai_knowledge_fts|hash_type|PostgreSQL statement error.*record not found'
+          if head -n 2000 /tmp/forgec2-smoke.log | grep -Ei "$patterns"; then
+            echo "boot log contains a stale-driver error pattern"
+            exit 1
+          fi
+          echo "boot log error patterns: 0"
 
   backup-restore:
     name: PostgreSQL backup restore drill (row counts)
