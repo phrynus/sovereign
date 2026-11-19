@@ -600,8 +600,8 @@ jobs:
       - name: Static checks (css/tokens/i18n/paths/dialogs/openapi/perms/layout/readme + Go + frontend gates, concurrent)
         run: npm run check:pre
       - run: npm test
-      # Ratcheting floor: 39.36% of statements in src/ (9878/25095), with the
-      # floor itself at 38.5% (frontend/scripts/check-coverage.mjs - the file
+      # Ratcheting floor: 40.26% of statements in src/ (10448/25947), with the
+      # floor itself at 39.5% (frontend/scripts/check-coverage.mjs - the file
       # that carries the number and the reason). It reads lower than it looks
       # because most uncovered code is page components no test imports at all,
       # not a missed branch inside a tested file. Raise this whenever tests are

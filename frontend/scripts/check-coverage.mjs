@@ -31,9 +31,11 @@ import { fileURLToPath } from "node:url";
 // Re-measured 2026-11-07 (CI linux): 37.71% statements (9189/24365). The floor
 // is raised to 36.5, keeping ~1.2-point headroom.
 // Re-measured 2026-11-11 (CI linux): 39.34% statements (9873/25095). The floor
-// is raised to 38.5, keeping ~0.9-point headroom - the same ~1 point the Go
+// was raised to 38.5, keeping ~0.9-point headroom - the same ~1 point the Go
 // side keeps: a large new component shipping without tests still trips it.
-const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 38.5);
+// Re-measured 2026-11-19 (windows): 40.26% statements (10448/25947), after the
+// transport-matrix page + test. Floor raised to 39.5 (~0.8-point headroom).
+const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 39.5);
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const summaryPath = join(root, "coverage", "coverage-summary.json");
