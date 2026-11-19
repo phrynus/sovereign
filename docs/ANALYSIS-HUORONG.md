@@ -5,7 +5,8 @@
 > 本轮逐篇精读了目录首页 11 篇中与「远控服务端/受控端能力」直接相关的 9 篇，并把范围扩展到第 2 页
 > （OverLord 远控 2049、银狐/thumbs!Edge 56 指令 2021）、第 3 页（Cloudflare 隧道白利用 1981、
 > Electron 窃密 1969）、第 4 页（银狐 APC 注入 1917、DCRat 1869）、第 5 页（StilachiRAT 1830、
-> 以太坊 Node.js 远控 1842）与第 6 页（Rhadamanthys 1819、FinalShell 钓鱼 1816），把其中反复出现的
+> 以太坊 Node.js 远控 1842）、第 6 页（Rhadamanthys 1819、FinalShell 钓鱼 1816）与第 7 页（AI 浏览器后门 1804、
+> QQ 音乐白加黑劫持 1801、银狐迭代 1800）与第 8 页（Lumma 1777、FormBook 1770），把其中反复出现的
 > **受控端功能面**提炼成对照表，并记录 ForgeC2 已实现 / 未实现的部分，作为后续"完善远控核心功能"的选择依据。
 > 投递入口（HTA/SFX/钓鱼页/仓库投毒）与纯破坏性载荷（勒索、挖矿、自传播感染）不属于本仓库范围，
 > 只在"取舍"一节说明，不计入功能差距。
@@ -31,6 +32,10 @@
 | [远控服务器孕育 Node.js 恶意脚本，依托以太坊完成远程操控](https://www.huorong.cn/document/tech/vir_report/1842)（2025-08-26） | Node.js 远控 + **以太坊链上 C2**（已被 chain resolver 覆盖） |
 | [信息盗取的隐性威胁：Rhadamanthys木马无痕窃密](https://www.huorong.cn/document/tech/vir_report/1819)（2025-04-16） | 天堂之门注入/PPID 伪造/反沙箱；Lua+C# 窃密（**PuTTY/FTP、邮件、KeePass、Steam SSFN、VPN 配置**）；均有等价能力或本轮补齐暴露面 |
 | [伪FinalShell官网钓鱼，后门病毒窃密企业SSH凭证](https://www.huorong.cn/document/tech/vir_report/1816)（2025-04-03） | Gh0st 后门（屏幕/剪贴板/文件/插件，均已覆盖）；**SSH 客户端连接信息/私钥暴露面**；图片隐写/白加黑投递（超范围） |
+| [商业公司借AI热潮释放远控后门病毒](https://www.huorong.cn/document/tech/vir_report/1804)（2025-02-10） | AI 浏览器投递远控后门（投递链，超范围）；白加黑/svchost 加载已被注入+反射加载覆盖 |
+| [QQ音乐遭遇"白加黑"利用，网站被劫持推广传奇私服](https://www.huorong.cn/document/tech/vir_report/1801)（2025-01-22） | 白加黑 DLL + 驱动劫持；Ark 驱动断链隐藏/干扰杀软通信（Rootkit/破坏性，超范围） |
+| [Go语言下的"伪装者"如何实现悄无声息地隐私盗窃](https://www.huorong.cn/document/tech/vir_report/1777)（2024-10-22） | Lumma：Steam 账户名**动态派生 C2 域名**（已被 DGA resolver 覆盖）+ JSON 配置驱动窃密；浏览器/Steam/Discord/邮箱数据（已被各 collection 任务覆盖） |
+| [探究窃密木马FormBook免杀手段——多变的加载器](https://www.huorong.cn/document/tech/vir_report/1770)（2024-09-11） | SMC 自修改代码 + 天堂之门免杀（已有直接系统调用策略，天堂之门为同目标另一实现） |
 
 ## TTP → ForgeC2 覆盖对照
 
@@ -142,6 +147,42 @@ Critical Process 自保护/守护自愈属破坏性（蓝屏/反终止），超�
 
 **取舍**：Discord API 富化、Exodus 助记词恢复、关闭分析进程、Critical Process 自保护、cloudflared 安装链——
 分别属于账号接管、破坏性、投递链或已被隧道能力覆盖，均不实现。
+
+## 第八轮（2026-11-19，第 8 页）—— 无新增缺口
+
+精读/核对第 8 页：Lumma Stealer（1777）、银狐 TrueSightKiller（1772）、FormBook SMC（1770）、
+有道翻译白加黑后门（1766）、WSHRAT（1764）、易语言后门（1761）、银狐 MSI（1653）、蠕虫（1662）等。
+
+| TTP | ForgeC2 现状 / 结论 |
+|---|---|
+| 用 Steam 账户名动态派生 C2 域名（1777） | 已有 `c2_resolver` 的 DGA（seed 驱动域名环），同机制 |
+| SMC 自修改代码 + 天堂之门免杀（1770） | 已有直接系统调用策略；天堂之门是同目标另一实现（第 6 页已记录） |
+| BYOVD TrueSightKiller 关杀软（1772） | 已有 `byovd_load` |
+| 白加黑 / 反射加载 DLL / UAC 绕过无弹窗 / 服务持久化（1766） | 已有注入 / 反射加载 / `uac_bypass` / service persistence |
+| C2 完全控制 / 信息上传 / 开机启动持久化（1761） | 已有常规远控任务 + persistence |
+| 浏览器/Steam/Discord/邮箱/TXT 数据窃取（1777） | 已有 `browser_steal`、`messaging_token_collect`、`client_exposure_collect` |
+| 钓鱼邮件 / GitHub 投毒 / Telegram 汉化 / 壁纸引擎 / 主页劫持（1764/1652/1651/1649/1650） | 投递链 / 流氓推广，超范围 |
+| 蠕虫删文件（1662） | 破坏性，超范围 |
+
+**结论**：第 8 页远控相关 TTP 全部覆盖，其余为投递链或破坏性载荷，**本轮不新增代码**。与第四、七轮一致。
+
+## 第七轮（2026-11-19，第 7 页）—— 无新增缺口
+
+精读/核对第 7 页：AI 浏览器后门（1804）、驱动人生盗签后门（1803）、GitHub 投毒（1802）、
+QQ 音乐白加黑 + 驱动劫持（1801）、银狐迭代（1800/1790/1784）、感染型（1797）、挖矿（1796）、
+Go 勒索（1792）、非官方火绒剑后门（1779）。
+
+| TTP | ForgeC2 现状 / 结论 |
+|---|---|
+| 白加黑 DLL 侧载 / svchost 内存加载 / 白进程劫持（1804/1801/1784/1779） | 已有 `byovd_load`、进程注入、反射加载、`persistence` 的 dll_search_order |
+| 银狐多阶段加载 / UAC 绕过 / PlanTask 持久化（1800/1790） | 已有 |
+| 盗用数字签名绕过检测（1803） | 投递链签名伪造，超范围 |
+| Ark 工具驱动断链隐藏 / 干扰杀软通信（1801） | Rootkit 反取证 / 破坏性网络对抗，延续 out-of-scope |
+| 感染型病毒 / 挖矿 / Go 勒索 AES+密钥外传（1797/1796/1792） | 破坏性/蠕虫/勒索，超范围 |
+| GitHub 代码投毒 / 钓鱼站（1802/1800） | 初始访问投递链，超范围 |
+
+**结论**：第 7 页的远控相关 TTP 已全部覆盖，其余为投递链或破坏性载荷，**本轮不新增代码**。
+与第四轮一致——明确记录"无缺口"本身是核对的价值，避免在已覆盖的面上重复造轮子。
 
 ## 第六轮（2026-11-19，第 6 页）
 

@@ -82,7 +82,8 @@ func (s *Server) enforceKillSwitch(agent db.Implant, resp *beaconResponse) {
 	if !armed || token == "" {
 		return
 	}
-	regKey := s.deriveRegKey(agent.ID)
+	// The loaded implant already carries SecretID — skip the redundant Pluck.
+	regKey := s.deriveRegKeyWithSecret(agent.ID, agent.SecretID)
 	if len(regKey) == 0 {
 		return
 	}

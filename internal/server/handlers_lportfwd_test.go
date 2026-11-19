@@ -323,6 +323,45 @@ func TestLPortFwdIdleReaped(t *testing.T) {
 	}
 }
 
+// TestLPortFwdStaleDeclarationReaped proves an agent that declared targets but
+// has gone offline loses its declaration on the periodic sweep, so a
+// replacement reusing the id cannot inherit an old allowlist. This also covers
+// agents with no active leg, which the old sweep could not see at all.
+func TestLPortFwdStaleDeclarationReaped(t *testing.T) {
+	ginSetTestMode(t)
+	s := initV3BeaconServer(t, testutil.SetupTestDB(t), tenantVisibilityMasterHex)
+	const staleAgent = "lpf-decl-stale"
+	const liveAgent = "lpf-decl-live"
+	if err := s.db.Create(&db.Implant{ID: staleAgent, LastSeen: time.Now().Add(-time.Hour)}).Error; err != nil {
+		t.Fatalf("seed stale agent: %v", err)
+	}
+	if err := s.db.Create(&db.Implant{ID: liveAgent, LastSeen: time.Now()}).Error; err != nil {
+		t.Fatalf("seed live agent: %v", err)
+	}
+
+	// Declarations only — no active legs. The old sweep returned early here.
+	s.lportfwdMu.Lock()
+	if s.lportfwdDeclared == nil {
+		s.lportfwdDeclared = make(map[string]map[string]bool)
+	}
+	s.lportfwdDeclared[staleAgent] = map[string]bool{"127.0.0.1:8080": true}
+	s.lportfwdDeclared[liveAgent] = map[string]bool{"127.0.0.1:9090": true}
+	s.lportfwdMu.Unlock()
+
+	s.cleanupStaleLPortFwd()
+
+	s.lportfwdMu.Lock()
+	_, staleGone := s.lportfwdDeclared[staleAgent]
+	_, liveKept := s.lportfwdDeclared[liveAgent]
+	s.lportfwdMu.Unlock()
+	if staleGone {
+		t.Fatal("stale agent declaration must be dropped")
+	}
+	if !liveKept {
+		t.Fatal("live agent declaration must survive")
+	}
+}
+
 // TestLPortFwdCloseAllDrains proves shutdown closes every tunneled leg and
 // clears the table, and is safe to run twice.
 func TestLPortFwdCloseAllDrains(t *testing.T) {

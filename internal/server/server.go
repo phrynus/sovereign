@@ -174,6 +174,10 @@ type Server struct {
 
 	// v3 per-implant registration secret store (seals/unseals reg secrets)
 	regSecrets *crypto.RegSecretStore
+	// regKeyCache memoizes unsealed keys by public secret id. Cleared whenever
+	// regSecrets is rebuilt (master-key rotation) so a rotated store can never
+	// serve a key unsealed under the previous master. See regkey_cache.go.
+	regKeyCache regKeyCache
 
 	// Per-agent bookkeeping for online network-config refresh (config-over-wire
 	// on encrypted beacon responses). Lazily initialised; see
@@ -619,6 +623,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server { // config-lock: constr
 	if beaconKeyHex := cfg.Server.BeaconKey; beaconKeyHex != "" {
 		if master, err := hex.DecodeString(beaconKeyHex); err == nil && len(master) > 0 {
 			s.regSecrets = crypto.NewRegSecretStore(master)
+			s.regKeyCache.clear() // never serve keys unsealed under a previous master
 			slog.Info("v3 per-implant registration secrets enabled")
 		}
 	}

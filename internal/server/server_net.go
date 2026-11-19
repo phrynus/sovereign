@@ -79,8 +79,14 @@ func (s *Server) cleanupStaleLPortFwd() {
 		legs = append(legs, leg{key: key, agentID: t.agentID, connID: connIDFromKey(key), lastActive: t.lastActive})
 		seenAgents[t.agentID] = true
 	}
+	// Include agents that only declared targets (no active leg). Otherwise a
+	// declaration whose agent went offline and never reopened a tunnel would
+	// linger forever and be inherited by a replacement using the same id.
+	for agentID := range s.lportfwdDeclared {
+		seenAgents[agentID] = true
+	}
 	s.lportfwdMu.Unlock()
-	if len(legs) == 0 {
+	if len(seenAgents) == 0 {
 		return
 	}
 	agentIDs := make([]string, 0, len(seenAgents))
@@ -107,6 +113,15 @@ func (s *Server) cleanupStaleLPortFwd() {
 		if !l.lastActive.IsZero() && now.Sub(l.lastActive) > lportfwdConnIdleTimeout {
 			slog.Info("lportfwd: reaping idle leg", "agent_id", l.agentID, "conn", l.connID)
 			s.lportfwdClose(l.agentID, l.connID)
+		}
+	}
+	// Drop stale declarations under the same threshold. A declaration is an
+	// operator-granted allowlist; a replacement agent reusing the id must not
+	// inherit it — it has to re-declare through a fresh lportfwd_start.
+	for agentID := range seenAgents {
+		a, ok := byID[agentID]
+		if !ok || now.Sub(a.LastSeen) > threshold {
+			s.clearLPortFwdDecl(agentID)
 		}
 	}
 }

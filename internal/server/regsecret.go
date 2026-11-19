@@ -51,6 +51,22 @@ func (s *Server) regSecretByID(id string) []byte {
 	if id == "" || s.regSecrets == nil {
 		return nil
 	}
+	// The unsealed key is immutable for the life of the store; the memo collapses
+	// the repeated DB read + AEAD unseal on the beacon and file-chain paths. The
+	// cache is cleared whenever regSecrets is rebuilt (master-key rotation).
+	if key, ok := s.regKeyCache.get(id); ok {
+		return key
+	}
+	secret := s.unsealRegSecretByID(id)
+	if secret != nil {
+		s.regKeyCache.put(id, secret)
+	}
+	return secret
+}
+
+// unsealRegSecretByID is the uncached DB read + AEAD unseal. Kept separate so
+// the benchmark can measure the raw path against the memoized one.
+func (s *Server) unsealRegSecretByID(id string) []byte {
 	var row db.RegSecret
 	if err := s.db.Where("id = ?", id).First(&row).Error; err != nil {
 		return nil

@@ -47,6 +47,31 @@ Two runs per benchmark (run-to-run spread was about ±7%):
 | `BenchmarkBeaconTaskDelivery` | 716k – 735k | ≈ 1 380 | 1 500 | 206 KB |
 | `BenchmarkBeaconCheckinWithResult` | 939k – 1 048k | ≈ 1 010 | 2 104 | 257 KB |
 
+### Registration-key recovery (memoized, 2026-11-19)
+
+`BenchmarkRegKeyDerivation` in `internal/server/regkey_bench_test.go` isolates
+the per-call cost of recovering an implant's v3 registration key. The uncached
+path reads the `reg_secrets` row and AEAD-unseals it; that runs on the beacon
+path (kill-switch enforcement) and once per chunk of a file-chain transfer.
+`regSecretByID` now memoizes by secret id (bounded FIFO, 256 entries, invalidated
+on beacon-key rotation), and kill-switch enforcement reuses the loaded implant's
+`SecretID` to skip the extra `Pluck`.
+
+```bash
+go test ./internal/server/ -run '^$' -bench BenchmarkRegKeyDerivation -benchtime=500x -benchmem
+```
+
+| Variant | ns/op | allocs/op | B/op |
+|---|---|---|---|
+| `raw-unseal` (uncached DB read + unseal) | 13 112 | 83 | 5 994 |
+| `memo` (bounded secret-id memo) | 30 | 1 | 32 |
+
+~437× faster and ~2 700× fewer allocations on the repeated path. The memo is
+invalidated in both store-rebuild sites (`server.go`, `config_sync.go`) so a
+rotated beacon key can never serve a key unsealed under the previous master.
+Re-measure before trusting these ratios on different storage; the DB read is an
+in-memory SQLite lookup here.
+
 ## 3. Deriving fleet capacity
 
 A fleet of *N* implants on a *T*-second base interval produces `N/T` check-ins

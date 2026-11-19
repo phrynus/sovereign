@@ -35,6 +35,19 @@ func (s *Server) deriveRegKey(agentID string) []byte {
 	return crypto.DeriveRegistrationKeyFromHex(s.serverBeaconKey(), agentID)
 }
 
+// deriveRegKeyWithSecret uses an already-known secret id to skip the implant
+// row lookup (Pluck). On the beacon path the caller has the loaded *db.Implant,
+// so the extra query in deriveRegKey is redundant. Falls back to the legacy
+// master-derived key exactly as deriveRegKey does when no secret is available.
+func (s *Server) deriveRegKeyWithSecret(agentID, secretID string) []byte {
+	if secretID != "" {
+		if key := s.regSecretByID(secretID); key != nil {
+			return key
+		}
+	}
+	return crypto.DeriveRegistrationKeyFromHex(s.serverBeaconKey(), agentID)
+}
+
 // computeAuthMAC computes the authentication MAC for handshake/registration
 // request frames and handshake response frames:
 //

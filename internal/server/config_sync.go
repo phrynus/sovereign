@@ -169,6 +169,7 @@ func (s *Server) syncRegSecrets() error {
 		return fmt.Errorf("invalid server.beacon_key, keeping previous store")
 	}
 	s.regSecrets = crypto.NewRegSecretStore(master)
+	s.regKeyCache.clear() // keys unsealed under the old master are no longer valid
 	slog.Warn("v3 registration secret store rebuilt from rotated beacon key; previously deployed implants must be regenerated")
 	return nil
 }

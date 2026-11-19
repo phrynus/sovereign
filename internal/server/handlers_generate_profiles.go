@@ -298,7 +298,7 @@ func (s *Server) handleValidateProfile(c *gin.Context) {
 	if valid {
 		for _, pl := range v2.Placements {
 			tb := &malleable.TransformBlock{}
-			for _, st := range malleable.ParseWire(pl.Chain) {
+			for _, st := range malleable.ParseWireCached(pl.Chain) {
 				tb.Transforms = append(tb.Transforms, malleable.Transform{Type: st.Type, Value: st.Value})
 			}
 			if len(tb.Transforms) == 0 {
@@ -393,13 +393,13 @@ func (s *Server) handleGeneratePage(c *gin.Context) {
 	defInt, defJitter, defUA, defSkipTLS := s.cfg.Implant.DefaultInterval, s.cfg.Implant.DefaultJitter, s.cfg.Implant.DefaultUA, s.cfg.Implant.DefaultSkipTLS
 	s.configMu.RUnlock()
 	data := gin.H{
-		"Title":              "ForgeC2 - Generate Agent",
-		"ActiveNav":          "generate",
-		"DefaultInt":         defInt,
-		"DefaultJitter":      defJitter,
-		"DefaultUA":          defUA,
-		"DefaultSkipTLS":     defSkipTLS,
-		"Listeners":          listeners,
+		"Title":          "ForgeC2 - Generate Agent",
+		"ActiveNav":      "generate",
+		"DefaultInt":     defInt,
+		"DefaultJitter":  defJitter,
+		"DefaultUA":      defUA,
+		"DefaultSkipTLS": defSkipTLS,
+		"Listeners":      listeners,
 		// #nosec G203 -- html/template auto-escapes; template.JS is the explicit escape hatch for embedded JSON.
 		"ProfilePresetsJSON": template.JS(strings.ReplaceAll(string(presetsJSON), "</script>", "<\\/script>")), // #nosec G203
 	}
