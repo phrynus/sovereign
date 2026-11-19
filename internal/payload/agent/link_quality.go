@@ -4,6 +4,7 @@
 package main
 
 import (
+	"strconv"
 	"sync"
 	"time"
 )
@@ -60,6 +61,24 @@ func observeBeaconResult(rtt time.Duration, ok bool) {
 	}
 	linkState.lossEWMA = linkState.lossEWMA*linkLossDecay + miss*(1-linkLossDecay)
 	linkState.total++
+}
+
+// linkQualityInfo formats the current link-quality snapshot for the beacon
+// `info` map (string values, sanitized by the server). Exposing the measurement
+// the agent already computes lets the console show live RTT/loss instead of
+// burying it in logs. Samples=0 means no completed exchange has been measured
+// yet (the first beacon reports zero).
+func linkQualityInfo() map[string]string {
+	st := snapshotLink()
+	out := map[string]string{
+		"link_samples": strconv.Itoa(st.Samples),
+		"link_loss":    strconv.FormatFloat(st.LossEWMA, 'f', 3, 64),
+		"link_total":   strconv.Itoa(st.Total),
+	}
+	if st.Samples > 0 {
+		out["link_rtt_ms"] = strconv.FormatInt(st.Median.Milliseconds(), 10)
+	}
+	return out
 }
 
 // snapshotLink copies the state under one lock so scoring never races a beacon.

@@ -23,4 +23,5 @@ export const DYNAMIC_PREFIXES = [
   "ai.risk_", // AI suggestion risk badge: t(`ai.risk_${suggestion.risk}`)
   "events.source_", // merged timeline source label selected before t(labelKey)
   "generate.modules.", // agent module catalogue: t(`generate.modules.${name}.title`/`.desc`)
+  "agents.detail_transport_err_", // transport migration validation: t(`agents.detail_transport_err_${problem}`)
 ];

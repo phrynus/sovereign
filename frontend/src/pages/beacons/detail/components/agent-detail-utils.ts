@@ -45,6 +45,10 @@ export interface AgentDetailModel {
   P2PMode?: string; p2p_mode?: string;
   PeerCount?: number; peer_count?: number;
   KillDate?: string; kill_date?: string;
+  /** Latest self-reported link quality (RTT/loss), agent detail only. */
+  LinkQuality?: {
+    rtt_ms?: number; loss_ewma?: number; samples?: number; total?: number; at?: number;
+  };
 }
 
 export interface TaskEntry {
@@ -85,6 +89,10 @@ export interface AgentDetailResponse {
   uptime?: string;
   time_since_last_seen?: string;
   children?: AgentDetailModel[];
+  /** Top-level from the backend gin.H LinkQuality (snake_cased). */
+  link_quality?: {
+    rtt_ms?: number; loss_ewma?: number; samples?: number; total?: number; at?: number;
+  };
 }
 
 export function getOSIcon(os: string): typeof Monitor {

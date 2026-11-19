@@ -69,6 +69,10 @@ interface AgentStatsGridProps {
   onClearKillDate: () => void;
   /** Stack cards in a single column (right-rail layout) instead of 2-col. */
   rail?: boolean;
+  /** Latest self-reported link quality from the agent detail response. */
+  linkQuality?: {
+    rtt_ms?: number; loss_ewma?: number; samples?: number; total?: number; at?: number;
+  };
 }
 
 export default memo(function AgentStatsGrid({
@@ -76,7 +80,7 @@ export default memo(function AgentStatsGrid({
   sleepValue, jitterValue, onSleepChange, onJitterChange,
   onApplySleep,   sleepSaving, status, childAgents, childrenExpanded,
   onToggleChildren, onExportJSON, onExportMarkdown, onCopyAllInfo,
-  killDate, onSetKillDate, onClearKillDate, rail = false,
+  killDate, onSetKillDate, onClearKillDate, rail = false, linkQuality,
 }: AgentStatsGridProps) {
   const agentID = agent.id || "";
   const { t } = useI18n();
@@ -120,6 +124,12 @@ export default memo(function AgentStatsGrid({
         <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_sleep")} value={interval > 0 ? `${interval}s` : "0s"} />
         <InfoRow label={t("agents.stats_jitter")} value={jitter >= 0 ? `${jitter}%` : "\u2014"} />
+        {linkQuality && (linkQuality.samples ?? 0) > 0 && (
+          <>
+            <InfoRow label={t("agents.stats_link_rtt")} value={`${linkQuality.rtt_ms ?? 0} ms`} />
+            <InfoRow label={t("agents.stats_link_loss")} value={`${((linkQuality.loss_ewma ?? 0) * 100).toFixed(1)}%`} />
+          </>
+        )}
         <InfoRow label={t("agents.stats_uptime")} value={uptimeLabel} />
         <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen, t) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
         <InfoRow label={t("agents.stats_idle")} value={timeSinceLastSeen || "\u2014"} />

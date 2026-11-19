@@ -72,6 +72,7 @@ export const STATIC_ROUTES: string[] = [
   "toolkit",
   "topology",
   "traffic",
+  "transport-matrix",
   "users",
   "agents/_",
   "agents/_/config",

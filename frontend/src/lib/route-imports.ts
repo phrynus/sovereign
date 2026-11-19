@@ -50,5 +50,6 @@ export const ROUTE_PAGE_IMPORTS: Record<string, () => Promise<{ default: unknown
   toolkit: () => import("@/pages/toolkit/ToolkitPage"),
   topology: () => import("@/pages/topology/TopologyPage"),
   traffic: () => import("@/pages/traffic/TrafficPage"),
+  "transport-matrix": () => import("@/pages/transport-matrix/TransportMatrixPage"),
   users: () => import("@/pages/users/UsersPage"),
 };

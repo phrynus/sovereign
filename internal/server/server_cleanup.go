@@ -260,6 +260,9 @@ func (s *Server) cleanupStaleMapEntries() {
 	// map entry per agent id forever.
 	cleaned += s.remoteInputLimiter.sweep(cutoff)
 
+	// Drop link-quality snapshots for agents that stopped beaconing.
+	cleaned += s.linkQualitySweep(StaleMapCleanupAge)
+
 	if cleaned > 0 {
 		slog.Info("Cleaned stale map entries", "count", cleaned)
 	}

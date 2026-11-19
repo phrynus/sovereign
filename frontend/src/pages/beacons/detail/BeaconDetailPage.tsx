@@ -678,6 +678,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
           <AISuggestCard agentId={id} online={status === "online"} />
           <AgentStatsGrid
             agent={agent as Partial<AgentDetailExt>}
+            linkQuality={data?.link_quality}
             uptime={data?.uptime}
             timeSinceLastSeen={data?.time_since_last_seen}
             sleepValue={sleepValue}

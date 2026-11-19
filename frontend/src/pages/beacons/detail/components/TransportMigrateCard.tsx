@@ -9,14 +9,26 @@ import { useI18n } from "@/lib/i18n";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
 
-/** Transports the console offers; the server accepts a wider set via API. */
-export const TRANSPORT_OPTIONS = ["tcp", "udp", "http", "wss", "quic", "dns", "smb"] as const;
+/**
+ * Transports the console offers. Mirrors the server's supportedTransportSchemes
+ * (internal/server/transport_migration.go) and the agent's supportedBeaconTransport
+ * (internal/payload/agent/agent_c2mode.go). Keeping this in sync avoids offering
+ * a switch the next beacon would refuse.
+ */
+export const TRANSPORT_OPTIONS = [
+  "http", "https", "tcp", "tls", "udp", "quic", "icmp", "ws", "wss",
+  "grpc", "grpcs", "ssh", "mtls", "h2c", "dns", "smb",
+] as const;
 export type TransportOption = (typeof TRANSPORT_OPTIONS)[number];
 
+/** Mirrors the server's transportURLFamilies; other transports use strict scheme===transport. */
 const URL_FAMILIES: Partial<Record<TransportOption, string[]>> = {
-  tcp: ["tcp", "tls"],
   http: ["http", "https"],
+  tcp: ["tcp", "tls"],
+  ws: ["ws", "wss"],
   wss: ["ws", "wss"],
+  grpc: ["grpc", "grpcs"],
+  grpcs: ["grpc", "grpcs"],
 };
 
 export type TransportProblem = "unsupported" | "invalid" | "mismatch";
@@ -54,18 +66,18 @@ export default memo(function TransportMigrateCard({ agentId, online }: Transport
   const [transport, setTransport] = useState<TransportOption>("tcp");
   const [c2Url, setC2Url] = useState("");
   const [error, setError] = useState("");
-  const [queued, setQueued] = useState(false);
+  const [queuedTarget, setQueuedTarget] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     const problem = validateTransportSelection(transport, c2Url);
     if (problem) {
       setError(t(`agents.detail_transport_err_${problem}`));
-      setQueued(false);
+      setQueuedTarget("");
       return;
     }
     setError("");
-    setQueued(false);
+    setQueuedTarget("");
     setBusy(true);
     try {
       const target = c2Url.trim();
@@ -73,7 +85,7 @@ export default memo(function TransportMigrateCard({ agentId, online }: Transport
         transport,
         ...(target ? { c2_url: target } : {}),
       });
-      setQueued(true);
+      setQueuedTarget(transport.toUpperCase() + (target ? " → " + target : ""));
     } catch (err) {
       setError(formatThrownError(err));
     } finally {
@@ -106,7 +118,11 @@ export default memo(function TransportMigrateCard({ agentId, online }: Transport
         {busy ? t("agents.detail_transport_busy") : t("agents.detail_transport_queue")}
       </Button>
       {!online && <span className="text-xs text-muted-foreground">{t("agents.detail_transport_offline")}</span>}
-      {queued && <span className="text-xs text-success-ink" role="status">{t("agents.detail_transport_queued")}</span>}
+      {queuedTarget && (
+        <span className="text-xs text-success-ink" role="status">
+          {t("agents.detail_transport_queued", { target: queuedTarget })}
+        </span>
+      )}
       {error && <span className="text-xs text-destructive-ink" role="status">{error}</span>}
     </Card>
   );

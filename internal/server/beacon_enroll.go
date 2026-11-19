@@ -33,6 +33,9 @@ func blockedReasonSuffix(reason string) string {
 // drop every returning agent's beacon.
 func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, now time.Time) (db.Implant, bool) {
 	req.Info = sanitizeInfo(req.Info)
+	// Record the agent's self-reported link quality on every beacon so the
+	// operator detail view shows live RTT/loss instead of backend logs.
+	s.recordLinkQuality(req.UUID, parseLinkQualityInfo(req.Info))
 	// C + Go implants send hostname/username/ip base64 with encoding=base64.
 	// Decode once so both create and update paths store plaintext (previously
 	// the update path stored raw base64 because only the create path decoded).

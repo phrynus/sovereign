@@ -570,6 +570,9 @@ var allowedInfoKeys = map[string]bool{
 	// column stayed empty in every real deployment while the direct-seed test
 	// passed. Any info key the agent sends MUST be declared here.
 	"tls_profile": true,
+	// Live link quality reported by the agent each beacon (RTT median in ms,
+	// loss EWMA, sample count, total exchanges). Bounded strings, operator-only.
+	"link_rtt_ms": true, "link_loss": true, "link_samples": true, "link_total": true,
 }
 
 const maxInfoValueLen = 512

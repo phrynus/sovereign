@@ -97,7 +97,7 @@ Full per-task, per-OS matrix (including C-implant deltas): [docs/CAPABILITY_MATR
 
 ![ForgeC2 sign-in](docs/assets/screens/login.png)
 
-The console ships <!--fact:routes-->43<!--/fact--> routed pages: a live operations
+The console ships <!--fact:routes-->44<!--/fact--> routed pages: a live operations
 dashboard, the payload generator, agent detail (files, terminal, persistence,
 screen, tokens), a token lab, malleable profiles, campaigns, phishing, BloodHound
 ingestion and fifteen settings sections — in dark and light themes.

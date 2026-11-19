@@ -63,6 +63,11 @@ func getSystemInfo() map[string]string {
 	// Reported once per beacon like the rest: the operator asked for a fingerprint, and "which one did this build actually use"
 	// is answerable at build time even though the server can never see the handshake itself.
 	info["tls_profile"] = configuredTLSProfile()
+	// Live link quality (RTT median / loss EWMA / sample count) is measured on
+	// every beacon and reported so the console can surface it instead of logs.
+	for k, v := range linkQualityInfo() {
+		info[k] = v
+	}
 	return info
 }
 

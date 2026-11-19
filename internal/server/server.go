@@ -391,6 +391,11 @@ type Server struct {
 	navStatsCache   map[uint]navStatsEntry
 	navStatsCacheMu sync.RWMutex
 
+	// Latest per-agent link-quality snapshot from beacons (RTT/loss). Bounded
+	// by fleet size and swept on the 24h cleanup; see link_quality_state.go.
+	linkQuality   map[string]linkQualitySnapshot
+	linkQualityMu sync.RWMutex
+
 	// SIEM webhook for security event forwarding
 	siem *SIEMWebhook
 

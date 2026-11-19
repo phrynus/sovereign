@@ -67,6 +67,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/infrastructure", labelKey: "nav.infrastructure", icon: Server },
       { href: "/dns", labelKey: "nav.dns", icon: Network, perms: ["listeners.read"] },
       { href: "/domain-fronting", labelKey: "nav.domain_fronting", icon: Cloud, perms: ["agents.read"] },
+      { href: "/transport-matrix", labelKey: "nav.transport_matrix", icon: Route, perms: ["listeners.read"] },
     ],
   },
   {

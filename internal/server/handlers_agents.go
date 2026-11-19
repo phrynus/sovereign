@@ -260,6 +260,9 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		"AgentAge":          agentAgeStr,
 		"Children":          children,
 	}
+	if lq, ok := s.getLinkQuality(id); ok && lq.hasLinkQuality() {
+		data["LinkQuality"] = lq
+	}
 	if c.Query("include_unlinked") != "false" {
 		data["UnlinkedAgents"] = unlinkedAgents
 	}
