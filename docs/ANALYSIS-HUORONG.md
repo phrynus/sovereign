@@ -4,8 +4,8 @@
 > 绝大多数是投递链（ClickFix 钓鱼、仿冒下载站、GitHub 投毒、感染型病毒）与勒索/挖矿的事件复盘。
 > 本轮逐篇精读了目录首页 11 篇中与「远控服务端/受控端能力」直接相关的 9 篇，并把范围扩展到第 2 页
 > （OverLord 远控 2049、银狐/thumbs!Edge 56 指令 2021）、第 3 页（Cloudflare 隧道白利用 1981、
-> Electron 窃密 1969）、第 4 页（银狐 APC 注入 1917、DCRat 1869）与第 5 页（StilachiRAT 1830、
-> 以太坊 Node.js 远控 1842），把其中反复出现的
+> Electron 窃密 1969）、第 4 页（银狐 APC 注入 1917、DCRat 1869）、第 5 页（StilachiRAT 1830、
+> 以太坊 Node.js 远控 1842）与第 6 页（Rhadamanthys 1819、FinalShell 钓鱼 1816），把其中反复出现的
 > **受控端功能面**提炼成对照表，并记录 ForgeC2 已实现 / 未实现的部分，作为后续"完善远控核心功能"的选择依据。
 > 投递入口（HTA/SFX/钓鱼页/仓库投毒）与纯破坏性载荷（勒索、挖矿、自传播感染）不属于本仓库范围，
 > 只在"取舍"一节说明，不计入功能差距。
@@ -29,6 +29,8 @@
 | [秒盗账号钱包！伪装 Electron 程序暗藏后门窃取加密数据](https://www.huorong.cn/document/tech/vir_report/1969)（2026-05-08） | **Discord token 发现（leveldb .ldb/.log）+ Discord API 富化（支付方式/礼品码/好友/guild）**；钱包/扩展扫描；关闭分析工具释放 DB 锁；无头浏览器辅助链 |
 | [StilachiRAT后门静默植入防火墙规则，封锁杀软通信无声窃密](https://www.huorong.cn/document/tech/vir_report/1830)（2025-06-30） | 防火墙规则阻断杀软通信（破坏性）；WMI 检测虚拟机；Chrome/剪切板/键盘窃取；**64-hex 私钥 + BIP-39 助记词 + 波场地址正则匹配**；差分截屏 |
 | [远控服务器孕育 Node.js 恶意脚本，依托以太坊完成远程操控](https://www.huorong.cn/document/tech/vir_report/1842)（2025-08-26） | Node.js 远控 + **以太坊链上 C2**（已被 chain resolver 覆盖） |
+| [信息盗取的隐性威胁：Rhadamanthys木马无痕窃密](https://www.huorong.cn/document/tech/vir_report/1819)（2025-04-16） | 天堂之门注入/PPID 伪造/反沙箱；Lua+C# 窃密（**PuTTY/FTP、邮件、KeePass、Steam SSFN、VPN 配置**）；均有等价能力或本轮补齐暴露面 |
+| [伪FinalShell官网钓鱼，后门病毒窃密企业SSH凭证](https://www.huorong.cn/document/tech/vir_report/1816)（2025-04-03） | Gh0st 后门（屏幕/剪贴板/文件/插件，均已覆盖）；**SSH 客户端连接信息/私钥暴露面**；图片隐写/白加黑投递（超范围） |
 
 ## TTP → ForgeC2 覆盖对照
 
@@ -140,6 +142,21 @@ Critical Process 自保护/守护自愈属破坏性（蓝屏/反终止），超�
 
 **取舍**：Discord API 富化、Exodus 助记词恢复、关闭分析进程、Critical Process 自保护、cloudflared 安装链——
 分别属于账号接管、破坏性、投递链或已被隧道能力覆盖，均不实现。
+
+## 第六轮（2026-11-19，第 6 页）
+
+精读 Rhadamanthys（1819）与 FinalShell 钓鱼（1816）。核对结果：
+
+| TTP | ForgeC2 现状 / 结论 |
+|---|---|
+| 天堂之门 Hook NtCreateUserProcess / EtwEventWrite、PPID 伪造、反沙箱/反虚拟机/反调试（1819） | 已有直接系统调用策略、`edr_blind`、`PPIDSpoof`、`sandbox_detect_advanced`；天堂之门是同目标的另一种实现选择（32/64 位栈切换），非能力缺口 |
+| 钱包 / Chrome / Edge / Steam / Discord / Telegram 窃取（1819） | 已有 `wallet_collect`、`browser_steal`、`cookie_export`、`messaging_token_collect` |
+| OpenVPN / WinSCP 配置（1819） | 已有 `vpn_creds`（OpenVPN 配置 + WinSCP 会话） |
+| 心跳/屏幕/剪贴板/文件读写/创建进程/下载执行/插件执行（1816 Gh0st） | 全部已有 |
+| VMP/图片隐写/自定义 PE/内存无落地投递链（1816/1819） | 投递链与打包器，超范围 |
+| **PuTTY/FTP 客户端、邮件客户端（Outlook/The Bat/eM Client/Pidgin）、KeePass 库、Steam SSFN、Nord/Proton VPN 配置的暴露面** | **真缺口 → 本轮补齐**：暴露面评估家族此前只覆盖钱包/消息 token，缺这一类客户端会话存储 |
+
+本轮落地：`client_exposure_collect` 任务。按平台列出上述客户端的会话存储目录，报告每客户端"已安装/未安装" + 文件数与字节数；**只取元数据（`DirEntry.Info`），从不打开文件、不读取内容、不跟随符号链接、不解密、不外发**。与前两轮同一克制边界——区分"盘上有会话材料"与"窃取并回放会话"是两种不同权力。opt-in + 审批门 + collection 模块 + toolkit/AI 白名单。证据：`TestCollectClientExposureNoContentRead`（确认 secret 字符串不出现在输出、符号链接不跟随）+ `TestClientTargetsPerPlatform`。
 
 ## 第五轮（2026-11-18，第 5 页）
 

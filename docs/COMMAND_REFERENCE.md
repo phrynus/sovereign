@@ -3,10 +3,10 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 226
-- **Constants in tasks.go:** 227
+- **Task types:** 227
+- **Constants in tasks.go:** 228
 - **Aliases:** 3
-- **Approval-gated:** 60
+- **Approval-gated:** 61
 - **Parameters (total):** 81
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
@@ -15,7 +15,7 @@
 - [Execution](#execution) (30)
 - [Discovery](#discovery) (36)
 - [Collection](#collection) (18)
-- [Credential Access](#credential-access) (39)
+- [Credential Access](#credential-access) (40)
 - [Defense Evasion](#defense-evasion) (30)
 - [Lateral Movement](#lateral-movement) (10)
 - [Persistence](#persistence) (4)
@@ -138,6 +138,7 @@
 | `asreproast` | AS-REP Roast | no | — | — | Roast AS-REP responses |
 | `bronze_bit` | Bronze Bit | **yes** | — | — | Bronze Bit attack |
 | `browser_steal` | Browser Steal | **yes** | — | — | Steal browser passwords |
+| `client_exposure_collect` | Client Exposure Collect | **yes** | — | — | Exposure map of SSH/FTP client, mail, password-manager, Steam and VPN session stores: presence + file counts/sizes only (never reads or returns secret contents) |
 | `cloud_steal` | Cloud Token Theft | **yes** | — | — | Steal cloud access tokens |
 | `coerce_dfs` | Coerce DFS | **yes** | — | — | Coerce NTLM auth via DFS |
 | `coerce_petitpotam` | Coerce PetitPotam | **yes** | — | — | Coerce NTLM auth via EFSRPC |

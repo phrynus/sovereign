@@ -169,4 +169,5 @@ var aiCollectionTypes = map[string]string{
 	"beacon_now":              protocol.TaskTypeBeaconNow,
 	"wallet_collect":          protocol.TaskTypeWalletCollect,
 	"messaging_token_collect": protocol.TaskTypeMessagingToken,
+	"client_exposure_collect": protocol.TaskTypeClientExposure,
 }

