@@ -159,7 +159,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		DNSServer       string `form:"dns_server"`
 		// Obfuscation selects the PowerShell one-liner preset for the
 		// self-contained Base64 variant: ""/none (legacy), light, standard, heavy.
-		Obfuscation string `form:"obfuscation"`
+		Obfuscation   string `form:"obfuscation"` // preset applies to the self-contained Base64 variant
 		PowerShellExe string `form:"powershell_exe"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
