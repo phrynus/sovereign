@@ -46,6 +46,9 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		// Obfuscation selects the PowerShell one-liner preset:
 		// ""/none (legacy), light, standard, heavy. Empty = legacy.
 		Obfuscation string `form:"obfuscation"`
+		// PowerShellExe pins the launcher to powershell (5.1) or pwsh (7+).
+		// Empty/auto keeps the previous random spelling.
+		PowerShellExe string `form:"powershell_exe"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -112,7 +115,14 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		return
 	}
 
-	oneLiner := obfuscation.GenerateCommandLineOneLinerWithOptions(ps1Code, obfuscation.PresetForLevel(form.Obfuscation))
+	psOpts := obfuscation.PresetForLevel(form.Obfuscation)
+	if exe, ok := normalizePowerShellExe(form.PowerShellExe); !ok {
+		respondError(c, http.StatusBadRequest, "Invalid powershell_exe")
+		return
+	} else {
+		psOpts.LauncherExe = exe
+	}
+	oneLiner := obfuscation.GenerateCommandLineOneLinerWithOptions(ps1Code, psOpts)
 
 	s.logBuild("windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "success", "", "")
 	respond(c, gin.H{
@@ -150,6 +160,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		// Obfuscation selects the PowerShell one-liner preset for the
 		// self-contained Base64 variant: ""/none (legacy), light, standard, heavy.
 		Obfuscation string `form:"obfuscation"`
+		PowerShellExe string `form:"powershell_exe"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -367,7 +378,14 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	// Generate one-liner variants (verified variants carry the SHA-256 so the
 	// target validates the payload after download/resume, before executing).
 	payloadSHA, payloadSize := sha256OfFile(hostPath)
-	oneLiners := buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, form.Proxy, payloadSHA, obfuscation.PresetForLevel(form.Obfuscation))
+	psOpts := obfuscation.PresetForLevel(form.Obfuscation)
+	if exe, ok := normalizePowerShellExe(form.PowerShellExe); !ok {
+		respondError(c, http.StatusBadRequest, "Invalid powershell_exe")
+		return
+	} else {
+		psOpts.LauncherExe = exe
+	}
+	oneLiners := buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, form.Proxy, payloadSHA, psOpts)
 
 	// The original build artifact in data/agents is a duplicate of the hosted
 	// payload copy and is never served again — register it for reaping.

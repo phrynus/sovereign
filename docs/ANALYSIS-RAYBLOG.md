@@ -288,18 +288,27 @@ JPEG 编码，经**控制信令**发送（不建立媒体面），控制台用 `
 `obfuscation.GenerateCommandLineOneLinerWithOptions` 包装，因此 URL 与摘要在 light(-enc) /
 standard、heavy(XOR) 档位下也不出现在命令行里。
 
-实测（本机 Windows PowerShell 5.1 + 本地 HTTP 服务打印 `PS1_DELIVERY_OK` 的脚本）：
+目标运行时纠正为 **PowerShell 7.7.0（`pwsh`）**：本机同时存在 5.1（`powershell.exe`），
+原生成器会在 `powershell`/`PowerShell`/`POWERSHELL`/`pwsh` 四种写法中随机，无法稳定 targeting PS7。
+现在 `PSObfuscateOptions.LauncherExe` 可显式钉住 `powershell` 或 `pwsh`；两个生成 handler 接受
+`powershell_exe`（`powershell` / `pwsh` / `auto`，非法值 400）。生成页还固定提供
+`PowerShell 7 (pwsh) Verified Memory Load` 变体，无需新增 UI 控件即可选择 PS7。
 
-|场景|结果|
-|---|---|
-|摘要正确，legacy launcher|`PS1_DELIVERY_OK`|
-|摘要错误|无输出、脚本不执行|
-|light / `-enc`|`PS1_DELIVERY_OK`|
-|standard / XOR（经 `cmd.exe /c`）|`PS1_DELIVERY_OK`|
-|heavy / XOR + 变量重命名 + 字符串切分（经 `cmd.exe /c`）|`PS1_DELIVERY_OK`|
+实测（本地 HTTP 服务分别打印 `PS1_DELIVERY_OK` / `PS7_DELIVERY_OK` 的无害脚本）：
+
+|场景|运行时|结果|
+|---|---|---|
+|摘要正确，legacy launcher|5.1 / 7.7.0|均执行并输出标记|
+|摘要错误|5.1 / 7.7.0|均静默、不执行|
+|light / `-enc`|5.1 / 7.7.0|均执行成功|
+|standard / XOR（经 `cmd.exe /c`）|5.1 / 7.7.0|均执行成功|
+|heavy / XOR + 变量重命名 + 字符串切分（经 `cmd.exe /c`）|5.1 / 7.7.0|均执行成功|
+|生成页的 pwsh 变体（heavy，经 `cmd.exe /c`）|7.7.0|执行成功|
 
 `TestBuildOneLiners_PS1VerifiedMemoryLoader` 钉住变体数量、摘要小写化、无明文 URL/IEX、
-`-enc` 档位形态；探针脚本与本地服务均为一次性验证，未留在仓库里。
+`-enc` 形态、pwsh 变体前缀、`LauncherExe` 与 `powershell_exe` 白名单；探针脚本与本地服务
+均为一次性验证，未留在仓库里。
+
 
 ## 方法说明
 

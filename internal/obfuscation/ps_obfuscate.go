@@ -23,6 +23,12 @@ type PSObfuscateOptions struct {
 	//  "gzip"               -> base64(gzip(code)) + inline IO.Compression decoder stub
 	Launcher string
 
+	// LauncherExe pins the executable name used for the outer launcher:
+	// "powershell" (Windows PowerShell 5.1) or "pwsh" (PowerShell 7+).
+	// Empty keeps the legacy random spelling. A value here wins over the
+	// randomization below so an operator can target a known host image.
+	LauncherExe string
+
 	// Source-level transforms applied before encoding (semantics-preserving):
 	CaseRandomize bool // randomize case of safe keywords/cmdlets (PS is case-insensitive there)
 	VarRename     bool // rename $variables consistently (skips automatics)
@@ -197,6 +203,12 @@ func xorKey(opts PSObfuscateOptions) byte {
 var launcherForms = []string{"powershell", "PowerShell", "POWERSHELL", "pwsh"}
 
 func randomizeLauncher(base string, opts PSObfuscateOptions) string {
+	switch strings.ToLower(strings.TrimSpace(opts.LauncherExe)) {
+	case "pwsh":
+		return "pwsh"
+	case "powershell":
+		return "powershell"
+	}
 	r := newRand(opts)
 	_ = base
 	// Keep "powershell" recognizable to operators but vary the spelling.
