@@ -35,6 +35,8 @@ echo ""
 # "ecdh:" (legacy XOR/plaintext modes no longer exist), the logging section
 # (not "log:"), and all five REQUIRED 32-byte-hex storage keys (empty values
 # are rejected — the legacy JWT-derivation cascade was removed).
+# PostgreSQL is now the only supported backend; the generated config points at
+#   the local compose profile (see the start instructions at the end).
 gen_hex_key() {
   if command -v openssl &>/dev/null; then
     openssl rand -hex 32
@@ -62,8 +64,8 @@ server:
   data_dir: "data"
 
 database:
-  path: "data/db/forgec2.db"
-  driver: "sqlite"
+  driver: "postgres"
+  dsn: "host=127.0.0.1 user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
 
 plugins:
   # Verify the bundled plugin packages by default. Third-party packages must
@@ -129,10 +131,12 @@ cp -r frontend/out internal/webdist/dist
 echo "  Embedded dist ready"
 echo ""
 
-# Build the server binary
+# Build the server binary (same host-OS suffix rule as `make build`)
 echo "Building forgec2-server..."
-go build -ldflags="-s -w" -o forgec2-server.exe ./cmd/server
-echo "  Binary ready: forgec2-server.exe"
+SERVER_BIN="forgec2-server"
+if [ "$(go env GOOS)" = "windows" ]; then SERVER_BIN="forgec2-server.exe"; fi
+go build -ldflags="-s -w" -o "$SERVER_BIN" ./cmd/server
+echo "  Binary ready: $SERVER_BIN"
 echo ""
 
 # Run backend tests (CI package set)
@@ -142,8 +146,11 @@ echo ""
 
 echo "=== Setup Complete ==="
 echo ""
+echo "Start PostgreSQL first (matches the generated dsn):"
+echo "  DB_PASSWORD=forgec2 docker compose --profile postgres up -d"
+echo ""
 echo "Start the server:"
-echo "  ./forgec2-server.exe -config config.yaml"
+echo "  ./$SERVER_BIN -config config.yaml"
 echo ""
 echo "Or build, deploy and verify in one step (build + restart + health + rollback):"
 echo "  bash scripts/deploy.sh          # Linux/macOS"

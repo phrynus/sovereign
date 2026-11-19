@@ -45,9 +45,9 @@ times the goal can be re-chosen. New criteria are added here when a new
 class of regression is worth gating.
 
 ## Project overview
-ForgeC2 is a mature Go (net/http + sqlite) C2 server plus a Vite + React TypeScript frontend.
+ForgeC2 is a mature Go (net/http + PostgreSQL) C2 server plus a Vite + React TypeScript frontend.
 - Server binary: `forgec2-server.exe` (built with `go build ./cmd/server`).
-- Default: port **8000**, config `config.yaml`, sqlite DB `data/db/forgec2.db` (users `admin`/`labtest`).
+- Default: port **8000**, config `config.yaml`, PostgreSQL via `database.driver`/`database.dsn` (see `config.example.yaml`); SQLite survives only in in-memory tests.
 - Version: 2.7.1 (see CHANGELOG.md; single source `VERSION`).
 
 ## Frontend build & embedding (IMPORTANT)
@@ -262,6 +262,14 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   passed `npm run check` locally and only failed in CI. Scope worth knowing: the hand-written
   per-OS tables in that file (Yes/No/Partial cells) are **not** verified — only the block
   between the `BEGIN/END GENERATED TASK INVENTORY` markers and the `as of vX.Y.Z` stamp.
+- `check:config-drivers` (`scripts/check-config-drivers.mjs`) — every tracked config
+  template/generator (`config.example.yaml`, `scripts/setup-dev.sh`, `deploy/demo/deploy.sh`)
+  must declare a driver the server ships (`postgres`). v2.8 removed SQLite, but
+  `setup-dev.sh` kept emitting `driver: sqlite` from its heredoc: the documented
+  dev entry point produced a config the server rejected at boot. The exported
+  `analyzeSource` detector is pinned by `scripts/check-config-drivers.test.mjs`
+  (6 cases: unquoted/quoted sqlite, postgres, a commented legacy example, a missing
+  declaration, and all tracked sources). Wired into both `check` and `check:pre`.
 - `TestDocumentedAPIRoutesAreInTheSpec` (Go) — the other direction from `TestFrontendAPIPathsExist`: every
   route the **router actually registers** under `/api` must appear in `api/openapi.yaml`, with a
   shrink-only allowlist for the beacon-facing endpoints, the WebSocket upgrades and the public landing
@@ -415,6 +423,14 @@ budget's comment states a headroom, check that arithmetic against the current me
 
 ## Testing
 
+### Local Windows: no binary-building tests
+
+Do not run tests that compile or execute generated implants on this Windows host — the
+`internal/payload` smoke tests and `TestAgentModuleExclusionBuilds` write executables that
+make Windows Security Center pop up. CI runs those jobs on Linux runners; treat CI as their
+gate. Non-binary checks (`npm run check`, `npm test`, targeted server tests via
+`go test ./internal/server/ -run …`) are safe locally.
+
 ### A targeted `-run` is not a suite
 
 `go test -run 'TestTheThingIChanged'` answers one question: *"did I break what I was thinking about"*. It does **not** answer
@@ -467,7 +483,11 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
 ## Build caveats
 - `go build ./...` passes (the `data/e2e/` helpers have `//go:build ignore` tags).
 - Go version: **1.26.0** (go.mod) with `toolchain go1.26.11` pinned for the standard-library security patches (net/http, crypto/tls, html/template, net/textproto). The Dockerfile's `golang:1.26.11-alpine` builder must equal that toolchain — the builder's stdlib is **linked into the shipped binary**, so the image base is a security decision, not a build detail. `scripts/check-docker-go-version.mjs` enforces the equality (in `check` and `check:pre`) because Dependabot's grouped `docker-base` bump moved it to `golang:1.27.0` and **every job stayed green**: govulncheck scans the module with the CI toolchain, never the base image. `GO-2026-6859` (net/http) is fixed in **go1.26.11 and go1.27.4**; 1.27.0–1.27.3 are affected, so a 1.27 move needs 1.27.4+ and a matching `toolchain` line. The CI `setup-go` pins name 1.26.11 as well, so govulncheck scans with the patched standard library (`go install golang.org/x/vuln/cmd/govulncheck@v1.1.4` is compiled by the installed toolchain, and `toolchain go1.26.11` carries the same version into the module); the `ci-go-1.26.11.patch` delivery file is retired and `.github/dependabot.yml` ignores `golang` so the base-image group cannot undo this.
-- sqlite driver is **`github.com/glebarez/sqlite`** (pure Go, no cgo). Any DB-verification temp program MUST use this driver, NOT `gorm.io/driver/sqlite` (which needs cgo).
+- Production DB is PostgreSQL (`gorm.io/driver/postgres`); SQLite is **test-only**:
+  in-memory unit tests use **`github.com/glebarez/sqlite`** (pure Go, no cgo). Any
+  DB-verification temp program that needs the test path MUST use that driver, NOT
+  `gorm.io/driver/sqlite` (which needs cgo). Config-template driver drift is caught
+  by `check:config-drivers`.
 
 ## CSRF Protection (IMPORTANT)
 - Login (`POST /api/login`) now sets `forgec2_csrf` cookie to the session-derived token (`DeriveCSRFToken(session, csrf_key)`), not a random value.
