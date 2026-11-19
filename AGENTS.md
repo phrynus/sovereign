@@ -219,7 +219,7 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   the half-fixed state.
 - `check:goroutine-recovery` (`frontend/scripts/check-goroutine-recovery.mjs`) — a **new** goroutine in a
   request path must not be able to kill the process. Go has no process-wide panic handler, and a survey of
-  `internal/server` found **63** `go …` sites with no reachable recover, so the gate freezes the **13** in
+  `internal/server` found **63** `go …` sites with no reachable recover, so the gate freezes the **11** in
   `handlers_*.go` (list is shrink-only) and refuses new ones. Two of the worst-looking sites are guarded by
   design — `wsReadPump`/`wsWritePump` handle their own errors, and the AI broker retry worker selects on
   `dst.done` so a racing unsubscribe cannot panic on a closed channel — which is why the rule is "no new
