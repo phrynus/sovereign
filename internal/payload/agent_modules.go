@@ -101,6 +101,11 @@ var agentModuleCatalog = []AgentModule{
 			"task_screen_webrtc_audio.go",
 			"task_screen_webrtc_webcam.go",
 			"task_screen_webrtc_region.go",
+			// keyword_watch_signal.go attaches the keyword-watch logic to the
+			// agentWebRTCSession type (owned by task_screen_webrtc.go), so it
+			// must be excluded with webrtc — a core-only build otherwise keeps
+			// this file and fails with "undefined: agentWebRTCSession".
+			"keyword_watch_signal.go",
 		},
 	},
 	{

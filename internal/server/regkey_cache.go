@@ -16,11 +16,6 @@ import "sync"
 // ever populated for ids that actually exist in the DB and unseal successfully.
 const regSecretCacheCap = 256
 
-type regKeyCacheEntry struct {
-	id  string
-	key []byte
-}
-
 type regKeyCache struct {
 	mu      sync.Mutex
 	entries map[string][]byte
