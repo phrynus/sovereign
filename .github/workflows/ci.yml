@@ -64,7 +64,19 @@ jobs:
       # scripting + cmd were previously untested here even though both ship
       # tests; keep the list explicit so runtime stays predictable.
       - name: Unit tests + coverage
-        run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/scripting/... ./internal/server/... ./pkg/... ./cmd/... -count=1 -timeout 8m -coverprofile=coverage.out
+        shell: bash
+        run: |
+          set -o pipefail
+          go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/scripting/... ./internal/server/... ./pkg/... ./cmd/... -count=1 -timeout 8m -coverprofile=coverage.out 2>&1 | tee unit.log
+      # The job log needs admin rights to download, and an annotation is the one
+      # failure detail a non-admin can read. Collapse the failing-test context
+      # into a single annotation instead of one per line (the API caps those).
+      - name: Surface test failures as an annotation
+        if: failure()
+        shell: bash
+        run: |
+          body=$(grep -n -E '^(--- FAIL|FAIL|panic:)' -A 12 unit.log 2>/dev/null | head -120 | sed ':a;N;$!ba;s/\n/%0A/g')
+          [ -n "$body" ] && echo "::error::$body" || echo "::error::unit tests failed but unit.log had no --- FAIL lines"
       - name: Coverage floor
         # Ratcheting floor. Measured 2026-11-07: 59.1% across this package list (the floor was
         # still 51.5 from a 52.8 measurement, so a 7-point regression would have passed unnoticed);
@@ -513,12 +525,33 @@ jobs:
           docker exec sovereign-pg pg_isready -U sovereign -d sovereign || { docker logs sovereign-pg | tail -n 50; exit 1; }
       - name: Generated-agent E2E (login -> listener -> generate -> beacon -> tasks)
         shell: pwsh
-        run: ./scripts/e2e-agent-local.ps1 -WorkDir "$env:RUNNER_TEMP/e2e-agent" -KeepWork
+        run: |
+          try {
+            ./scripts/e2e-agent-local.ps1 -WorkDir "$env:RUNNER_TEMP/e2e-agent" -KeepWork *>&1 |
+              Tee-Object -FilePath "$env:RUNNER_TEMP/e2e.log"
+          } catch {
+            Write-Host $_
+            exit 1
+          }
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Server log (failure only)
         if: failure()
         run: |
           log="$RUNNER_TEMP/e2e-agent/logs/sovereign.log"
           [ -f "$log" ] && tail -n 200 "$log" || echo "no server log"
+      # The job log needs admin rights to download; annotations do not. Collapse
+      # the harness's last lines plus the server's into one readable annotation.
+      - name: Surface the E2E failure as an annotation
+        if: failure()
+        shell: bash
+        run: |
+          body=$({
+            echo '--- harness ---'
+            tail -n 40 "$RUNNER_TEMP/e2e.log" 2>/dev/null || echo 'no harness log'
+            echo '--- server ---'
+            tail -n 40 "$RUNNER_TEMP/e2e-agent/logs/sovereign.log" 2>/dev/null || echo 'no server log'
+          } | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error::$body"
 
   lint:
     runs-on: ubuntu-latest
