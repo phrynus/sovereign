@@ -11,7 +11,7 @@ const HISTORY_MESSAGE_CAP = 200;
 const HISTORY_CONTENT_CAP = 80_000;
 const HISTORY_TOTAL_CONTENT_CAP = 2_000_000;
 const HISTORY_TRACE_STEP_CAP = 100;
-const LAST_SESSION_KEY = "forgec2.ai.lastSession";
+const LAST_SESSION_KEY = "sovereign.ai.lastSession";
 
 function readLastSessionId(): number | null {
   if (typeof window === "undefined") return null;

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // benchKillSwitchArm measures arming the kill switch over an n-implant fleet —

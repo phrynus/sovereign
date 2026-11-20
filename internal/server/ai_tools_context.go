@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 

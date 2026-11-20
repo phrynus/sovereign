@@ -149,7 +149,7 @@ func TestStagerStage2ConfigCarriesMTLSMaterial(t *testing.T) {
 }
 
 // TestStagerStage2BuildNamesAreUnique guards the fixed-name regression: two
-// concurrent stage-2 requests used to write the same forgec2_stage2.exe, so a
+// concurrent stage-2 requests used to write the same sovereign_stage2.exe, so a
 // request could read (and ship) another request's beacon binary. Every config
 // must carry its own build name and keep the descriptive prefix.
 func TestStagerStage2BuildNamesAreUnique(t *testing.T) {
@@ -160,7 +160,7 @@ func TestStagerStage2BuildNamesAreUnique(t *testing.T) {
 		t.Fatalf("stage-2 build names collide: %q", first.Filename)
 	}
 	for name, ic := range map[string]ImplantConfig{"first": first, "second": second} {
-		if !strings.HasPrefix(ic.Filename, "forgec2_stage2_") {
+		if !strings.HasPrefix(ic.Filename, "sovereign_stage2_") {
 			t.Fatalf("%s stage-2 build name lost its prefix: %q", name, ic.Filename)
 		}
 		if strings.ContainsAny(ic.Filename, `/\`) {
@@ -192,7 +192,7 @@ func mtlsTestPKI(t *testing.T) (caPEM, serverCertPEM, serverKeyPEM, clientCertPE
 	caKey := newKey()
 	caTpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "forgec2 stager test CA"},
+		Subject:               pkix.Name{CommonName: "sovereign stager test CA"},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(time.Hour),
 		IsCA:                  true,

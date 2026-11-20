@@ -4,8 +4,8 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/malleable"
 	"net/http"
 	"net/http/httptest"
 	"net/url"

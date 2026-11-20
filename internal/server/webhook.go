@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -118,7 +118,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) error {
 			return fmt.Errorf("webhook request build failed: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "ForgeC2-Webhook/1.0")
+		req.Header.Set("User-Agent", "Sovereign-Webhook/1.0")
 
 		if wh.Headers != "" {
 			var hdr map[string]string

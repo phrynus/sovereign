@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestLoginLogCSVExportSharesFilters proves the export is the same selection as

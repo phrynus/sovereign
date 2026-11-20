@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func metricAlertTestServer(t *testing.T) (*Server, *metricAlertEngine, *time.Time) {

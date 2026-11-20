@@ -1,4 +1,4 @@
-# ForgeC2 Command Reference
+# Sovereign Command Reference
 
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.

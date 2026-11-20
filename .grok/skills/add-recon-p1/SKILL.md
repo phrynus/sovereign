@@ -1,10 +1,10 @@
 ---
 name: add-recon-p1
-description: Add ForgeC2 P1 recon features (cookie_export, vpn_creds, file hunter, screen trigger). Use for recon tasks, browser cookies, VPN credentials.
+description: Add Sovereign P1 recon features (cookie_export, vpn_creds, file hunter, screen trigger). Use for recon tasks, browser cookies, VPN credentials.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

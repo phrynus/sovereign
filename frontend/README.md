@@ -1,4 +1,4 @@
-# ForgeC2 Frontend
+# Sovereign Frontend
 
 Vite 7 + React Router v7 前端，使用 Tailwind CSS 和 shadcn/ui 构建。
 

@@ -1,10 +1,10 @@
 param(
-  [string]$OutputPath = "extensions\chrome\forgec2-chrome-c2.zip"
+  [string]$OutputPath = "extensions\chrome\sovereign-chrome-c2.zip"
 )
 
 $extensionDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $targetDir = Join-Path -Path (Split-Path -Parent (Split-Path -Parent $extensionDir)) -ChildPath "frontend\public"
-$zipTarget = Join-Path -Path $targetDir -ChildPath "forgec2-chrome-c2.zip"
+$zipTarget = Join-Path -Path $targetDir -ChildPath "sovereign-chrome-c2.zip"
 
 Write-Host "[*] Building Chrome extension package..." -ForegroundColor Cyan
 

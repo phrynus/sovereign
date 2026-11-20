@@ -8,7 +8,7 @@ import { staticExportPlugin } from "./vite-plugins/staticExport.js";
 // tags are appended in transformIndexHtml (build mode) from ctx.bundle.
 function fontPreloadPlugin(): Plugin {
   return {
-    name: "forgec2:font-preload",
+    name: "sovereign:font-preload",
     apply: "build",
     transformIndexHtml: {
       order: "post",
@@ -106,7 +106,7 @@ export default defineConfig(({ command }) => {
   for (const legacy of ["NEXT_PUBLIC_API_BASE", "NEXT_PUBLIC_WS_URL", "NEXT_PUBLIC_GO_BACKEND_PORT"]) {
     if (process.env[legacy]) {
       console.warn(
-        `[forgec2] ${legacy} is no longer read; use VITE_FORGEC2_${legacy.slice("NEXT_PUBLIC_".length)} instead.`,
+        `[sovereign] ${legacy} is no longer read; use VITE_FORGEC2_${legacy.slice("NEXT_PUBLIC_".length)} instead.`,
       );
     }
   }

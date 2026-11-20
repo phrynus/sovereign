@@ -34,7 +34,7 @@ const (
 	// wintunAdapterName mirrors the Linux interface name (fc2tun0).
 	wintunAdapterName = "fc2tun0"
 	// wintunTunnelType is the cosmetic adapter description shown by Windows.
-	wintunTunnelType = "ForgeC2"
+	wintunTunnelType = "Sovereign"
 	// wintunRingCapacity is the session ring size (4 MiB, wireguard-go's default).
 	wintunRingCapacity = 0x400000
 	// wintunStopWaitMillis bounds the read-loop wait so stopAgentTUN cannot
@@ -246,7 +246,7 @@ func stageWintunDLL(data []byte) error {
 	if werr := os.WriteFile(target, data, 0600); werr == nil {
 		return nil
 	}
-	tmp := filepath.Join(os.TempDir(), "forgec2-wintun")
+	tmp := filepath.Join(os.TempDir(), "sovereign-wintun")
 	if err := os.MkdirAll(tmp, 0700); err != nil {
 		return fmt.Errorf("stage Wintun next to the implant failed and %s is unusable: %w", tmp, err)
 	}

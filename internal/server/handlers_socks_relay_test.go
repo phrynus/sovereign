@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	promtest "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // TestSocksOutboundOverflowClosesConn proves a connection whose unsent

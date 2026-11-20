@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestPluginLoadFailures covers the endpoint that names packages which are on disk but rejected.

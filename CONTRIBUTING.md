@@ -1,6 +1,6 @@
-# Contributing to ForgeC2
+# Contributing to Sovereign
 
-Thank you for your interest in contributing to ForgeC2. This document outlines the guidelines for contributing to this project.
+Thank you for your interest in contributing to Sovereign. This document outlines the guidelines for contributing to this project.
 
 ## Prerequisites
 
@@ -15,8 +15,8 @@ Thank you for your interest in contributing to ForgeC2. This document outlines t
 1. Fork and clone the repository:
 
 ```bash
-git clone https://github.com/your-username/forgec2.git
-cd forgec2
+git clone https://github.com/your-username/sovereign.git
+cd sovereign
 ```
 
 2. Install Go dependencies:
@@ -38,8 +38,8 @@ cd frontend && npm install
 powershell -File scripts/dev-backend.ps1
 
 # Linux/macOS
-go build -o forgec2-server ./cmd/server
-./forgec2-server -config config.yaml
+go build -o sovereign-server ./cmd/server
+./sovereign-server -config config.yaml
 ```
 
 ## Code Style

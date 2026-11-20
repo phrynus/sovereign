@@ -15,10 +15,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func TestHandleDBBackup_ProducesValidSnapshot(t *testing.T) {
@@ -32,7 +32,7 @@ func TestHandleDBBackup_ProducesValidSnapshot(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	dbPath := filepath.Join(tmp, "forgec2.db")
+	dbPath := filepath.Join(tmp, "sovereign.db")
 	if err := os.WriteFile(dbPath, []byte("placeholder"), 0600); err != nil {
 		t.Fatalf("create placeholder db file: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestHandleDBBackup_RequiresKeyForEncryptedDefault(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	d := testutil.SetupTestDB(t)
 	tmp := t.TempDir()
-	dbPath := filepath.Join(tmp, "forgec2.db")
+	dbPath := filepath.Join(tmp, "sovereign.db")
 	if err := os.WriteFile(dbPath, []byte("placeholder"), 0600); err != nil {
 		t.Fatalf("create placeholder db file: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestHandleDBBackup_PlaintextOptOut(t *testing.T) {
 		t.Fatalf("create probe table: %v", err)
 	}
 	tmp := t.TempDir()
-	dbPath := filepath.Join(tmp, "forgec2.db")
+	dbPath := filepath.Join(tmp, "sovereign.db")
 	if err := os.WriteFile(dbPath, []byte("placeholder"), 0600); err != nil {
 		t.Fatalf("create placeholder db file: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestWriteRestoredDB_SwapsValidDatabase(t *testing.T) {
 		t.Fatalf("read dir: %v", err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".forgec2-restore-") {
+		if strings.HasPrefix(e.Name(), ".sovereign-restore-") {
 			t.Fatalf("leftover restore temp file: %s", e.Name())
 		}
 	}
@@ -462,7 +462,7 @@ func TestHandleRestoreFromFile_RestoresEncryptedFbk(t *testing.T) {
 	}
 	encrypted := encryptBackupForTest(t, keyHex, raw)
 
-	backupPath := filepath.Join(tmp, "backups", "forgec2_backup_20260101.fbk")
+	backupPath := filepath.Join(tmp, "backups", "sovereign_backup_20260101.fbk")
 	if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
 		t.Fatalf("create backup dir: %v", err)
 	}
@@ -484,7 +484,7 @@ func TestHandleRestoreFromFile_RestoresEncryptedFbk(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("type", "file")
-	form.Set("name", "forgec2_backup_20260101.fbk")
+	form.Set("name", "sovereign_backup_20260101.fbk")
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -559,7 +559,7 @@ func TestHandleRestoreFromFile_RejectsSidecarKeyMismatch(t *testing.T) {
 	keyHex := hex.EncodeToString(keyBytes)
 
 	tmp := t.TempDir()
-	backupPath := filepath.Join(tmp, "backups", "forgec2_backup_20260101.fbk")
+	backupPath := filepath.Join(tmp, "backups", "sovereign_backup_20260101.fbk")
 	if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
 		t.Fatalf("create backup dir: %v", err)
 	}
@@ -581,7 +581,7 @@ func TestHandleRestoreFromFile_RejectsSidecarKeyMismatch(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("type", "file")
-	form.Set("name", "forgec2_backup_20260101.fbk")
+	form.Set("name", "sovereign_backup_20260101.fbk")
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

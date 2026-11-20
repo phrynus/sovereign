@@ -19,7 +19,7 @@ func makeTrustedTestChain(t *testing.T) (*x509.Certificate, *x509.Certificate, *
 	}
 	rootTmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "ForgeC2 Test Root", Organization: []string{"ForgeC2 Tests"}},
+		Subject:               pkix.Name{CommonName: "Sovereign Test Root", Organization: []string{"Sovereign Tests"}},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.Add(24 * time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
@@ -41,7 +41,7 @@ func makeTrustedTestChain(t *testing.T) (*x509.Certificate, *x509.Certificate, *
 	}
 	leafTmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(2),
-		Subject:               pkix.Name{CommonName: "ForgeC2 Test Signer", Organization: []string{"ForgeC2 Tests"}},
+		Subject:               pkix.Name{CommonName: "Sovereign Test Signer", Organization: []string{"Sovereign Tests"}},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.Add(24 * time.Hour),
 		KeyUsage:              x509.KeyUsageDigitalSignature,

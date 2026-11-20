@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -20,7 +20,7 @@ func authedRequest(t *testing.T, database *gorm.DB, token string) int {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	AuthRequired(database)(c)
 	return w.Code
 }

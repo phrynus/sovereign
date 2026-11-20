@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // TestAllowedOrigin pins the WebSocket origin gate. Hostnames are

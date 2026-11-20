@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         For open-ended ideas and "how do I..." questions, use
-        [Discussions](https://github.com/r0si/forgec2/discussions) instead — issues
+        [Discussions](https://github.com/r0si/sovereign/discussions) instead — issues
         are for concrete, actionable proposals.
 
   - type: textarea
@@ -22,7 +22,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: What should ForgeC2 do? UI mockups, API shapes and config keys are welcome.
+      description: What should Sovereign do? UI mockups, API shapes and config keys are welcome.
     validations:
       required: true
 

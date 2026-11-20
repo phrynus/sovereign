@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TestAliasDispatchRewritesType pins the dispatch behaviour: a task sent with

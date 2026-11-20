@@ -1,4 +1,4 @@
-# ForgeC2 API smoke — unauthenticated + optional authenticated session checks
+# Sovereign API smoke — unauthenticated + optional authenticated session checks
 # Usage:
 #   powershell -File scripts/api-smoke.ps1
 #   powershell -File scripts/api-smoke.ps1 -User admin -Password admin
@@ -39,12 +39,12 @@ function Get-ErrorBody($err) {
 
 function Get-Csrf([Microsoft.PowerShell.Commands.WebRequestSession]$session) {
     foreach ($c in $session.Cookies.GetCookies($BaseUrl)) {
-        if ($c.Name -eq "forgec2_csrf") { return $c.Value }
+        if ($c.Name -eq "sovereign_csrf") { return $c.Value }
     }
     return $null
 }
 
-Write-Host "ForgeC2 API smoke against $BaseUrl" -ForegroundColor Cyan
+Write-Host "Sovereign API smoke against $BaseUrl" -ForegroundColor Cyan
 
 # --- Unauthenticated ---
 
@@ -55,7 +55,7 @@ try {
     else { Fail "health" "unexpected body: $($h | ConvertTo-Json -Compress)" }
 } catch {
     Fail "health" $_.Exception.Message
-    Write-Host "Server not reachable. Start with: .\forgec2-server.exe -config config.yaml" -ForegroundColor Yellow
+    Write-Host "Server not reachable. Start with: .\sovereign-server.exe -config config.yaml" -ForegroundColor Yellow
     exit 1
 }
 
@@ -126,7 +126,7 @@ if (-not $SkipLogin -and $User -ne "" -and $Password -ne "") {
 
         $hasSession = $false
         foreach ($c in $session.Cookies.GetCookies($BaseUrl)) {
-            if ($c.Name -eq "forgec2_session" -and $c.Value) { $hasSession = $true }
+            if ($c.Name -eq "sovereign_session" -and $c.Value) { $hasSession = $true }
         }
 
         if (($loginCode -ge 200 -and $loginCode -lt 400) -or $hasSession) {

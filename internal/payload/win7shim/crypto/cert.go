@@ -37,8 +37,8 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"ForgeC2"},
-			CommonName:   "ForgeC2 C2 Server",
+			Organization: []string{"Sovereign"},
+			CommonName:   "Sovereign C2 Server",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(365 * 24 * time.Hour), // 1 year
@@ -46,7 +46,7 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("0.0.0.0")},
-		DNSNames:              []string{"localhost", "forgec2.local"},
+		DNSNames:              []string{"localhost", "sovereign.local"},
 	}
 
 	// Create certificate

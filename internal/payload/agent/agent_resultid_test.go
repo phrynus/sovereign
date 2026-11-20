@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 var resultIDRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)

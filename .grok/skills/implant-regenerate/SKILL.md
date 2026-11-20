@@ -1,10 +1,10 @@
 ---
 name: implant-regenerate
-description: When ForgeC2 implant changes require regenerate vs set_sleep. Use when heartbeat wrong, agent code changed, or old implant behavior.
+description: When Sovereign implant changes require regenerate vs set_sleep. Use when heartbeat wrong, agent code changed, or old implant behavior.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: ops
 ---
 

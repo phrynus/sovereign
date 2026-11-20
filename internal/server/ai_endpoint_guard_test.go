@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // newRedirectRequest builds the *http.Request shape a CheckRedirect hook sees.

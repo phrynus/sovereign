@@ -1,10 +1,10 @@
 ---
 name: add-token-feature
-description: Extend ForgeC2 Kerberos/token operations (dump, impersonate, page UI). Use for token, kerberos, impersonation, or /add-token-feature.
+description: Extend Sovereign Kerberos/token operations (dump, impersonate, page UI). Use for token, kerberos, impersonation, or /add-token-feature.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Why tasks fail.
@@ -208,7 +208,7 @@ func (s *Server) handleTaskFailureStats(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the failure breakdown")
 			return
 		}
-		name := fmt.Sprintf("forgec2_failures-%s_%s.csv", groupBy, time.Now().Format("2006-01-02_150405"))
+		name := fmt.Sprintf("sovereign_failures-%s_%s.csv", groupBy, time.Now().Format("2006-01-02_150405"))
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		// A truncated sample must not read as a complete one, in the file as well as in the JSON.
 		if len(rows) >= failureStatsSampleLimit {

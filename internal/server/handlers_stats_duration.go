@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // taskDurationSampleLimit bounds how many rows the statistics endpoint reads. The value is a
@@ -220,7 +220,7 @@ func (s *Server) handleTaskDurationStats(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the duration report")
 			return
 		}
-		name := fmt.Sprintf("forgec2_duration_%s_%s.csv", groupBy, time.Now().Format("2006-01-02_150405"))
+		name := fmt.Sprintf("sovereign_duration_%s_%s.csv", groupBy, time.Now().Format("2006-01-02_150405"))
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		if scope := taskExportScope(c); scope != "" {
 			c.Header(taskExportScopeHeader, scope)

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 // TestAIDeletePluginTool closes the assistant's plugin lifecycle: create, run, update, and finally

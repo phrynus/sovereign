@@ -105,7 +105,7 @@ var win7ShimPkgs = []struct{ dir, importPath string }{
 
 // win7ShimModulePath is the stub module location inside the temp build dir,
 // mirrored by the replace rewrite in materializeWin7Shim.
-const win7ShimModulePath = "win7shimroot/github.com/forgec2/forgec2"
+const win7ShimModulePath = "win7shimroot/github.com/r0si/sovereign"
 
 const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 

@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package main implements the ForgeC2 shellcode loader executable. It is a
+// Package main implements the Sovereign shellcode loader executable. It is a
 // standalone, stdlib-only module: the loader source lives here (embedded into
 // the server binary) and is copied into a throwaway build directory together
 // with a generated payload_gen.go carrying the per-build blob, key, decode

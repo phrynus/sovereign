@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // extC2DiscordFixture builds a Discord channel pointed at the test server.

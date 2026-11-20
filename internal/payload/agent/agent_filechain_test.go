@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 // The agent's file-chain key derivation and chunk MAC MUST mirror the server's
@@ -25,7 +25,7 @@ func TestFileChainKeyMirrorsServer(t *testing.T) {
 	if want == nil {
 		t.Fatal("server DeriveFileChainKey returned nil")
 	}
-	got := hkdfSHA256(regKey, []byte("forgec2-filechain-v1"), []byte("file-transfer"))
+	got := hkdfSHA256(regKey, []byte("sovereign-filechain-v1"), []byte("file-transfer"))
 	if hex.EncodeToString(got) != hex.EncodeToString(want) {
 		t.Errorf("agent chain key %x != server chain key %x", got, want)
 	}
@@ -33,7 +33,7 @@ func TestFileChainKeyMirrorsServer(t *testing.T) {
 
 func TestFileChunkMACMirrorsServer(t *testing.T) {
 	regKey := []byte("some-per-agent-reg-key-material")
-	chainKey := hkdfSHA256(regKey, []byte("forgec2-filechain-v1"), []byte("file-transfer"))
+	chainKey := hkdfSHA256(regKey, []byte("sovereign-filechain-v1"), []byte("file-transfer"))
 	prev := make([]byte, 32)
 	data := []byte("chunk payload")
 	want := crypto.FileChunkMAC(chainKey, prev, data)

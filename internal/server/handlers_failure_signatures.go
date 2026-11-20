@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Failure signatures across the system.
@@ -231,7 +231,7 @@ func (s *Server) handleFailureSignatures(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the failure shapes")
 			return
 		}
-		name := "forgec2_failure-shapes_" + time.Now().Format("2006-01-02_150405") + ".csv"
+		name := "sovereign_failure-shapes_" + time.Now().Format("2006-01-02_150405") + ".csv"
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		// The file carries its own scope, like every other export here.
 		if scope := taskExportScope(c); scope != "" {

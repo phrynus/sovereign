@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 func (s *Server) resolvePluginRecord(id string) (*db.Plugin, error) {

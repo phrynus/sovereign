@@ -54,7 +54,7 @@ func buildImportedFuncModule(t *testing.T, moduleName, funcName string) []byte {
 // TestWasmSandboxRejectsEveryHostImport is the threat model from docs/PLUGIN_TIERS.md in
 // executable form: "no WASI, no filesystem/network/env" is only true if a module that
 // imports such a host function cannot be instantiated at all. The runner instantiates
-// exactly one host module, forgec2, so anything else must fail before run() is reached.
+// exactly one host module, sovereign, so anything else must fail before run() is reached.
 func TestWasmSandboxRejectsEveryHostImport(t *testing.T) {
 	cases := []struct{ module, function string }{
 		{"wasi_snapshot_preview1", "fd_write"},
@@ -81,15 +81,15 @@ func TestWasmSandboxRejectsEveryHostImport(t *testing.T) {
 }
 
 // TestWasmSandboxOnlyExposesLog proves the positive half: the one host function the
-// runner does provide is log(), and it is provided on forgec2.
+// runner does provide is log(), and it is provided on sovereign.
 func TestWasmSandboxOnlyExposesLog(t *testing.T) {
 	dir, m := writeWasmPlugin(t, buildImportedFuncModule(t, "forgec2", "log"))
 	if _, err := (&executor{}).run(context.Background(), dir, m, map[string]interface{}{}, 0); err != nil {
-		t.Fatalf("a module importing forgec2.log was refused: %v", err)
+		t.Fatalf("a module importing sovereign.log was refused: %v", err)
 	}
 }
 
-// buildLogImportModule imports forgec2.log with the signature the runner declares,
+// buildLogImportModule imports sovereign.log with the signature the runner declares,
 // (i32,i32)->(), so the positive case exercises the sandbox allowing what it should.
 func buildLogImportModule() []byte {
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}

@@ -39,7 +39,7 @@ func TestAlertEmailEscapesImplantControlledFields(t *testing.T) {
 	if !strings.Contains(body, "10.0.0.1") {
 		t.Fatal("the agent IP disappeared from the mail body")
 	}
-	if !strings.Contains(body, "ForgeC2 Alert") {
+	if !strings.Contains(body, "Sovereign Alert") {
 		t.Fatal("the template lost its heading")
 	}
 }
@@ -50,7 +50,7 @@ func TestMIMEMessageCannotHaveHeadersSplit(t *testing.T) {
 	msg := string(buildMIMEMessage(
 		"c2@example.test",
 		"ops@example.test\r\nBcc: victim@example.test",
-		"ForgeC2 Alert: x\r\nX-Injected: 1",
+		"Sovereign Alert: x\r\nX-Injected: 1",
 		"<p>body</p>",
 	))
 
@@ -61,7 +61,7 @@ func TestMIMEMessageCannotHaveHeadersSplit(t *testing.T) {
 	if strings.Contains(headerBlock, "X-Injected:") {
 		t.Fatalf("the subject added a header: %q", headerBlock)
 	}
-	if !strings.Contains(headerBlock, "Subject: ForgeC2 Alert: x") {
+	if !strings.Contains(headerBlock, "Subject: Sovereign Alert: x") {
 		t.Fatalf("the subject was mangled beyond recognition: %q", headerBlock)
 	}
 }

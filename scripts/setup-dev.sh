@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ForgeC2 — Development Environment Setup
+# Sovereign — Development Environment Setup
 # Usage: bash scripts/setup-dev.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT_DIR"
 
-echo "=== ForgeC2 Development Setup ==="
+echo "=== Sovereign Development Setup ==="
 echo ""
 
 # Check prerequisites
@@ -65,7 +65,7 @@ server:
 
 database:
   driver: "postgres"
-  dsn: "host=127.0.0.1 user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+  dsn: "host=127.0.0.1 user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 
 plugins:
   # Verify the bundled plugin packages by default. Third-party packages must
@@ -143,9 +143,9 @@ echo "  Embedded dist ready"
 echo ""
 
 # Build the server binary (same host-OS suffix rule as `make build`)
-echo "Building forgec2-server..."
-SERVER_BIN="forgec2-server"
-if [ "$(go env GOOS)" = "windows" ]; then SERVER_BIN="forgec2-server.exe"; fi
+echo "Building sovereign-server..."
+SERVER_BIN="sovereign-server"
+if [ "$(go env GOOS)" = "windows" ]; then SERVER_BIN="sovereign-server.exe"; fi
 go build -ldflags="-s -w" -o "$SERVER_BIN" ./cmd/server
 echo "  Binary ready: $SERVER_BIN"
 echo ""
@@ -158,7 +158,7 @@ echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Start PostgreSQL first (matches the generated dsn):"
-echo "  DB_PASSWORD=forgec2 docker compose --profile postgres up -d"
+echo "  DB_PASSWORD=sovereign docker compose --profile postgres up -d"
 echo ""
 echo "Start the server:"
 echo "  ./$SERVER_BIN -config config.yaml"

@@ -25,8 +25,8 @@ const BuildHistorySection = lazy(() => import("./BuildHistorySection"));
 
 import { useWS } from "@/lib/wsContext";
 
-const BANNER_DISMISS_KEY = "forgec2_gen_banner_dismissed";
-const FORMAT_KEY = "forgec2_gen_format";
+const BANNER_DISMISS_KEY = "sovereign_gen_banner_dismissed";
+const FORMAT_KEY = "sovereign_gen_format";
 
 function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNode; tint: string; title: string; desc: string; className?: string }) {
   return (

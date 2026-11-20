@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -47,7 +47,7 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":       "ForgeC2 - Token Management - " + agent.Hostname,
+		"Title":       "Sovereign - Token Management - " + agent.Hostname,
 		"Agent":       agent,
 		"Tokens":      tokens,
 		"ActiveToken": activeToken,
@@ -89,7 +89,7 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - Token Collection",
+		"Title":     "Sovereign - Token Collection",
 		"Tokens":    tokens,
 		"AgentMap":  agentMap,
 		"ActiveNav": "tokens",

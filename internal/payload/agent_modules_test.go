@@ -415,7 +415,7 @@ func TestAgentModuleExclusionBuilds(t *testing.T) {
 	// dependencies from the same (warm) module cache as everything else; only
 	// the module name changes and the root module is pulled in by replace.
 	stagedMod := moduleLineRe.ReplaceAllString(string(rootMod), "module agent")
-	stagedMod += "\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(repoRoot) + "\n"
+	stagedMod += "\nreplace github.com/r0si/sovereign => " + filepath.ToSlash(repoRoot) + "\n"
 	goSum, err := os.ReadFile(filepath.Join(repoRoot, "go.sum"))
 	if err != nil {
 		t.Fatalf("read root go.sum: %v", err)

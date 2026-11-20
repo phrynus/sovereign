@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // seedToolSweepData populates one row of every kind the read-only tools read,

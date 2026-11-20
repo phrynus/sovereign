@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# deploy.sh — build, deploy and verify a ForgeC2 server instance.
+# deploy.sh — build, deploy and verify a Sovereign server instance.
 #
 # One command that takes the working tree to a running, verified server:
 #
 #   preflight -> build (frontend bundle + Go binary) -> stop the old instance
 #   -> start the new one -> health/ready/login smoke -> rollback
 #
-# The previous binary is kept as forgec2-server.prev. A new instance that
+# The previous binary is kept as sovereign-server.prev. A new instance that
 # does not come up healthy is rolled back to that binary and started again,
 # so a bad build never leaves the box down.
 #
@@ -89,7 +89,7 @@ else
     node scripts/normalize-webdist.mjs
     if [ "$SKIP_CHECKS" -eq 0 ]; then ( cd frontend && npm run check ); fi
   fi
-  go build -o forgec2-server ./cmd/server
+  go build -o sovereign-server ./cmd/server
 fi
 ok "build finished"
 
@@ -100,9 +100,9 @@ if [ "$NO_START" -eq 1 ]; then
 fi
 
 # ------------------------------------------------- 2. keep the last good build
-BINARY="$ROOT_DIR/forgec2-server"
-PREVIOUS="$ROOT_DIR/forgec2-server.prev"
-[ -f "$BINARY" ] && cp -f "$BINARY" "$PREVIOUS" && ok "previous binary kept as forgec2-server.prev"
+BINARY="$ROOT_DIR/sovereign-server"
+PREVIOUS="$ROOT_DIR/sovereign-server.prev"
+[ -f "$BINARY" ] && cp -f "$BINARY" "$PREVIOUS" && ok "previous binary kept as sovereign-server.prev"
 
 # ------------------------------------------------------------- 3. stop the old one
 step "Stop the running instance"
@@ -149,7 +149,7 @@ wait_for_health() {
 
 if ! wait_for_health "$NEW_PID"; then
   fail "the new instance did not become healthy within ${HEALTH_TIMEOUT}s"
-  [ -f logs/forgec2.log ] && tail -n 30 logs/forgec2.log
+  [ -f logs/sovereign.log ] && tail -n 30 logs/sovereign.log
   if [ "$NO_ROLLBACK" -eq 1 ]; then exit 1; fi
   if [ ! -f "$PREVIOUS" ]; then
     fail "no previous binary to roll back to - the box stays down until the build is fixed"
@@ -164,7 +164,7 @@ if ! wait_for_health "$NEW_PID"; then
   if wait_for_health "$ROLLBACK_PID"; then
     ok "rolled back to the previous build (PID $ROLLBACK_PID) - the console is up again"
   else
-    fail "the rollback did not come up either - check logs/forgec2.log"
+    fail "the rollback did not come up either - check logs/sovereign.log"
   fi
   exit 1
 fi
@@ -187,4 +187,4 @@ echo
 printf '\033[32m==> Deployed (PID %s)\033[0m\n' "$NEW_PID"
 echo "    console : http://127.0.0.1:$PORT/  (bound to $BIND_HOST)"
 echo "    health  : http://127.0.0.1:$PORT/health"
-echo "    logs    : logs/forgec2.log, logs/stdout.log, logs/stderr.log"
+echo "    logs    : logs/sovereign.log, logs/stdout.log, logs/stderr.log"

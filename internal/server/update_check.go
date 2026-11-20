@@ -21,7 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// defaultUpdateCheckURLFmt is the GitHub releases API format for ForgeC2
+// defaultUpdateCheckURLFmt is the GitHub releases API format for Sovereign
 const defaultUpdateCheckURLFmt = "https://api.github.com/repos/%s/releases/latest"
 const defaultReleaseAssetsURLFmt = "https://api.github.com/repos/%s/releases/tags/%s"
 const defaultReleaseRepoURLFmt = "https://api.github.com/repos/%s"
@@ -203,7 +203,7 @@ func fetchLatestVersion(repo string) (string, error) {
 			return "", fmt.Errorf("create request: %w", err)
 		}
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+		req.Header.Set("User-Agent", "Sovereign/"+ServerVersion)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -812,7 +812,7 @@ func releaseRepoExists(repo string) (bool, error) {
 		return false, fmt.Errorf("create repository request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	req.Header.Set("User-Agent", "Sovereign/"+ServerVersion)
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, fmt.Errorf("github api: %w", err)
@@ -842,7 +842,7 @@ func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
 			return nil, fmt.Errorf("create request: %w", err)
 		}
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+		req.Header.Set("User-Agent", "Sovereign/"+ServerVersion)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -901,7 +901,7 @@ func (s *Server) downloadUpdateFile(url, dest, version string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	req.Header.Set("User-Agent", "Sovereign/"+ServerVersion)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1010,7 +1010,7 @@ func fetchChecksumFile(checksumURL, binaryPath string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("create checksum request: %w", err)
 	}
-	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	req.Header.Set("User-Agent", "Sovereign/"+ServerVersion)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("download checksum: %w", err)
@@ -1110,7 +1110,7 @@ func fetchReleaseSignature(checksumURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create signature request: %w", err)
 	}
-	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	req.Header.Set("User-Agent", "Sovereign/"+ServerVersion)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download signature: %w", err)

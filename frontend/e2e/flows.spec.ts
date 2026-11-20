@@ -149,7 +149,7 @@ async function withSession(page: Page) {
   // wsContext bounces to /login when the session cookie is missing after the
   // WebSocket closes (mocked: aborted), so seed a fake session first.
   await page.context().addCookies([
-    { name: "forgec2_session", value: "e2e", domain: "127.0.0.1", path: "/" },
+    { name: "sovereign_session", value: "e2e", domain: "127.0.0.1", path: "/" },
   ]);
 }
 

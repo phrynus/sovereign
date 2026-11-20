@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/obfuscation"
-	"github.com/forgec2/forgec2/internal/payload"
-	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/obfuscation"
+	"github.com/r0si/sovereign/internal/payload"
+	"github.com/r0si/sovereign/internal/util"
 )
 
 // sha256OfFile returns the hex SHA-256 and size of the hosted payload so
@@ -255,7 +255,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		UserAgent:       form.UserAgent,
 		Persist:         form.Persist,
 		SkipTLSVerify:   form.SkipTLSVerify,
-		Filename:        "forgec2_beacon",
+		Filename:        "sovereign_beacon",
 		Debug:           false,
 		Profile:         form.Profile,
 		ListenerID:      form.ListenerID,

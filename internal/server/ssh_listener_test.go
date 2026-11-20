@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/testutil"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -35,7 +35,7 @@ func TestSSHBeaconListenerRoundTrip(t *testing.T) {
 
 	l := NewSSHBeaconListener(SSHListenerConfig{
 		Addr:     "127.0.0.1:0",
-		User:     "forgec2",
+		User:     "sovereign",
 		Password: "hunter2",
 		KeyAuth:  true,
 		HostKey:  testSSHHostKey(t),
@@ -47,7 +47,7 @@ func TestSSHBeaconListenerRoundTrip(t *testing.T) {
 	defer l.Stop()
 
 	client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
-		User:            "forgec2",
+		User:            "sovereign",
 		Auth:            []ssh.AuthMethod{ssh.Password("hunter2")},
 		HostKeyCallback: acceptAnyHostKey,
 		Timeout:         10 * time.Second,
@@ -103,7 +103,7 @@ func TestSSHProductionHandlerRejectsPlaintext(t *testing.T) {
 
 	l := NewSSHBeaconListener(SSHListenerConfig{
 		Addr:     "127.0.0.1:0",
-		User:     "forgec2",
+		User:     "sovereign",
 		Password: "hunter2",
 		KeyAuth:  true,
 		HostKey:  testSSHHostKey(t),
@@ -115,7 +115,7 @@ func TestSSHProductionHandlerRejectsPlaintext(t *testing.T) {
 	defer l.Stop()
 
 	client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
-		User:            "forgec2",
+		User:            "sovereign",
 		Auth:            []ssh.AuthMethod{ssh.Password("hunter2")},
 		HostKeyCallback: acceptAnyHostKey,
 		Timeout:         10 * time.Second,
@@ -164,7 +164,7 @@ func TestSSHProductionHandlerRejectsPlaintext(t *testing.T) {
 func TestSSHBeaconListenerWrongPasswordRejected(t *testing.T) {
 	l := NewSSHBeaconListener(SSHListenerConfig{
 		Addr:     "127.0.0.1:0",
-		User:     "forgec2",
+		User:     "sovereign",
 		Password: "correct",
 		HostKey:  testSSHHostKey(t),
 	})
@@ -175,7 +175,7 @@ func TestSSHBeaconListenerWrongPasswordRejected(t *testing.T) {
 	defer l.Stop()
 
 	client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
-		User:            "forgec2",
+		User:            "sovereign",
 		Auth:            []ssh.AuthMethod{ssh.Password("wrong")},
 		HostKeyCallback: acceptAnyHostKey,
 		Timeout:         10 * time.Second,
@@ -191,7 +191,7 @@ func TestSSHBeaconListenerKeyOnlyAndKeyboardInteractive(t *testing.T) {
 
 	l := NewSSHBeaconListener(SSHListenerConfig{
 		Addr:    "127.0.0.1:0",
-		User:    "forgec2",
+		User:    "sovereign",
 		KeyAuth: true,
 		HostKey: testSSHHostKey(t),
 	})
@@ -203,7 +203,7 @@ func TestSSHBeaconListenerKeyOnlyAndKeyboardInteractive(t *testing.T) {
 
 	t.Run("keyboard-interactive accepted when password empty", func(t *testing.T) {
 		client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
-			User: "forgec2",
+			User: "sovereign",
 			Auth: []ssh.AuthMethod{ssh.KeyboardInteractive(func(name, instruction string, questions []string, echos []bool) ([]string, error) {
 				return make([]string, len(questions)), nil
 			})},
@@ -219,7 +219,7 @@ func TestSSHBeaconListenerKeyOnlyAndKeyboardInteractive(t *testing.T) {
 	t.Run("keyboard-interactive rejected when password set", func(t *testing.T) {
 		strict := NewSSHBeaconListener(SSHListenerConfig{
 			Addr:     "127.0.0.1:0",
-			User:     "forgec2",
+			User:     "sovereign",
 			Password: "set",
 			HostKey:  testSSHHostKey(t),
 		})
@@ -230,7 +230,7 @@ func TestSSHBeaconListenerKeyOnlyAndKeyboardInteractive(t *testing.T) {
 		defer strict.Stop()
 
 		client, err := ssh.Dial("tcp", strict.Addr(), &ssh.ClientConfig{
-			User: "forgec2",
+			User: "sovereign",
 			Auth: []ssh.AuthMethod{ssh.KeyboardInteractive(func(name, instruction string, questions []string, echos []bool) ([]string, error) {
 				return make([]string, len(questions)), nil
 			})},
@@ -249,7 +249,7 @@ func TestSSHBeaconListenerPublicKeyAuth(t *testing.T) {
 
 	l := NewSSHBeaconListener(SSHListenerConfig{
 		Addr:     "127.0.0.1:0",
-		User:     "forgec2",
+		User:     "sovereign",
 		Password: "somepass",
 		KeyAuth:  true,
 		HostKey:  testSSHHostKey(t),
@@ -270,7 +270,7 @@ func TestSSHBeaconListenerPublicKeyAuth(t *testing.T) {
 	}
 
 	client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
-		User:            "forgec2",
+		User:            "sovereign",
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: acceptAnyHostKey,
 		Timeout:         10 * time.Second,
@@ -321,7 +321,7 @@ func TestEnvelopeAgentID(t *testing.T) {
 func TestSSHBeaconListenerRejectsDirectTCPChannel(t *testing.T) {
 	l := NewSSHBeaconListener(SSHListenerConfig{
 		Addr:    "127.0.0.1:0",
-		User:    "forgec2",
+		User:    "sovereign",
 		KeyAuth: true,
 		HostKey: testSSHHostKey(t),
 	})
@@ -332,7 +332,7 @@ func TestSSHBeaconListenerRejectsDirectTCPChannel(t *testing.T) {
 	defer l.Stop()
 
 	client, err := ssh.Dial("tcp", l.Addr(), &ssh.ClientConfig{
-		User:            "forgec2",
+		User:            "sovereign",
 		Auth:            []ssh.AuthMethod{ssh.Password("")},
 		HostKeyCallback: acceptAnyHostKey,
 		Timeout:         10 * time.Second,

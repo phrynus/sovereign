@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/malleable"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/malleable"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func writeProfileFile(t *testing.T, s *Server, name string, pls []malleable.PlacementV2) string {

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Live UI e2e against a REAL ForgeC2 server (Go binary + embedded frontend).
+ * Live UI e2e against a REAL Sovereign server (Go binary + embedded frontend).
  *
  * The default `playwright.config.ts` serves the static export; this config
  * talks to a running server instead, so login, session cookies, CSRF and API

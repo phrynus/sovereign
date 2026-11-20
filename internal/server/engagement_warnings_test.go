@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestEngagementWarnings covers the deadline reminder: without it, the first sign of an expiring

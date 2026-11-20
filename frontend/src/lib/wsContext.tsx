@@ -94,7 +94,7 @@ const MAX_BUFFER_SIZE = 50;
 // flushed ahead of the normal buffer on reconnect, same overflow discipline.
 const MAX_CRITICAL_BUFFER_SIZE = 10;
 /** Dispatched on window when an offline send is shed (detail: {dropped}). */
-export const WS_OUTBOX_DROP_EVENT = "forgec2:ws-outbox-drop";
+export const WS_OUTBOX_DROP_EVENT = "sovereign:ws-outbox-drop";
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);

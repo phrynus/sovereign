@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // Shared protocol types.

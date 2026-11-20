@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // updateTestServers tracks every server built by newUpdateTestServer so
@@ -32,7 +32,7 @@ func newUpdateTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
-	cfg.Server.UpdateCheckRepo = "forgec2-test/nonexistent-update-repo"
+	cfg.Server.UpdateCheckRepo = "sovereign-test/nonexistent-update-repo"
 	s := &Server{db: testutil.SetupTestDB(t), cfg: cfg, ctx: context.Background()}
 	updateTestServers = append(updateTestServers, s)
 	return s
@@ -184,7 +184,7 @@ func TestHotUpdateNeverDowngradesAnUnreadableBuild(t *testing.T) {
 // so it cannot terminate the argument early.
 func TestQuoteCmd(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{`C:\Program Files\forgec2\server.exe`, `"C:\Program Files\forgec2\server.exe"`},
+		{`C:\Program Files\sovereign\server.exe`, `"C:\Program Files\sovereign\server.exe"`},
 		{`plain.exe`, `"plain.exe"`},
 		{`a"b`, `"a""b"`},
 		{`a"&calc&"b`, `"a""&calc&""b"`},
@@ -256,7 +256,7 @@ func TestQuoteShSurvivesRealShell(t *testing.T) {
 // unescaped quote that would close the argument and reopen the command line.
 func TestQuoteCmdCannotBeBrokenOutOf(t *testing.T) {
 	payloads := []string{
-		`C:\Program Files\forgec2\server.exe`,
+		`C:\Program Files\sovereign\server.exe`,
 		`a"b`,
 		`a"&calc&"b`,
 		`"& net user hacker pass /add &"`,
@@ -321,8 +321,8 @@ func TestProgressWriterAccumulates(t *testing.T) {
 // shown is built from the configured repository, not from request input.
 func TestReleaseURLUsesConfiguredRepo(t *testing.T) {
 	s := newUpdateTestServer(t)
-	s.cfg.Server.UpdateCheckRepo = "acme/forgec2"
-	if got := s.releaseURL("v2.7.0"); got != "https://github.com/acme/forgec2/releases/tag/v2.7.0" {
+	s.cfg.Server.UpdateCheckRepo = "acme/sovereign"
+	if got := s.releaseURL("v2.7.0"); got != "https://github.com/acme/sovereign/releases/tag/v2.7.0" {
 		t.Fatalf("releaseURL = %q", got)
 	}
 }
@@ -331,7 +331,7 @@ func TestReleaseURLUsesConfiguredRepo(t *testing.T) {
 // the release page, so the operator never has to guess where to pull from.
 func TestBroadcastUpdateNotificationCarriesDownloadLink(t *testing.T) {
 	s := newUpdateTestServer(t)
-	s.cfg.Server.UpdateCheckRepo = "acme/forgec2"
+	s.cfg.Server.UpdateCheckRepo = "acme/sovereign"
 
 	conn := &wsClientConn{ch: make(chan []byte, 8)}
 	s.wsClients = map[*websocket.Conn]*wsClientConn{nil: conn}
@@ -349,7 +349,7 @@ func TestBroadcastUpdateNotificationCarriesDownloadLink(t *testing.T) {
 	if payload["latest"] != "v3.0.0" {
 		t.Fatalf("latest = %v", payload["latest"])
 	}
-	if payload["download_url"] != "https://github.com/acme/forgec2/releases/tag/v3.0.0" {
+	if payload["download_url"] != "https://github.com/acme/sovereign/releases/tag/v3.0.0" {
 		t.Fatalf("download_url = %v", payload["download_url"])
 	}
 	if payload["current"] != ServerVersion {
@@ -424,8 +424,8 @@ func TestFetchReleaseSignatureFailsLoud(t *testing.T) {
 func TestDownloadUpdateFileWritesAndReportsProgress(t *testing.T) {
 	payload := bytes.Repeat([]byte("MZ-binary"), 4096)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "ForgeC2/") {
-			t.Errorf("User-Agent = %q, want a ForgeC2 agent", got)
+		if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "Sovereign/") {
+			t.Errorf("User-Agent = %q, want a Sovereign agent", got)
 		}
 		_, _ = w.Write(payload)
 	}))
@@ -502,7 +502,7 @@ func updateCtx() (*gin.Context, *httptest.ResponseRecorder) {
 // surfaced check error (a failed check must never look like a clean state).
 func TestHandleUpdateCheckShapes(t *testing.T) {
 	s := newUpdateTestServer(t)
-	s.cfg.Server.UpdateCheckRepo = "acme/forgec2"
+	s.cfg.Server.UpdateCheckRepo = "acme/sovereign"
 
 	c, w := updateCtx()
 	s.handleUpdateCheck(c)
@@ -534,7 +534,7 @@ func TestHandleUpdateCheckShapes(t *testing.T) {
 	if avail["update_available"] != true || avail["latest_version"] != "v3.0.0" {
 		t.Fatalf("available state = %v", avail)
 	}
-	if avail["download_url"] != "https://github.com/acme/forgec2/releases/tag/v3.0.0" {
+	if avail["download_url"] != "https://github.com/acme/sovereign/releases/tag/v3.0.0" {
 		t.Fatalf("download_url = %v", avail["download_url"])
 	}
 	if avail["check_error"] != "rate limited" {
@@ -551,7 +551,7 @@ func TestHandleUpdateCheckShapes(t *testing.T) {
 func TestHandleCheckVersionReportsUpToDate(t *testing.T) {
 	s := newUpdateTestServer(t)
 	setServerVersion(t, "2.6.2")
-	s.cfg.Server.UpdateCheckRepo = "acme/forgec2"
+	s.cfg.Server.UpdateCheckRepo = "acme/sovereign"
 
 	s.updateState.mu.Lock()
 	s.updateState.Available = true
@@ -584,7 +584,7 @@ func TestHandleCheckVersionReportsUpToDate(t *testing.T) {
 	if newer["is_latest"] != false {
 		t.Fatalf("is_latest = %v for a newer latest_version", newer["is_latest"])
 	}
-	if newer["download_url"] != "https://github.com/acme/forgec2/releases/tag/v2.7.0" {
+	if newer["download_url"] != "https://github.com/acme/sovereign/releases/tag/v2.7.0" {
 		t.Fatalf("download_url = %v", newer["download_url"])
 	}
 }
@@ -601,7 +601,7 @@ func TestHandleCheckVersionNeverClaimsUpToDateAfterAFailedCheck(t *testing.T) {
 	s.updateState.LatestVersion = "v2.9.0"
 	s.updateState.Available = false
 	s.updateState.CheckOK = false
-	s.updateState.Error = `github api: repository "forgec2/forgec2" does not exist`
+	s.updateState.Error = `github api: repository "sovereign/sovereign" does not exist`
 	s.updateState.mu.Unlock()
 
 	c, w := updateCtx()
@@ -778,7 +778,7 @@ func stubGitHubAPI(t *testing.T, releaseStatus int, repoStatus int, releaseBody 
 		}
 		w.WriteHeader(repoStatus)
 		if repoStatus == http.StatusOK {
-			_, _ = w.Write([]byte(`{"full_name":"acme/forgec2"}`))
+			_, _ = w.Write([]byte(`{"full_name":"acme/sovereign"}`))
 		}
 	}))
 	previousCheck, previousRepo := updateCheckURLFmt, releaseRepoURLFmt
@@ -811,7 +811,7 @@ func TestFetchLatestVersionReportsAMissingRepository(t *testing.T) {
 func TestFetchLatestVersionAcceptsARepositoryWithoutReleases(t *testing.T) {
 	stubGitHubAPI(t, http.StatusNotFound, http.StatusOK, "")
 
-	version, err := fetchLatestVersion("acme/forgec2")
+	version, err := fetchLatestVersion("acme/sovereign")
 	if err != nil {
 		t.Fatalf("fetchLatestVersion: %v", err)
 	}
@@ -824,7 +824,7 @@ func TestFetchLatestVersionAcceptsARepositoryWithoutReleases(t *testing.T) {
 func TestFetchLatestVersionReturnsThePublishedTag(t *testing.T) {
 	stubGitHubAPI(t, http.StatusOK, http.StatusOK, `{"tag_name":"v2.7.1"}`)
 
-	version, err := fetchLatestVersion("acme/forgec2")
+	version, err := fetchLatestVersion("acme/sovereign")
 	if err != nil {
 		t.Fatalf("fetchLatestVersion: %v", err)
 	}
@@ -838,8 +838,8 @@ func TestFetchLatestVersionReturnsThePublishedTag(t *testing.T) {
 // and leaves the installation untouched.
 func TestPerformHotUpdateRefusesAReleaseWithoutThisPlatform(t *testing.T) {
 	stubReleaseAssets(t, []GitHubAsset{
-		{Name: "forgec2-server-plan9-amd64"},
-		{Name: "forgec2-server-plan9-amd64.sha256"},
+		{Name: "sovereign-server-plan9-amd64"},
+		{Name: "sovereign-server-plan9-amd64.sha256"},
 	})
 
 	s := newUpdateTestServer(t)

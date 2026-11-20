@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/playbook"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/playbook"
 )
 
 // Playbook runs: storage and the read-only view.
@@ -176,7 +176,7 @@ func (s *Server) handleListPlaybookRuns(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the playbook runs")
 			return
 		}
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="forgec2_playbook-runs_%s.csv"`,
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="sovereign_playbook-runs_%s.csv"`,
 			time.Now().Format("2006-01-02_150405")))
 		c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(buf.String()))
 		return

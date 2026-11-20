@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // spaFS wraps http.FileSystem to serve index.html for SPA client-side routes.
@@ -95,7 +95,7 @@ func (s *Server) SetStaticFS(staticFS fs.FS) {
 		// Unauthenticated root/dashboard access: redirect to /login so the
 		// user sees the login form immediately instead of a blank SPA shell.
 		if path == "/" || path == "/dashboard" {
-			if tokenStr, err := c.Cookie("forgec2_session"); err != nil || tokenStr == "" {
+			if tokenStr, err := c.Cookie("sovereign_session"); err != nil || tokenStr == "" {
 				c.Redirect(http.StatusFound, "/login")
 				c.Abort()
 				return

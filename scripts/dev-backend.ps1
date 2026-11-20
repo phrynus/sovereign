@@ -24,13 +24,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "crypto tests failed" }
 
     Write-Host "==> build binary" -ForegroundColor Cyan
-    go build -o forgec2-server.exe ./cmd/server 2>&1 | ForEach-Object { Write-Host $_ }
+    go build -o sovereign-server.exe ./cmd/server 2>&1 | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0) { throw "binary build failed" }
 
     Write-Host "==> restart server" -ForegroundColor Cyan
-    cmd /c "taskkill /f /im forgec2-server.exe >nul 2>&1"
+    cmd /c "taskkill /f /im sovereign-server.exe >nul 2>&1"
     Start-Sleep -Seconds 1
-    $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru
+    $p = Start-Process -WindowStyle Hidden -FilePath ".\sovereign-server.exe" -ArgumentList "-config config.yaml" -PassThru
     Start-Sleep -Seconds 3
 
     $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -ErrorAction SilentlyContinue

@@ -1,10 +1,10 @@
 ---
 name: plugin-task
-description: Create JSON-defined ForgeC2 custom task plugins (PowerShell script, parameters, plugins/samples). Use for JSON plugins or /plugin-task.
+description: Create JSON-defined Sovereign custom task plugins (PowerShell script, parameters, plugins/samples). Use for JSON plugins or /plugin-task.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 
@@ -19,7 +19,7 @@ metadata:
   "name": "Plugin Name",
   "description": "Description",
   "version": "1.0.0",
-  "author": "ForgeC2",
+  "author": "Sovereign",
   "task_type": "unique_task_type",
   "script": "function Do-Work { param($Target) ... }; Do-Work -Target '{{target}}'",
   "category": "recon",

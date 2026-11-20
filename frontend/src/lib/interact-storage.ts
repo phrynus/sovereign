@@ -4,7 +4,7 @@ export type InteractTab = (typeof INTERACT_TABS)[number];
 export const DOCK_HEIGHT_MIN = 180;
 export const DOCK_HEIGHT_MAX = 640;
 export const DOCK_HEIGHT_DEFAULT = 360;
-const INTERACT_STORAGE_KEY = "forgec2_interact_dock";
+const INTERACT_STORAGE_KEY = "sovereign_interact_dock";
 
 export function clampDockHeight(height: number, max = DOCK_HEIGHT_MAX): number {
   if (!Number.isFinite(height)) return DOCK_HEIGHT_DEFAULT;

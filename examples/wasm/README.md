@@ -13,7 +13,7 @@ answers with a markdown report echoing it.
 
 | File | What it is |
 | --- | --- |
-| `plugin.c` | the whole ABI in ~150 lines: `run(ptr,len) -> i64` (low 32 bits pointer, high 32 bits length), reading the input through the pointer the host passes, writing the reply into module-private data, the optional `forgec2.log` import |
+| `plugin.c` | the whole ABI in ~150 lines: `run(ptr,len) -> i64` (low 32 bits pointer, high 32 bits length), reading the input through the pointer the host passes, writing the reply into module-private data, the optional `sovereign.log` import |
 | `build.sh` | how to build it (`clang`, wasi-sdk or `zig cc`) |
 | `plugin.wasm` | the committed build (`SHA256SUMS`, built with zig 0.17.0 / LLVM 21) |
 | `manifest.yaml` | `interpreter: wasm` requires an entry ending in `.wasm` |
@@ -54,6 +54,6 @@ or set `plugins.require_signed: false` for a lab.
 `internal/plugin/wasm_example_test.go` loads this directory's **real manifest**,
 runs the committed `plugin.wasm` through the real executor and parses the
 report it produced, checking that the label travelled from `params.label` into
-the title, the (base64) body and the `forgec2.log` diagnostics. The example is
+the title, the (base64) body and the `sovereign.log` diagnostics. The example is
 therefore covered by `go test ./internal/plugin/...` and cannot rot silently
 when the host or the ABI changes.

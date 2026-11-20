@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 func TestOperatorIPAllowed(t *testing.T) {

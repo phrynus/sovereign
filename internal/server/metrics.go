@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 type MetricsCollector struct {
@@ -58,128 +58,128 @@ type MetricsCollector struct {
 func NewMetricsCollector(s *Server) *MetricsCollector {
 	return &MetricsCollector{
 		AgentsTotal: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forgec2_agents_total",
+			Name: "sovereign_agents_total",
 			Help: "Total number of agents ever registered.",
 		}),
 		AgentsOnline: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forgec2_agents_online",
+			Name: "sovereign_agents_online",
 			Help: "Current number of online agents.",
 		}),
 		TasksTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_tasks_total",
+			Name: "sovereign_tasks_total",
 			Help: "Total number of tasks created.",
 		}),
 		TasksPending: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forgec2_tasks_pending",
+			Name: "sovereign_tasks_pending",
 			Help: "Current number of pending tasks.",
 		}),
 		ListenersTotal: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forgec2_listeners_total",
+			Name: "sovereign_listeners_total",
 			Help: "Current number of enabled listeners.",
 		}),
 		CredsTotal: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forgec2_credentials_total",
+			Name: "sovereign_credentials_total",
 			Help: "Total number of stored credentials.",
 		}),
 		UptimeSeconds: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-			Name: "forgec2_uptime_seconds",
+			Name: "sovereign_uptime_seconds",
 			Help: "Server uptime in seconds.",
 		}, func() float64 {
 			return time.Since(s.startTime).Seconds()
 		}),
 		SessionRekeysTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_session_rekeys_total",
+			Name: "sovereign_session_rekeys_total",
 			Help: "Total number of crypto session rekeys, per agent.",
 		}, []string{"agent_id"}),
 		RequestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "forgec2_request_duration_seconds",
+			Name:    "sovereign_request_duration_seconds",
 			Help:    "Histogram of API request durations.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"method", "path", "status"}),
 		BeaconDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "forgec2_beacon_duration_seconds",
+			Name:    "sovereign_beacon_duration_seconds",
 			Help:    "Histogram of beacon processing durations.",
 			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
 		}, []string{"transport"}),
 		TaskExecuteDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "forgec2_task_execute_duration_seconds",
+			Name:    "sovereign_task_execute_duration_seconds",
 			Help:    "Histogram of task execution durations (time between creation and completion).",
 			Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600},
 		}, []string{"type"}),
 		AuditDroppedTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_audit_dropped_total",
+			Name: "sovereign_audit_dropped_total",
 			Help: "Total number of audit log entries dropped (queue full or persist failure).",
 		}),
 		EventDroppedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_event_dropped_total",
+			Name: "sovereign_event_dropped_total",
 			Help: "Total number of internal bus events dropped, by reason.",
 		}, []string{"reason"}),
 		VaultErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_vault_errors_total",
+			Name: "sovereign_vault_errors_total",
 			Help: "Total number of vault crypto failures, by operation. An encrypt failure means output was dropped rather than stored as plaintext.",
 		}, []string{"op"}),
 		TasksPendingByAgent: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "forgec2_tasks_pending_by_agent",
+			Name: "sovereign_tasks_pending_by_agent",
 			Help: "Pending (undelivered) tasks per agent.",
 		}, []string{"agent_id"}),
 		OldestPendingSeconds: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "forgec2_oldest_pending_seconds",
+			Name: "sovereign_oldest_pending_seconds",
 			Help: "Age of the oldest pending task per agent, in seconds.",
 		}, []string{"agent_id"}),
 		SocksDroppedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_socks_dropped_total",
+			Name: "sovereign_socks_dropped_total",
 			Help: "Total number of SOCKS relay frames dropped, by reason.",
 		}, []string{"reason"}),
 		FileChainEventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_filechain_events_total",
+			Name: "sovereign_filechain_events_total",
 			Help: "File-transfer chain integrity events, by outcome (legacy_bypass, downgrade_rejected, mismatch).",
 		}, []string{"outcome"}),
 		AgentResultGapsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_agent_result_gaps_total",
+			Name: "sovereign_agent_result_gaps_total",
 			Help: "Total task results the agent discarded before delivery (queue-full/oversized); per-task detail is in the agent_result_gap audit record.",
 		}),
 		DBBusyRetriesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_db_busy_retries_total",
+			Name: "sovereign_db_busy_retries_total",
 			Help: "SQLite lock-contention retries on the beacon hot path, by operation.",
 		}, []string{"op"}),
 		MalleableEventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_malleable_events_total",
+			Name: "sovereign_malleable_events_total",
 			Help: "Malleable profile failures (encode_fail, profile_load_fail) that leave traffic uncovered, by outcome and profile.",
 		}, []string{"outcome", "profile"}),
 		BackupAgeSeconds: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forgec2_backup_age_seconds",
+			Name: "sovereign_backup_age_seconds",
 			Help: "Seconds since the last successful encrypted database backup (0 when backups are disabled or none has succeeded yet).",
 		}),
 		BackupFailuresTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_backup_failures_total",
+			Name: "sovereign_backup_failures_total",
 			Help: "Total failed backup attempts (scheduled or manual).",
 		}),
 		StatsCacheHitsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_stats_cache_hits_total",
+			Name: "sovereign_stats_cache_hits_total",
 			Help: "Statistics reads served from the short-TTL cache instead of the database.",
 		}),
 		StatsCacheMissesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_stats_cache_misses_total",
+			Name: "sovereign_stats_cache_misses_total",
 			Help: "Statistics reads that had to query the database.",
 		}),
 		StatsCacheEvictionsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_stats_cache_evictions_total",
+			Name: "sovereign_stats_cache_evictions_total",
 			Help: "Times the statistics cache hit its entry cap and was emptied.",
 		}),
 		BackupSuccessTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_backup_success_total",
+			Name: "sovereign_backup_success_total",
 			Help: "Total successful encrypted database backups.",
 		}),
 		BeaconRateLimitedTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_beacon_rate_limited_total",
+			Name: "sovereign_beacon_rate_limited_total",
 			Help: "Total beacon requests rejected with 429 by the per-IP beacon rate limiter.",
 		}),
 		BeaconProtocolRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "forgec2_beacon_protocol_rejected_total",
+			Name: "sovereign_beacon_protocol_rejected_total",
 			Help: "Total beacons refused because the agent's protocol version is not served, by reason (too_old, too_new).",
 		}, []string{"reason"}),
 		BeaconProtocolDeprecatedTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "forgec2_beacon_protocol_deprecated_total",
+			Name: "sovereign_beacon_protocol_deprecated_total",
 			Help: "Total beacons served on a protocol version inside the compatibility window (the agents still need a rebuild).",
 		}),
 	}

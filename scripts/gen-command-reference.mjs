@@ -203,7 +203,7 @@ function render(specs, constCount, missingConsts) {
   const aliasCount = specs.reduce((n, s) => n + s.aliases.length, 0);
 
   const lines = [];
-  lines.push("# ForgeC2 Command Reference");
+  lines.push("# Sovereign Command Reference");
   lines.push("");
   lines.push("> **Generated** from `pkg/protocol/taskspec_data.go` by");
   lines.push("> `node scripts/gen-command-reference.mjs`. Do not edit by hand.");

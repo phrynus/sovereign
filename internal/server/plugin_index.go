@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
 	"net/http"
 	"os"
 	"path/filepath"

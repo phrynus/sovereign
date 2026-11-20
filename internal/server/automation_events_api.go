@@ -56,4 +56,3 @@ func (s *Server) handleAutomationEvents(c *gin.Context) {
 			"condition operators are contains, equals and regex, and anything else is refused at save time",
 	})
 }
-

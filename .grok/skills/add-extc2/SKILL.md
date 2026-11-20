@@ -1,16 +1,16 @@
 ---
 name: add-extc2
-description: Extend ForgeC2 external C2 bridge (third-party connectors, ExtC2 protocol). Use for external C2, ExtC2, or /add-extc2.
+description: Extend Sovereign external C2 bridge (third-party connectors, ExtC2 protocol). Use for external C2, ExtC2, or /add-extc2.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 
 ## When to use
 
-Bridge external C2 frameworks or custom connectors into ForgeC2 tasking.
+Bridge external C2 frameworks or custom connectors into Sovereign tasking.
 
 ## Key files
 

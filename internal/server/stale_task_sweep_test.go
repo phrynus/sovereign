@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func seedStaleTask(t *testing.T, s *Server, agentID, status string, attempts int, claimedAt time.Time) db.Task {

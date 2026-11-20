@@ -35,7 +35,7 @@ export const zhAI: Record<string, string> = {
   "ai.empty_response": "模型已完成处理，但没有返回可显示的正文。请重试；若持续出现，请检查模型档案的输出上限和流式兼容性。",
   "ai.export": "导出",
   "ai.greeting_desc": "我可以汇报当前态势、列出在线 Beacon、标出高权限与告警，并给出下一步操作建议。点快捷查询，或直接用自然语言提问。",
-  "ai.greeting_title": "你好！我是 ForgeC2 AI 助手",
+  "ai.greeting_title": "你好！我是 Sovereign AI 助手",
   "ai.input_hint": "Enter 发送 · Shift+Enter 换行",
   "ai.chat_only": "纯聊",
   "ai.chat_only_hint": "纯聊模式：不调用工具，仅根据上下文回答",

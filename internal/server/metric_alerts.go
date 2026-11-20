@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Metric alert bridge: threshold checks over the teamserver's Prometheus

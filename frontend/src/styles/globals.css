@@ -38,7 +38,7 @@
   --font-jbmono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
 }
 
-/* ── ForgeC2 Design System (v2) ── */
+/* ── Sovereign Design System (v2) ── */
 :root {
   /* ── Ink-wash palette: rice paper, graphite, muted mineral pigments ── */
   --code-accent: oklch(0.82 0.012 80);

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Build plugin.wasm for the ForgeC2 WASM tier (ABI v1).
+# Build plugin.wasm for the Sovereign WASM tier (ABI v1).
 #
 # Any clang with a wasm32 backend works, with or without a sysroot: the module
 # is freestanding (-nostdlib) and declares its own host import. plugin.c also

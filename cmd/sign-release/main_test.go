@@ -28,8 +28,8 @@ func TestSignFileRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
-	path := filepath.Join(t.TempDir(), "forgec2-server-linux-amd64.sha256")
-	writeFile(t, path, "abc123  forgec2-server-linux-amd64\n")
+	path := filepath.Join(t.TempDir(), "sovereign-server-linux-amd64.sha256")
+	writeFile(t, path, "abc123  sovereign-server-linux-amd64\n")
 
 	if err := signFile(priv, path); err != nil {
 		t.Fatalf("signFile: %v", err)
@@ -47,20 +47,20 @@ func TestVerifyFileRejectsTampering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
-	path := filepath.Join(t.TempDir(), "forgec2-v2.7.0-linux-amd64.tar.gz.sha256")
-	writeFile(t, path, "abc123  forgec2-v2.7.0-linux-amd64.tar.gz\n")
+	path := filepath.Join(t.TempDir(), "sovereign-v2.7.0-linux-amd64.tar.gz.sha256")
+	writeFile(t, path, "abc123  sovereign-v2.7.0-linux-amd64.tar.gz\n")
 	if err := signFile(priv, path); err != nil {
 		t.Fatalf("signFile: %v", err)
 	}
 
 	// A modified checksum file must not verify, even with the right key.
-	writeFile(t, path, "deadbeef  forgec2-v2.7.0-linux-amd64.tar.gz\n")
+	writeFile(t, path, "deadbeef  sovereign-v2.7.0-linux-amd64.tar.gz\n")
 	if err := verifyFile(pub, path); err == nil {
 		t.Fatal("verifyFile accepted a modified file")
 	}
 
 	// Restoring the content does not help with a different key.
-	writeFile(t, path, "abc123  forgec2-v2.7.0-linux-amd64.tar.gz\n")
+	writeFile(t, path, "abc123  sovereign-v2.7.0-linux-amd64.tar.gz\n")
 	otherPub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate second key: %v", err)
@@ -134,8 +134,8 @@ func TestSignatureInteropWithTheUpdater(t *testing.T) {
 	}
 	dir := t.TempDir()
 	// Same shape the release workflow signs: "<hash>  <name>\n".
-	path := filepath.Join(dir, "forgec2-server-linux-amd64.sha256")
-	checksum := "abc123  forgec2-server-linux-amd64\n"
+	path := filepath.Join(dir, "sovereign-server-linux-amd64.sha256")
+	checksum := "abc123  sovereign-server-linux-amd64\n"
 	writeFile(t, path, checksum)
 
 	if err := signFile(priv, path); err != nil {
@@ -169,7 +169,7 @@ func TestSignatureInteropWithTheUpdater(t *testing.T) {
 		t.Fatalf("a trailing newline broke verification: %v", err)
 	}
 	// One changed byte of the checksum file invalidates it.
-	if err := verify(sigBody, "abd123  forgec2-server-linux-amd64\n"); err == nil {
+	if err := verify(sigBody, "abd123  sovereign-server-linux-amd64\n"); err == nil {
 		t.Fatal("a tampered checksum file still verified")
 	}
 	// The wrong key does not verify.

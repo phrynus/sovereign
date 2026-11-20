@@ -69,7 +69,7 @@ func SetupLogRotation(logDir string) io.Writer {
 	}
 
 	lumberjackLogger := &lumberjack.Logger{
-		Filename:   filepath.Join(logDir, "forgec2.log"),
+		Filename:   filepath.Join(logDir, "sovereign.log"),
 		MaxSize:    100, // MB
 		MaxBackups: 5,
 		MaxAge:     30, // days

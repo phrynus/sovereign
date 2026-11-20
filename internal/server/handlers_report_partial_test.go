@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // newReportTestServer builds a plain server (no tenant context: legacy
@@ -52,7 +52,7 @@ func TestBuildReportDataMarksPartialOnSectionFailure(t *testing.T) {
 // empty one.
 func TestReportHTMLBannerOnPartial(t *testing.T) {
 	report := gin.H{
-		"title":            "ForgeC2 Action Report",
+		"title":            "Sovereign Action Report",
 		"generated":        "2026-01-01 00:00:00",
 		"date_range":       "2026-01-01 to 2026-01-31",
 		"summary":          gin.H{"total_agents": 3},
@@ -70,7 +70,7 @@ func TestReportHTMLBannerOnPartial(t *testing.T) {
 
 	// A complete report must not gain a banner.
 	clean := gin.H{
-		"title":      "ForgeC2 Action Report",
+		"title":      "Sovereign Action Report",
 		"generated":  "2026-01-01 00:00:00",
 		"date_range": "2026-01-01 to 2026-01-31",
 		"summary":    gin.H{"total_agents": 3},

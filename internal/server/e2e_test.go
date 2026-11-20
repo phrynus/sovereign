@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
-	"github.com/forgec2/forgec2/pkg/encoding"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
+	"github.com/r0si/sovereign/pkg/encoding"
 )
 
 func TestE2E_Smoke_HealthEndpoint(t *testing.T) {

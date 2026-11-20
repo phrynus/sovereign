@@ -1,10 +1,10 @@
 ---
 name: add-listener
-description: Add or extend ForgeC2 C2 listeners (HTTP/TCP/DNS/ICMP/SMB). Use when adding listeners, beacon protocols, or /add-listener.
+description: Add or extend Sovereign C2 listeners (HTTP/TCP/DNS/ICMP/SMB). Use when adding listeners, beacon protocols, or /add-listener.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

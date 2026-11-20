@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/forgec2/forgec2/api"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/api"
 )
 
 // TestAPIDocsServeTheEmbeddedSpec pins the fix for a release-only failure: the docs endpoint

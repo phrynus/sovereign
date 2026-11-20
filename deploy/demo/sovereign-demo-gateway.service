@@ -1,0 +1,20 @@
+# DEPRECATED - deploy.sh starts the gateway itself (`nginx -c ...`), so this
+# unit is only useful on a host that keeps nginx under systemd. It is kept for
+# the native rollback path; it depends on sovereign-demo.service, which the
+# container deployment disables.
+[Unit]
+Description=Sovereign read-only HTTP demo gateway
+After=network.target sovereign-demo.service
+Wants=sovereign-demo.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/nginx -t -c /opt/sovereign-demo/nginx.conf
+ExecStart=/bin/nginx -c /opt/sovereign-demo/nginx.conf -g "daemon off;"
+ExecReload=/bin/nginx -c /opt/sovereign-demo/nginx.conf -s reload
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

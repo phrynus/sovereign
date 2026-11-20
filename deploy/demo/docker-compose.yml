@@ -1,4 +1,4 @@
-name: forgec2-demo
+name: sovereign-demo
 
 # The demo backend runs in the host network namespace so it can reach the
 # host's PostgreSQL on 127.0.0.1:5432 and bind only to 127.0.0.1:18000, where
@@ -8,7 +8,7 @@ name: forgec2-demo
 # The image defaults to the published edge build. Pin the digest when you need
 # a byte-identical deployment; this is the build the current demo runs:
 #
-#   FORGEC2_IMAGE=ghcr.io/r0si/forgec2@sha256:06494d39938734a2813308c749fc621174cd1fde299d41febb47d5a54bc454e9
+#   FORGEC2_IMAGE=ghcr.io/r0si/sovereign@sha256:06494d39938734a2813308c749fc621174cd1fde299d41febb47d5a54bc454e9
 #
 # `edge` and its sha-<commit> tag resolve to the same manifest. On hosts where
 # GHCR is unreachable, a read-only mirror serves the identical manifest; set
@@ -17,9 +17,9 @@ name: forgec2-demo
 # load the same image from GHCR and run it under a local tag:
 # deploy/demo/verify-image.sh proves the two are the same content.
 services:
-  forgec2:
-    image: ${FORGEC2_IMAGE:-ghcr.io/r0si/forgec2:edge}
-    container_name: forgec2-demo
+  sovereign:
+    image: ${FORGEC2_IMAGE:-ghcr.io/r0si/sovereign:edge}
+    container_name: sovereign-demo
     restart: unless-stopped
     network_mode: host
     # Plugin discovery is relative to the process working directory; /data is
@@ -33,8 +33,8 @@ services:
     volumes:
       # The config is mounted read-only: the server never rewrites it (secrets
       # arrive through the environment, so Load has nothing to persist).
-      - /opt/forgec2-demo/compose/config.yaml:/data/config.yaml:ro
-      - /opt/forgec2-demo/container-data:/data
+      - /opt/sovereign-demo/compose/config.yaml:/data/config.yaml:ro
+      - /opt/sovereign-demo/container-data:/data
     environment:
       - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:?set in .env}
       - FORGEC2_LOOT_KEY=${FORGEC2_LOOT_KEY:?set in .env}
@@ -51,7 +51,7 @@ services:
       - FORGEC2_HOST=127.0.0.1
       - FORGEC2_PORT=18000
       - FORGEC2_DB_DRIVER=postgres
-      - FORGEC2_DB_DSN=host=127.0.0.1 port=5432 user=forgec2 password=${DB_PASSWORD:?set in .env} dbname=forgec2 sslmode=disable
+      - FORGEC2_DB_DSN=host=127.0.0.1 port=5432 user=sovereign password=${DB_PASSWORD:?set in .env} dbname=sovereign sslmode=disable
       - TZ=Asia/Shanghai
     mem_limit: 1g
     pids_limit: 512

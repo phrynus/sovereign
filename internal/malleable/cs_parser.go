@@ -325,7 +325,7 @@ type csHTTPBlock struct {
 
 // ParseCSProfile parses a Cobalt Strike Malleable C2 profile into the v2
 // canonical form. It accepts the full CS block grammar, maps the HTTP beacon
-// subset ForgeC2 implements, and reports unsupported blocks as warnings while
+// subset Sovereign implements, and reports unsupported blocks as warnings while
 // preserving them in the editor's source text.
 func ParseCSProfile(name, text string) CSResult {
 	toks, diags := csLex(text)
@@ -384,7 +384,7 @@ type csBuilder struct {
 	extWorkEnd        string
 	extWorkTZ         string
 
-	// forgec2 { ... } fields that overlap HTTP block fields. Flags let an
+	// sovereign { ... } fields that overlap HTTP block fields. Flags let an
 	// explicit extension value win regardless of block order.
 	extClientID        []StepV2
 	extClientIDSet     bool
@@ -413,7 +413,7 @@ func (b *csBuilder) warnStmt(st *csStatement, code, msg string) {
 
 func (b *csBuilder) ignoreBlock(st *csStatement, reason string) {
 	b.ignored = append(b.ignored, st.name)
-	b.warnStmt(st, "cs.unsupported_block", fmt.Sprintf("%s block is not applied by ForgeC2 (%s); it is preserved in the source", st.name, reason))
+	b.warnStmt(st, "cs.unsupported_block", fmt.Sprintf("%s block is not applied by Sovereign (%s); it is preserved in the source", st.name, reason))
 }
 
 func (b *csBuilder) walkTop(stmts []*csStatement) {
@@ -431,12 +431,12 @@ func (b *csBuilder) walkTop(stmts []*csStatement) {
 			b.httpBlock(st, b.post)
 		case "http-config":
 			b.httpConfig(st)
-		case "forgec2":
-			b.forgec2Block(st)
+		case "sovereign":
+			b.sovereignBlock(st)
 		case "http-stager":
-			b.ignoreBlock(st, "ForgeC2 uses its own stager/one-liner pipeline")
+			b.ignoreBlock(st, "Sovereign uses its own stager/one-liner pipeline")
 		case "post-ex", "process-inject", "stage", "ssl-certificate", "dns-beacon", "ssh", "tcp":
-			b.ignoreBlock(st, "no equivalent in the ForgeC2 HTTP beacon")
+			b.ignoreBlock(st, "no equivalent in the Sovereign HTTP beacon")
 		default:
 			b.warnStmt(st, "cs.unknown_block", fmt.Sprintf("unknown block %q is ignored", st.name))
 		}
@@ -474,7 +474,7 @@ func (b *csBuilder) topSet(st *csStatement) {
 	case "description":
 		b.v2.Description = first
 	case "sample_name":
-		// CS sample names are not ForgeC2 profile names; keep only as metadata.
+		// CS sample names are not Sovereign profile names; keep only as metadata.
 		if b.v2.Description == "" {
 			b.v2.Description = first
 		}
@@ -482,7 +482,7 @@ func (b *csBuilder) topSet(st *csStatement) {
 		"dns_stager_prepend", "dns_stager_subhost", "maxdns",
 		"pipename", "smb_frame_header", "tcp_frame_header", "ssh_banner",
 		"ssh_pipename", "callback_host", "http_proxy":
-		b.warnStmt(st, "cs.unsupported_set", fmt.Sprintf("set %s is not applied by ForgeC2", key))
+		b.warnStmt(st, "cs.unsupported_set", fmt.Sprintf("set %s is not applied by Sovereign", key))
 	default:
 		b.warnStmt(st, "cs.unsupported_set", fmt.Sprintf("unknown set %q is ignored", key))
 	}
@@ -533,7 +533,7 @@ func (b *csBuilder) httpSet(st *csStatement, blk *csHTTPBlock) {
 	case "useragent", "user_agent":
 		b.v2.UserAgent = first
 	case "host", "ssl", "uri_x86", "uri_x64":
-		b.warnStmt(st, "cs.unsupported_http_set", fmt.Sprintf("set %s is not applied to ForgeC2 beacons", key))
+		b.warnStmt(st, "cs.unsupported_http_set", fmt.Sprintf("set %s is not applied to Sovereign beacons", key))
 	default:
 		b.warnStmt(st, "cs.unsupported_http_set", fmt.Sprintf("unknown http set %q is ignored", key))
 	}
@@ -668,10 +668,10 @@ func normalizeTransform(name string) string {
 	return n
 }
 
-func (b *csBuilder) forgec2Block(st *csStatement) {
+func (b *csBuilder) sovereignBlock(st *csStatement) {
 	for _, child := range st.children {
 		if !child.isSet {
-			b.warnStmt(child, "cs.forgec2_block", fmt.Sprintf("nested block %q inside forgec2 is ignored", child.name))
+			b.warnStmt(child, "cs.sovereign_block", fmt.Sprintf("nested block %q inside sovereign is ignored", child.name))
 			continue
 		}
 		if len(child.args) == 0 {
@@ -759,7 +759,7 @@ func (b *csBuilder) forgec2Block(st *csStatement) {
 		case "description":
 			b.v2.Description = first
 		default:
-			b.warnStmt(child, "cs.unknown_extension", fmt.Sprintf("unknown forgec2 set %q is ignored", key))
+			b.warnStmt(child, "cs.unknown_extension", fmt.Sprintf("unknown sovereign set %q is ignored", key))
 		}
 	}
 }
@@ -787,7 +787,7 @@ func (b *csBuilder) finish() {
 		}
 	}
 	if method == "" {
-		b.warn(1, 1, "cs.no_http_block", "profile has no http-get or http-post block; ForgeC2 will use its default HTTP method")
+		b.warn(1, 1, "cs.no_http_block", "profile has no http-get or http-post block; Sovereign will use its default HTTP method")
 	}
 	if method != "" {
 		b.v2.Method = method

@@ -90,13 +90,13 @@ describe("ThemeProvider", () => {
   });
 
   it("applies the stored theme on boot", async () => {
-    localStorage.setItem("forgec2_theme", "dark");
+    localStorage.setItem("sovereign_theme", "dark");
     await mount("dark|dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
   it("ignores an unknown stored theme and stays light", async () => {
-    localStorage.setItem("forgec2_theme", "neon");
+    localStorage.setItem("sovereign_theme", "neon");
     await mount("light|light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
@@ -105,19 +105,19 @@ describe("ThemeProvider", () => {
     await mount("light|light");
 
     fireEvent.click(screen.getByTestId("to-dark"));
-    expect(localStorage.getItem("forgec2_theme")).toBe("dark");
+    expect(localStorage.getItem("sovereign_theme")).toBe("dark");
     expect(screen.getByTestId("probe").textContent).toBe("dark|dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
 
     fireEvent.click(screen.getByTestId("to-light"));
-    expect(localStorage.getItem("forgec2_theme")).toBe("light");
+    expect(localStorage.getItem("sovereign_theme")).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
   it("system follows prefers-color-scheme and reacts to media changes", async () => {
     await mount("light|light");
     fireEvent.click(screen.getByTestId("to-system"));
-    expect(localStorage.getItem("forgec2_theme")).toBe("system");
+    expect(localStorage.getItem("sovereign_theme")).toBe("system");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
 
     media.matches = true;
@@ -175,7 +175,7 @@ describe("ThemeProvider", () => {
   });
 
   it("does not apply a queued boot theme after unmount", async () => {
-    localStorage.setItem("forgec2_theme", "dark");
+    localStorage.setItem("sovereign_theme", "dark");
     const view = render(<ThemeProvider><Probe /></ThemeProvider>);
     view.unmount();
     await act(async () => {});
@@ -184,14 +184,14 @@ describe("ThemeProvider", () => {
 
   it("falls back safely when matchMedia is unavailable", async () => {
     vi.stubGlobal("matchMedia", undefined);
-    localStorage.setItem("forgec2_theme", "system");
+    localStorage.setItem("sovereign_theme", "system");
     await mount("system|light");
     fireEvent.click(screen.getByTestId("to-dark"));
     expect(screen.getByTestId("probe").textContent).toBe("dark|dark");
   });
 
   it("does not restore stale system mode after a failed fixed-theme save", async () => {
-    localStorage.setItem("forgec2_theme", "system");
+    localStorage.setItem("sovereign_theme", "system");
     await mount("system|light");
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("Full", "QuotaExceededError");

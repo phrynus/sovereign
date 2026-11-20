@@ -121,12 +121,12 @@ linters:
         #    hold the whole shutdown path hostage — the process is leaving;
         #    whatever leaked is moot. (Same judgment as the deadline group:
         #    the shutdown is best-effort by design.)
-        - (*github.com/forgec2/forgec2/internal/server.GRPCListener).Stop
-        - (*github.com/forgec2/forgec2/internal/server.DNSBeaconListener).Stop
-        - (*github.com/forgec2/forgec2/internal/server.H2CBeaconListener).Stop
-        - (*github.com/forgec2/forgec2/internal/server.QUICBeaconListener).Stop
-        - (*github.com/forgec2/forgec2/internal/server.SSHBeaconListener).Stop
-        - (*github.com/forgec2/forgec2/internal/server.Server).stopExtraListener
+        - (*github.com/r0si/sovereign/internal/server.GRPCListener).Stop
+        - (*github.com/r0si/sovereign/internal/server.DNSBeaconListener).Stop
+        - (*github.com/r0si/sovereign/internal/server.H2CBeaconListener).Stop
+        - (*github.com/r0si/sovereign/internal/server.QUICBeaconListener).Stop
+        - (*github.com/r0si/sovereign/internal/server.SSHBeaconListener).Stop
+        - (*github.com/r0si/sovereign/internal/server.Server).stopExtraListener
         - (*github.com/slack-go/slack.RTM).Disconnect
         - (*github.com/quic-go/quic-go.Conn).CloseWithError
         #
@@ -151,7 +151,7 @@ linters:
         # 8) (*BackupManager).PerformBackup is a self-journaling API: it
         #    records its own failures via noteBackupResult (log + stats), so
         #    the scheduled tick loop treats it as fire-and-forget on purpose.
-        - (*github.com/forgec2/forgec2/internal/server.BackupManager).PerformBackup
+        - (*github.com/r0si/sovereign/internal/server.BackupManager).PerformBackup
         #
         # 7) fmt.Sscanf here is a best-effort numeric hint parse whose failure
         #    path applies a graceful fallback value at every call.

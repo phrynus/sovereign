@@ -1,10 +1,10 @@
 ---
 name: fix-ui-style
-description: Fix ForgeC2 UI styling — Tailwind tokens, dark mode, theme toggle, layout consistency
+description: Fix Sovereign UI styling — Tailwind tokens, dark mode, theme toggle, layout consistency
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: debug
 ---
 
@@ -34,7 +34,7 @@ bg-card text-foreground border border-border rounded-lg p-(--card-spacing) shado
 
 | File | What to check |
 |------|---------------|
-| `frontend/src/lib/theme.tsx` | `ThemeProvider`, `localStorage forgec2_theme` |
+| `frontend/src/lib/theme.tsx` | `ThemeProvider`, `localStorage sovereign_theme` |
 | `frontend/index.html` | Inline theme-init script (avoids a flash before hydration) |
 | `frontend/src/components/TopBar.tsx` | Light / Dark / System menu |
 | `frontend/src/components/ClientProvider.tsx` | Wraps `ThemeProvider` |

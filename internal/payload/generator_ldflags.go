@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/forgec2/forgec2/pkg/peimage"
+	"github.com/r0si/sovereign/pkg/peimage"
 )
 
 // buildLdflags returns the linker flags for the agent build. The runtime config

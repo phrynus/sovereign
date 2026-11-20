@@ -1,10 +1,10 @@
 ---
 name: fix-ui-page
-description: Fix ForgeC2 UI page issues — button handlers, API wiring, tabs. Use for frontend bugs on the Vite SPA.
+description: Fix Sovereign UI page issues — button handlers, API wiring, tabs. Use for frontend bugs on the Vite SPA.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: debug
 ---
 
@@ -49,7 +49,7 @@ npm run verify   # typecheck + lint + vitest + every check:* gate
 Then sync the embedded bundle before pushing (`scripts/build-embedded.ps1` from
 the repo root) — the `check:webdist` pre-push hook fails otherwise.
 
-If a Go handler changed too: `go build -o forgec2-server.exe ./cmd/server` and restart the API.
+If a Go handler changed too: `go build -o sovereign-server.exe ./cmd/server` and restart the API.
 
 ## Verify
 

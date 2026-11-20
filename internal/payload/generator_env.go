@@ -178,10 +178,10 @@ func resolveGarbleCmd() string {
 	return ""
 }
 
-// forgeC2ModuleRoot walks upward from the working directory to find the
+// sovereignModuleRoot walks upward from the working directory to find the
 // root go.mod (handles the server running from the project root AND go test
 // runs, where the working directory is a subpackage).
-func forgeC2ModuleRoot() (string, error) {
+func sovereignModuleRoot() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = "."
@@ -197,19 +197,19 @@ func forgeC2ModuleRoot() (string, error) {
 		}
 		dir = parent
 	}
-	return "", fmt.Errorf("could not locate forgec2 module root from %s", wd)
+	return "", fmt.Errorf("could not locate sovereign module root from %s", wd)
 }
 
-// forgeC2ModuleReplace returns a `replace` directive for the local
-// github.com/forgec2/forgec2 module, so the temp agent build can
+// sovereignModuleReplace returns a `replace` directive for the local
+// github.com/r0si/sovereign module, so the temp agent build can
 // find it without requiring a remote git repository.
-func forgeC2ModuleReplace() string {
-	dir, err := forgeC2ModuleRoot()
+func sovereignModuleReplace() string {
+	dir, err := sovereignModuleRoot()
 	if err != nil {
 		return ""
 	}
 	// go.mod replace targets must use forward slashes even on Windows.
-	return "\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(dir) + "\n"
+	return "\nreplace github.com/r0si/sovereign => " + filepath.ToSlash(dir) + "\n"
 }
 
 // stageRootAgentModule seeds a temp agent module from the repository's own
@@ -224,7 +224,7 @@ func forgeC2ModuleReplace() string {
 // deployment that ships only the binary), in which case the caller falls back
 // to the generated module plus `go mod tidy`.
 func stageRootAgentModule(workDir string) (ok bool, err error) {
-	root, err := forgeC2ModuleRoot()
+	root, err := sovereignModuleRoot()
 	if err != nil {
 		return false, nil
 	}
@@ -237,7 +237,7 @@ func stageRootAgentModule(workDir string) (ok bool, err error) {
 		return false, nil
 	}
 	staged := replaceModuleDirective(string(goMod), "agent")
-	staged = strings.TrimRight(staged, "\r\n") + "\n\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(root) + "\n"
+	staged = strings.TrimRight(staged, "\r\n") + "\n\nreplace github.com/r0si/sovereign => " + filepath.ToSlash(root) + "\n"
 	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(staged), 0600); err != nil {
 		return false, err
 	}

@@ -1,10 +1,10 @@
 ---
 name: add-generate-option
-description: Add ForgeC2 implant generator options (ldflags, obfuscation, artifacts). Use for generate page, build flags, or /add-generate-option.
+description: Add Sovereign implant generator options (ldflags, obfuscation, artifacts). Use for generate page, build flags, or /add-generate-option.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

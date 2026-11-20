@@ -15,7 +15,7 @@ export const DEFAULT_SHORTCUTS: Record<string, ShortcutDef> = {
   toggle_lock: { key: "l", ctrl: true, shift: true, descKey: "shortcuts.toggle_lock_desc" },
 };
 
-const STORAGE_KEY = "forgec2_shortcuts";
+const STORAGE_KEY = "sovereign_shortcuts";
 
 // cloneShortcuts copies every ENTRY, not just the map. The default branch used to return
 // { ...DEFAULT_SHORTCUTS }, a shallow copy whose values are the shared module objects, while the

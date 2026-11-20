@@ -109,7 +109,7 @@ export function usePayloadGenerator() {
     // "default" = follow the server fleet-wide default; empty cap = follow server default too.
     beacon_randomization: "default", max_random_interval_ms: "",
     ua: DEFAULT_UA, proxy: "", failover: "", crypto_key: "", beacon_key: "", profile: "",
-    dns_doh_url: "", dns_dot_addr: "", ssh_user: "forgec2", ssh_password: "", ssh_key: "", ssh_host_key: "",
+    dns_doh_url: "", dns_dot_addr: "", ssh_user: "sovereign", ssh_password: "", ssh_key: "", ssh_host_key: "",
     mtls_cert: "", mtls_key: "", mtls_ca: "",
   });
 

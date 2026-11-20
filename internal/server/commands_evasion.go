@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // ── Post-ex: mimikatz / net / BOF / AMSI-ETW / evasion / self-update ───────

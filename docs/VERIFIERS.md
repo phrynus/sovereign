@@ -1,6 +1,6 @@
 # Offline verifiers
 
-Three artefacts leave a ForgeC2 deployment and get checked somewhere else: a **handover bundle**, an **audit export**,
+Three artefacts leave a Sovereign deployment and get checked somewhere else: a **handover bundle**, an **audit export**,
 and a **plugin package**. All three carry what a receiver needs to check them without a running console, and each has a
 command for it:
 

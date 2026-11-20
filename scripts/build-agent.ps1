@@ -9,13 +9,13 @@ try {
     # (platform files + !windows stubs). Verify all three link targets.
     # agent_stager is windows-only by build tag — verify that separately.
     $targets = @(
-        @{ GOOS="windows"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent.exe" },
-        @{ GOOS="linux"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent-linux" },
-        @{ GOOS="darwin"; GOARCH="amd64"; dir="internal/payload/agent"; out="forgec2-agent-darwin" }
+        @{ GOOS="windows"; GOARCH="amd64"; dir="internal/payload/agent"; out="sovereign-agent.exe" },
+        @{ GOOS="linux"; GOARCH="amd64"; dir="internal/payload/agent"; out="sovereign-agent-linux" },
+        @{ GOOS="darwin"; GOARCH="amd64"; dir="internal/payload/agent"; out="sovereign-agent-darwin" }
     )
 
     # Verify Windows stager too
-    $stagerTarget = @{ GOOS="windows"; GOARCH="amd64"; dir="internal/payload/agent_stager"; out="forgec2-stager.exe" }
+    $stagerTarget = @{ GOOS="windows"; GOARCH="amd64"; dir="internal/payload/agent_stager"; out="sovereign-stager.exe" }
 
     $failures = 0
     $successes = 0
@@ -30,11 +30,11 @@ try {
         $label = "$($t.GOOS)/$($t.GOARCH) $($t.dir)"
         Write-Host "  Building $label ... " -NoNewline
 
-        $output = go build -o "forgec2-agent-build-verify" "./$($t.dir)" 2>&1
+        $output = go build -o "sovereign-agent-build-verify" "./$($t.dir)" 2>&1
         if ($LASTEXITCODE -eq 0) {
-            if (Test-Path "forgec2-agent-build-verify") {
-                $size = (Get-Item "forgec2-agent-build-verify").Length
-                Remove-Item -Force "forgec2-agent-build-verify"
+            if (Test-Path "sovereign-agent-build-verify") {
+                $size = (Get-Item "sovereign-agent-build-verify").Length
+                Remove-Item -Force "sovereign-agent-build-verify"
                 Write-Host "OK ($([math]::Round($size / 1KB)) KB)" -ForegroundColor Green
                 $successes++
             } else {
@@ -58,6 +58,6 @@ try {
 
     Write-Host "All agent targets compile successfully." -ForegroundColor Green
 } finally {
-    Remove-Item -ErrorAction SilentlyContinue -Force "forgec2-agent-build-verify" 2>$null
+    Remove-Item -ErrorAction SilentlyContinue -Force "sovereign-agent-build-verify" 2>$null
     Pop-Location
 }

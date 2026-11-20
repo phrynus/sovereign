@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func (s *Server) handleDashboard(c *gin.Context) {
@@ -66,7 +66,7 @@ func (s *Server) handleDashboard(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":          "ForgeC2 - Dashboard",
+		"Title":          "Sovereign - Dashboard",
 		"ActiveNav":      "dashboard",
 		"TotalAgents":    counts.TotalAgents,
 		"OnlineAgents":   counts.OnlineAgents,
@@ -164,7 +164,7 @@ func (s *Server) getNavStats(c *gin.Context) gin.H {
 }
 
 func detectLanguage(c *gin.Context) string {
-	if lang, err := c.Cookie("forgec2_lang"); err == nil && lang != "" {
+	if lang, err := c.Cookie("sovereign_lang"); err == nil && lang != "" {
 		if IsLanguageSupported(lang) {
 			return lang
 		}

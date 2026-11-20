@@ -3,11 +3,11 @@
 .PHONY: tidy deps i18n-check i18n-missing
 .PHONY: db-reset help
 
-BINARY   ?= forgec2-server
+BINARY   ?= sovereign-server
 GOOS     ?= $(shell go env GOOS)
 BIN_EXT  := $(if $(filter windows,$(GOOS)),.exe,)
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS  := -s -w -buildid= -X github.com/forgec2/forgec2/internal/server.ServerVersion=$(VERSION)
+LDFLAGS  := -s -w -buildid= -X github.com/r0si/sovereign/internal/server.ServerVersion=$(VERSION)
 
 # ---------- Core ----------
 
@@ -93,7 +93,7 @@ dev:
 db-reset:
 	@echo "WARNING: This deletes the database. Press Ctrl+C to abort."
 	@timeout /t 3 >nul 2>&1 || sleep 3
-	rm -f data/db/forgec2.db
+	rm -f data/db/sovereign.db
 
 # ---------- Cleanup ----------
 
@@ -109,7 +109,7 @@ clean:
 # ---------- Help ----------
 
 help:
-	@echo "ForgeC2 Makefile"
+	@echo "Sovereign Makefile"
 	@echo ""
 	@echo "  make build          Build server for the host OS (requires existing internal/webdist/dist)"
 	@echo "  make build-js       Build frontend JS"

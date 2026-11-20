@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // TestDiffConfigReportsNoDuplicates pins a copy-paste bug that was live: the

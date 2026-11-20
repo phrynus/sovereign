@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── DB-backed extra listeners (http/tcp/tls/dns/icmp/ssh/h2c/quic/udp) ─────

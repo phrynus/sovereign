@@ -32,14 +32,14 @@ func signForTest(t *testing.T, seedHex string, data []byte) string {
 // detached release signatures.
 func TestVerifyReleaseSignature(t *testing.T) {
 	pubHex, seedHex := testSigningPair(t)
-	data := []byte("abc123  forgec2-server-windows-amd64.exe\n")
+	data := []byte("abc123  sovereign-server-windows-amd64.exe\n")
 	sigHex := signForTest(t, seedHex, data)
 
 	if err := verifyReleaseSignature(data, sigHex, pubHex); err != nil {
 		t.Fatalf("valid signature rejected: %v", err)
 	}
 	// Tampered checksum bytes.
-	if err := verifyReleaseSignature([]byte("abc124  forgec2-server-windows-amd64.exe\n"), sigHex, pubHex); err == nil {
+	if err := verifyReleaseSignature([]byte("abc124  sovereign-server-windows-amd64.exe\n"), sigHex, pubHex); err == nil {
 		t.Fatal("tampered checksum accepted")
 	}
 	// Tampered signature.
@@ -64,9 +64,9 @@ func TestVerifyReleaseSignature(t *testing.T) {
 // TestMatchChecksumLine proves multi-asset checksum files match by filename
 // (first-line-only matching verified against the wrong asset).
 func TestMatchChecksumLine(t *testing.T) {
-	content := "aaa  forgec2-server-linux-amd64\n" +
-		"bbb  forgec2-server-windows-amd64.exe\n"
-	got, err := matchChecksumLine(content, "forgec2-server-windows-amd64.exe")
+	content := "aaa  sovereign-server-linux-amd64\n" +
+		"bbb  sovereign-server-windows-amd64.exe\n"
+	got, err := matchChecksumLine(content, "sovereign-server-windows-amd64.exe")
 	if err != nil || got != "bbb" {
 		t.Fatalf("matched=%q err=%v, want bbb", got, err)
 	}
@@ -86,14 +86,14 @@ func TestMatchChecksumLine(t *testing.T) {
 func TestVerifyChecksumBytesEndToEnd(t *testing.T) {
 	pubHex, seedHex := testSigningPair(t)
 	dir := t.TempDir()
-	binPath := filepath.Join(dir, "forgec2-server-windows-amd64.exe")
+	binPath := filepath.Join(dir, "sovereign-server-windows-amd64.exe")
 	payload := []byte("fake-binary-bytes")
 	if err := os.WriteFile(binPath, payload, 0600); err != nil {
 		t.Fatalf("write bin: %v", err)
 	}
-	checksum := "deadbeef  forgec2-server-windows-amd64.exe\n"
+	checksum := "deadbeef  sovereign-server-windows-amd64.exe\n"
 	// Real hash path first (wrong hash must fail before signature matters).
-	if err := verifyChecksumBytes(binPath, []byte(checksum), "forgec2-server-windows-amd64.exe"); err == nil {
+	if err := verifyChecksumBytes(binPath, []byte(checksum), "sovereign-server-windows-amd64.exe"); err == nil {
 		t.Fatal("wrong hash accepted")
 	}
 	sigHex := signForTest(t, seedHex, []byte(checksum))

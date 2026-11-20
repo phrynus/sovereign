@@ -240,7 +240,7 @@ func PredefinedProfiles() map[string]*Profile {
 	}
 }
 
-// DefaultProfile returns the default ForgeC2 profile.
+// DefaultProfile returns the default Sovereign profile.
 //
 // NOTE on changing URIs here: baked agents and the server's NoRoute beacon
 // handling key on /collect. Extending the pool is safe (agents rotate when
@@ -249,7 +249,7 @@ func PredefinedProfiles() map[string]*Profile {
 func DefaultProfile() *Profile {
 	return &Profile{
 		Name:        "default",
-		Description: "Default ForgeC2 beacon profile",
+		Description: "Default Sovereign beacon profile",
 		HTTPGet: HTTPGet{
 			URI:  []string{"/collect", "/r/collect", "/j/collect"},
 			Verb: "GET",

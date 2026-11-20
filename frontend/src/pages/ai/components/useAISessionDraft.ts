@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 
-const NEW_DRAFT_KEY = "forgec2.ai.newDraft";
+const NEW_DRAFT_KEY = "sovereign.ai.newDraft";
 
 /** Debounced, session-isolated draft persistence for the AI composer. */
 export function useAISessionDraft(sessionId: number | null, input: string) {

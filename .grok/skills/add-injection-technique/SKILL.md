@@ -1,10 +1,10 @@
 ---
 name: add-injection-technique
-description: Add ForgeC2 process injection techniques (EarlyBird, Threadless, NtCreateThreadEx). Use for injection, shellcode inject, or /add-injection-technique.
+description: Add Sovereign process injection techniques (EarlyBird, Threadless, NtCreateThreadEx). Use for injection, shellcode inject, or /add-injection-technique.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

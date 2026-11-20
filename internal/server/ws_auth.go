@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // wsAuthInterval is how often a live operator/notification WebSocket re-checks
@@ -14,12 +14,12 @@ import (
 // this, AuthRequired rejections on HTTP never reach an already-upgraded socket.
 const wsAuthInterval = 30 * time.Second
 
-// authenticateOperatorWS validates the forgec2_session cookie for operator
+// authenticateOperatorWS validates the sovereign_session cookie for operator
 // WebSocket endpoints with the same checks as AuthRequired: parseable token,
 // live (non-revoked) session row, user still active, and force-logout not
 // after token IssuedAt. On failure it writes the JSON error and returns false.
 func (s *Server) authenticateOperatorWS(c *gin.Context) (*middleware.Claims, string, bool) {
-	tokenStr, err := c.Cookie("forgec2_session")
+	tokenStr, err := c.Cookie("sovereign_session")
 	if err != nil || tokenStr == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "no session token"})
 		return nil, "", false

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func TestAITaskChainTool(t *testing.T) {

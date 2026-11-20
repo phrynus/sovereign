@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/infrastructure"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/infrastructure"
 )
 
 type infraGenerateRequest struct {
@@ -195,7 +195,7 @@ func (s *Server) handleProfileExport(c *gin.Context) {
 		}
 		content = string(data)
 	case "nginx":
-		content = fmt.Sprintf(`# ForgeC2 Malleable Profile 鈥?Nginx map
+		content = fmt.Sprintf(`# Sovereign Malleable Profile 鈥?Nginx map
 # Apply to your nginx redirector to replicate C2 response behavior
 
 map $request_uri $c2_content_type {
@@ -207,7 +207,7 @@ map $request_uri $c2_status_code {
 }
 `, profile.ContentType, profile.StatusCode)
 	case "env":
-		content = fmt.Sprintf(`# ForgeC2 Malleable Profile 鈥?Environment variables
+		content = fmt.Sprintf(`# Sovereign Malleable Profile 鈥?Environment variables
 FORGEC2_PROFILE_NAME=%s
 FORGEC2_STATUS_CODE=%d
 FORGEC2_CONTENT_TYPE=%s

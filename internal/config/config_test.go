@@ -191,7 +191,7 @@ func TestIsWeakSecret(t *testing.T) {
 		{"", true},
 		{"short", true},
 		{"change_me", true},
-		{"forgec2_secret_key_change_this_in_production", true},
+		{"sovereign_secret_key_change_this_in_production", true},
 		{"REDACTED_PLACEHOLDER_REPLACE_IN_PRODUCTION", true},
 		{"my_placeholder_key_goes_here", true},
 		{"secret", true},

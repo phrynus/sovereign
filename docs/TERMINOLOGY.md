@@ -1,4 +1,4 @@
-# Terminology & Naming — ForgeC2 UI
+# Terminology & Naming — Sovereign UI
 
 Status: **U7 body-copy sweep complete — 16 page/domain waves landed; the inventory's
 remaining 73 flags are all documented keeps (2026-10-19).** This file is the contract for what the

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // BuildJob tracks an asynchronous binary build.

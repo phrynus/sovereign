@@ -14,7 +14,7 @@ import (
 // kill-switch derivation parameters — MUST mirror internal/crypto/keys.go
 // (see agent_killswitch_test.go for the byte-for-byte cross-check).
 const (
-	killSwitchSalt = "forgec2-killswitch-v1"
+	killSwitchSalt = "sovereign-killswitch-v1"
 	killSwitchInfo = "killswitch"
 )
 

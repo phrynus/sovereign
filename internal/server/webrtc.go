@@ -30,12 +30,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pion/logging"
 	"github.com/pion/turn/v4"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 const (
@@ -527,11 +527,11 @@ func (h *webrtcHub) authenticateAgent(sessionID, token, agentID string) (*webrtc
 // realm from making the auth key disagree with the realm Pion advertises.
 func (h *webrtcHub) turnRealm() string {
 	if h.cfg == nil {
-		return "forgec2"
+		return "sovereign"
 	}
 	realm := strings.TrimSpace(h.cfg.WebRTC.Realm)
 	if realm == "" {
-		return "forgec2"
+		return "sovereign"
 	}
 	return realm
 }

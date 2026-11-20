@@ -1,5 +1,5 @@
 @echo off
-REM ForgeC2 C-Implant E2E verification batch script
+REM Sovereign C-Implant E2E verification batch script
 REM Usage: e2e-c-implant.bat [HOST] [PORT] [USER] [PASS] [AGENT_ID] [TASK_TYPE] [COMMAND_JSON] [EXTRA_JSON_FIELDS]
 REM
 REM EXTRA_JSON_FIELDS (argv 8 or the E2E_EXTRA_JSON env var) is a raw JSON
@@ -52,7 +52,7 @@ if "%EXTRA%"=="" set EXTRA=%E2E_EXTRA_JSON%
 if not "%EXTRA%"=="" set EXTRA=,%EXTRA%
 
 set BASE_URL=http://%HOST%:%PORT%
-set COOKIE_JAR=%TEMP%\forgec2-e2e-cookies.txt
+set COOKIE_JAR=%TEMP%\sovereign-e2e-cookies.txt
 
 echo [E2E] Target: %BASE_URL%
 echo [E2E] Agent: %AGENT_ID%
@@ -65,7 +65,7 @@ if exist "%COOKIE_JAR%" del /f /q "%COOKIE_JAR%"
 
 REM 1. Login. Inspect the status code as well as curl's exit code: curl exits 0
 REM on HTTP 401 (and 429), which used to surface only as a confusing
-REM "forgec2_csrf cookie not found" several steps later.
+REM "sovereign_csrf cookie not found" several steps later.
 echo [E2E] Logging in as %USER%...
 for /f "delims=" %%A in ('curl.exe -s -o nul -w "%%{http_code}" -c "%COOKIE_JAR%" -d "username=%USER%&password=%PASS%" "%BASE_URL%/api/login"') do set LOGIN_CODE=%%A
 if not "%LOGIN_CODE%"=="302" if not "%LOGIN_CODE%"=="200" (
@@ -85,13 +85,13 @@ if %ERRORLEVEL% neq 0 (
 )
 echo [E2E] OK: CSRF cookie rotated
 
-REM 3. Extract forgec2_csrf cookie from jar
+REM 3. Extract sovereign_csrf cookie from jar
 set CSRF_TOKEN=
-for /f "tokens=7 delims=	" %%A in ('type "%COOKIE_JAR%" ^| find "forgec2_csrf"') do (
+for /f "tokens=7 delims=	" %%A in ('type "%COOKIE_JAR%" ^| find "sovereign_csrf"') do (
     set CSRF_TOKEN=%%A
 )
 if "%CSRF_TOKEN%"=="" (
-    echo [E2E] ERROR: forgec2_csrf cookie not found
+    echo [E2E] ERROR: sovereign_csrf cookie not found
     exit /b 1
 )
 echo [E2E] OK: CSRF token extracted (%CSRF_TOKEN:~0,16%...)

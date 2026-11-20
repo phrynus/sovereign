@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestEmergencyStatusCounts pins the two figures on the emergency panel. It is

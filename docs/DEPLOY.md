@@ -1,6 +1,6 @@
-# ForgeC2 Deploy (simplest path)
+# Sovereign Deploy (simplest path)
 
-Prebuilt `forgec2-server` binaries for Linux and Windows are published on every
+Prebuilt `sovereign-server` binaries for Linux and Windows are published on every
 `v*` tag via `.github/workflows/release.yml` (frontend already embedded —
 single file, no Node.js needed at runtime).
 
@@ -33,8 +33,8 @@ What it adds over "build and restart by hand":
   out, so the new one never fights for the bind.
 - **Verification** — `/health`, `/ready` and `/login` are probed; a failed
   `/health` is not silently ignored.
-- **Rollback** — the previous binary is kept as `forgec2-server.prev` (or
-  `forgec2-server.exe.prev`). A new instance that does not come up healthy
+- **Rollback** — the previous binary is kept as `sovereign-server.prev` (or
+  `sovereign-server.exe.prev`). A new instance that does not come up healthy
   is rolled back to it and started again: a bad build never leaves the box
   down.
 
@@ -48,12 +48,12 @@ Every `v*` tag publishes two kinds of asset:
 
 | Asset | Use |
 | --- | --- |
-| `forgec2-v<version>-windows-<arch>.zip` | unzip, double-click `start.cmd` |
-| `forgec2-v<version>-linux-<arch>.tar.gz` | `tar xzf … && cd … && ./start.sh` |
-| `forgec2-server-<os>-<arch>[.exe]` | the raw binary, for Docker images and your own packaging |
+| `sovereign-v<version>-windows-<arch>.zip` | unzip, double-click `start.cmd` |
+| `sovereign-v<version>-linux-<arch>.tar.gz` | `tar xzf … && cd … && ./start.sh` |
+| `sovereign-server-<os>-<arch>[.exe]` | the raw binary, for Docker images and your own packaging |
 
-The archives carry the embedded-console binary (renamed to `forgec2-server` /
-`forgec2-server.exe`), `config.example.yaml`, `LICENSE`, `QUICKSTART.txt` and
+The archives carry the embedded-console binary (renamed to `sovereign-server` /
+`sovereign-server.exe`), `config.example.yaml`, `LICENSE`, `QUICKSTART.txt` and
 the launcher. The launcher creates `config.yaml` on first run, prints the
 console URL, and the server prints the generated `admin` password in the same
 window. Nothing else has to be installed: no Node.js, no Go, no database
@@ -63,11 +63,11 @@ Both the raw binaries and the archives ship a `.sha256` plus a detached
 Ed25519 `.sig` over that checksum:
 
 ```bash
-sha256sum -c forgec2-v2.7.0-linux-amd64.tar.gz.sha256
+sha256sum -c sovereign-v2.7.0-linux-amd64.tar.gz.sha256
 # Detached Ed25519 signature over that checksum file (no secret needed):
 go run ./cmd/sign-release -verify \
   -key 2583e905edf1b67be9caaf0f7fe4efc402b8456c68fd458a4fb21a9083318d52 \
-  forgec2-v2.7.0-linux-amd64.tar.gz.sha256
+  sovereign-v2.7.0-linux-amd64.tar.gz.sha256
 ```
 
 Release signing public key (set it as `crypto.update_signing_key` to require
@@ -87,13 +87,13 @@ the rolling development build.
 
 ```bash
 # a release (recommended)
-docker pull ghcr.io/r0si/forgec2:2.7.2
+docker pull ghcr.io/r0si/sovereign:2.7.2
 
 # what does the tag actually contain?
-docker buildx imagetools inspect ghcr.io/r0si/forgec2:2.7.2
+docker buildx imagetools inspect ghcr.io/r0si/sovereign:2.7.2
 
 # pin for a reproducible deployment
-docker pull ghcr.io/r0si/forgec2@sha256:<digest>
+docker pull ghcr.io/r0si/sovereign@sha256:<digest>
 ```
 
 ```bash
@@ -107,7 +107,7 @@ keys (`crypto.loot_key` / `extc2_key` / `backup_key` / `credential_key` / `csrf_
 are generated at startup and written back to `config.yaml`, so the example
 config is a working first start; set them explicitly (or via `FORGEC2_*` env)
 when the config file is mounted read-only. Data persists in the
-`forgec2_data` volume (`FORGEC2_DATA_DIR=/data`, which also anchors logs and
+`sovereign_data` volume (`FORGEC2_DATA_DIR=/data`, which also anchors logs and
 backups). No `.env` needed unless you want overrides (see `.env.example`).
 Postgres is opt-in:
 `docker compose --profile postgres up -d --build` (set `DB_PASSWORD`,
@@ -133,9 +133,9 @@ Env equivalents: `FORGEC2_BACKUP_RETAIN`, `FORGEC2_BACKUP_SCHEDULE`.
 Freshness is observable, so a stalled job is not discovered at restore time:
 
 - `GET /api/v1/health` → `backup: { retain, age_seconds, last_success, last_failure, last_error }`
-- Prometheus: `forgec2_backup_age_seconds`, `forgec2_backup_success_total`, `forgec2_backup_failures_total`
+- Prometheus: `sovereign_backup_age_seconds`, `sovereign_backup_success_total`, `sovereign_backup_failures_total`
 
-Alert on `forgec2_backup_age_seconds` exceeding ~2× your schedule interval.
+Alert on `sovereign_backup_age_seconds` exceeding ~2× your schedule interval.
 
 ### Production overlay
 
@@ -155,23 +155,23 @@ curl -fsS https://127.0.0.1:8000/health
 
 ```bash
 # from the GitHub Release page for your version:
-curl -LO https://github.com/r0si/forgec2/releases/download/vX.Y.Z/forgec2-server-linux-amd64
-chmod +x forgec2-server-linux-amd64
+curl -LO https://github.com/r0si/sovereign/releases/download/vX.Y.Z/sovereign-server-linux-amd64
+chmod +x sovereign-server-linux-amd64
 cp config.example.yaml config.yaml
-./forgec2-server-linux-amd64 -config config.yaml
+./sovereign-server-linux-amd64 -config config.yaml
 ```
 
 ## Option C — Windows, bare binary
 
 ```powershell
-# download forgec2-server-windows-amd64.exe from the GitHub Release page,
+# download sovereign-server-windows-amd64.exe from the GitHub Release page,
 # rename it, then from that folder:
 Copy-Item config.example.yaml config.yaml
-.\forgec2-server.exe -config config.yaml
+.\sovereign-server.exe -config config.yaml
 ```
 
 Open `https://<host>:8000` (self-signed cert on first run; TLS on by default).
-Data (SQLite + uploads) lives under `data/` (or the `forgec2_data` volume).
+Data (SQLite + uploads) lives under `data/` (or the `sovereign_data` volume).
 
 The console binds **every interface** by default (`server.host: 0.0.0.0`), so
 it can be operated from another host or container network. Two consequences:
@@ -199,7 +199,7 @@ because it phones home to `api.github.com`:
 # config.yaml
 server:
   update_check_enabled: true
-  update_check_repo: r0si/forgec2   # defaults to the repository the binary was built from
+  update_check_repo: r0si/sovereign   # defaults to the repository the binary was built from
 ```
 
 With the check enabled, Settings → *Check for updates* (or the banner) offers
@@ -207,7 +207,7 @@ the new release, and an administrator can install it from the dialog. The
 update:
 
 1. picks the asset that matches the running platform
-   (`forgec2-server-<os>-<arch>[.exe]`) — a release that carries no binary for
+   (`sovereign-server-<os>-<arch>[.exe]`) — a release that carries no binary for
    this platform, or an ambiguous one, is refused;
 2. downloads it into `<install dir>/.update/`, verifies the SHA-256 published
    next to it (and the detached Ed25519 signature when
@@ -231,9 +231,9 @@ targets:
 
 | Asset | Required | Purpose |
 |---|---|---|
-| `forgec2-server-<os>-<arch>[.exe]` | yes | the installable binary |
-| `forgec2-server-<os>-<arch>[.exe].sha256` | yes | checksum of **that** binary |
-| `forgec2-server-<os>-<arch>[.exe].sha256.sig` | when signing is on | detached Ed25519 signature |
+| `sovereign-server-<os>-<arch>[.exe]` | yes | the installable binary |
+| `sovereign-server-<os>-<arch>[.exe].sha256` | yes | checksum of **that** binary |
+| `sovereign-server-<os>-<arch>[.exe].sha256.sig` | when signing is on | detached Ed25519 signature |
 
 Anything else in the release — the one-click archives, the SBOM, `QUICKSTART.txt`,
 other platforms' binaries — is ignored by the picker, and a checksum that
@@ -249,24 +249,24 @@ The hot update needs a working installation; to replace the binary by hand:
 ```powershell
 # Windows
 $env:V = "v2.7.1"
-curl.exe -L -o forgec2-server.exe.new "https://github.com/r0si/forgec2/releases/download/$env:V/forgec2-server-windows-amd64.exe"
+curl.exe -L -o sovereign-server.exe.new "https://github.com/r0si/sovereign/releases/download/$env:V/sovereign-server-windows-amd64.exe"
 # verify against the published checksum before swapping:
-curl.exe -L -o server.sha256 "https://github.com/r0si/forgec2/releases/download/$env:V/forgec2-server-windows-amd64.exe.sha256"
-Get-FileHash forgec2-server.exe.new -Algorithm SHA256   # compare with server.sha256
-taskkill /f /im forgec2-server.exe
-Move-Item -Force forgec2-server.exe forgec2-server.exe.prev
-Move-Item -Force forgec2-server.exe.new forgec2-server.exe
-.\forgec2-server.exe -config config.yaml
+curl.exe -L -o server.sha256 "https://github.com/r0si/sovereign/releases/download/$env:V/sovereign-server-windows-amd64.exe.sha256"
+Get-FileHash sovereign-server.exe.new -Algorithm SHA256   # compare with server.sha256
+taskkill /f /im sovereign-server.exe
+Move-Item -Force sovereign-server.exe sovereign-server.exe.prev
+Move-Item -Force sovereign-server.exe.new sovereign-server.exe
+.\sovereign-server.exe -config config.yaml
 ```
 
 ```bash
 # Linux
 V=v2.7.1
-curl -LO "https://github.com/r0si/forgec2/releases/download/$V/forgec2-server-linux-amd64"
-sha256sum -c "forgec2-server-linux-amd64.sha256" 2>/dev/null || curl -LO "https://github.com/r0si/forgec2/releases/download/$V/forgec2-server-linux-amd64.sha256"
-sha256sum -c forgec2-server-linux-amd64.sha256
-mv forgec2-server forgec2-server.prev && mv forgec2-server-linux-amd64 forgec2-server
-./forgec2-server -config config.yaml
+curl -LO "https://github.com/r0si/sovereign/releases/download/$V/sovereign-server-linux-amd64"
+sha256sum -c "sovereign-server-linux-amd64.sha256" 2>/dev/null || curl -LO "https://github.com/r0si/sovereign/releases/download/$V/sovereign-server-linux-amd64.sha256"
+sha256sum -c sovereign-server-linux-amd64.sha256
+mv sovereign-server sovereign-server.prev && mv sovereign-server-linux-amd64 sovereign-server
+./sovereign-server -config config.yaml
 ```
 
 `scripts/deploy.ps1` / `scripts/deploy.sh` do the same thing from a source
@@ -383,9 +383,9 @@ and `POST /api/automation/action-stats/reset` (both audited), discoverable at ru
 
 | Symptom | Cause / fix |
 |---|---|
-| `port 0.0.0.0:8000 is already in use` | Another instance is running: `taskkill /f /im forgec2-server.exe` (Windows) or `docker compose down` / `pkill forgec2-server` (Linux). Or change `server.port` in `config.yaml`. |
+| `port 0.0.0.0:8000 is already in use` | Another instance is running: `taskkill /f /im sovereign-server.exe` (Windows) or `docker compose down` / `pkill sovereign-server` (Linux). Or change `server.port` in `config.yaml`. |
 | `unable to open database file` (Docker) | `/data` not writable — fixed in-image (nonroot-owned seed); `docker compose down -v` on a stale root-owned volume, then `up` again. Bare binary: run from a writable directory. |
-| `unhealthy` container right after `up` | Normal for ~30s (Go build + first-run migrations). `docker compose ps`; `start_period` covers it. If still unhealthy: `docker compose logs forgec2`. |
+| `unhealthy` container right after `up` | Normal for ~30s (Go build + first-run migrations). `docker compose ps`; `start_period` covers it. If still unhealthy: `docker compose logs sovereign`. |
 | Browser cert warning | Expected: self-signed cert generated at `data/server.crt`. Accept once, or put `cert_file`/`key_file` with a real cert in `config.yaml`. |
 | Windows SmartScreen / Defender flag | Unsigned exe — click “More info → Run anyway”; consider adding a Defender exclusion for the folder on lab machines. |
 | Windows Firewall prompt on first start | Allow private networks so agents can reach port 8000. |

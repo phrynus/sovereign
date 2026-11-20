@@ -4,7 +4,7 @@
 	.export_name	run, run
 	.functype	push_str (i32) -> ()
 	.functype	host_log (i32, i32) -> ()
-	.import_module	host_log, forgec2
+	.import_module	host_log, sovereign
 	.import_name	host_log, log
 	.section	.text.run,"R",@
 	.hidden	run                             # -- Begin function run

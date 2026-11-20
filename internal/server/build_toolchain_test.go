@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestBuildToolchainPreflight covers the endpoint an operator calls before waiting for a compile.

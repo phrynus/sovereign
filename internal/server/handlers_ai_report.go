@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -193,7 +193,7 @@ func (s *Server) buildAIMarkdownReport(scope string, reqCtx *aiReqCtx) (string, 
 	w := func(format string, args ...interface{}) {
 		fmt.Fprintf(&b, format+"\n", args...)
 	}
-	w("# ForgeC2 Engagement Report (%s)", scope)
+	w("# Sovereign Engagement Report (%s)", scope)
 	w("")
 	w("_Generated %s by the AI assistant - data window: last 30 days_\n", now.Format("2006-01-02 15:04"))
 

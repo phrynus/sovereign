@@ -8,7 +8,7 @@ COOKIE_JAR="$(mktemp)"
 trap 'rm -f "$COOKIE_JAR"' EXIT
 CURL=(curl -sk)
 
-echo "=== ForgeC2 CI API smoke ($BASE_URL) ==="
+echo "=== Sovereign CI API smoke ($BASE_URL) ==="
 
 # health
 health="$("${CURL[@]}" -f "$BASE_URL/health")"
@@ -37,7 +37,7 @@ if [[ -z "$SMOKE_ADMIN_PASSWORD" ]]; then
   exit 1
 fi
 "${CURL[@]}" -f -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE_URL/login" -o /dev/null || true
-CSRF="$(grep -E 'forgec2_csrf' "$COOKIE_JAR" | awk '{print $NF}' | tail -n1 || true)"
+CSRF="$(grep -E 'sovereign_csrf' "$COOKIE_JAR" | awk '{print $NF}' | tail -n1 || true)"
 
 login_code="$("${CURL[@]}" -s -o /tmp/login_post.body -w '%{http_code}' \
   -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
@@ -50,7 +50,7 @@ login_code="$("${CURL[@]}" -s -o /tmp/login_post.body -w '%{http_code}' \
 
 # 302 / 200 / 0-style redirect all OK if session cookie present
 has_session=0
-if grep -q 'forgec2_session' "$COOKIE_JAR" 2>/dev/null; then
+if grep -q 'sovereign_session' "$COOKIE_JAR" 2>/dev/null; then
   has_session=1
 fi
 
@@ -59,11 +59,11 @@ if [[ "$login_code" =~ ^(200|301|302|303|307)$ ]] || [[ "$has_session" -eq 1 ]];
 else
   echo "FAIL login HTTP $login_code session=$has_session (expect admin / \$SMOKE_ADMIN_PASSWORD from auth.default_password on fresh DB)"
   cat /tmp/login_post.body 2>/dev/null || true
-  tail -n 30 /tmp/forgec2-smoke.log 2>/dev/null || true
+  tail -n 30 /tmp/sovereign-smoke.log 2>/dev/null || true
   exit 1
 fi
 
-CSRF="$(grep -E 'forgec2_csrf' "$COOKIE_JAR" | awk '{print $NF}' | tail -n1 || true)"
+CSRF="$(grep -E 'sovereign_csrf' "$COOKIE_JAR" | awk '{print $NF}' | tail -n1 || true)"
 AUTH_H=(-b "$COOKIE_JAR" -H "Accept: application/json")
 if [[ -n "${CSRF:-}" ]]; then
   AUTH_H+=(-H "X-CSRF-Token: $CSRF")

@@ -9,8 +9,8 @@ body:
         Thanks for taking the time to file a report.
 
         **Do not report security vulnerabilities here.** Use the
-        [private advisory form](https://github.com/r0si/forgec2/security/advisories/new)
-        instead — see [SECURITY.md](https://github.com/r0si/forgec2/blob/main/SECURITY.md).
+        [private advisory form](https://github.com/r0si/sovereign/security/advisories/new)
+        instead — see [SECURITY.md](https://github.com/r0si/sovereign/blob/main/SECURITY.md).
 
         Before filing, please search existing issues and check that you are on the
         latest release.
@@ -18,8 +18,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: ForgeC2 version
-      description: Shown under Settings → About, or in the `forgec2-server -version` output.
+      label: Sovereign version
+      description: Shown under Settings → About, or in the `sovereign-server -version` output.
       placeholder: "2.7.1"
     validations:
       required: true
@@ -92,7 +92,7 @@ body:
     attributes:
       label: Relevant logs
       description: |
-        `logs/forgec2.log` and the browser console. Redact beacon keys, JWT secrets,
+        `logs/sovereign.log` and the browser console. Redact beacon keys, JWT secrets,
         API keys, hostnames and anything else sensitive.
       render: shell
     validations:

@@ -48,7 +48,7 @@ it("keeps the error fallback subscribed to the parent language", async () => {
 });
 
 it("can still translate a root failure without a parent provider", async () => {
-  localStorage.setItem("forgec2_lang", "zh");
+  localStorage.setItem("sovereign_lang", "zh");
   render(<ErrorBoundary><Broken /></ErrorBoundary>);
   await screen.findByRole("heading", { name: "发生错误" });
 });

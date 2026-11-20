@@ -32,8 +32,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 	"gopkg.in/yaml.v3"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -41,7 +41,7 @@ import (
 )
 
 func main() {
-	dsn := flag.String("dsn", "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable", "PostgreSQL connection string")
+	dsn := flag.String("dsn", "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable", "PostgreSQL connection string")
 	configPath := flag.String("config", "", "server config.yaml to read server.beacon_key from (ignored when -beacon-key is given)")
 	keyHex := flag.String("beacon-key", "", "server.beacon_key as hex")
 	tenantFlag := flag.String("tenant", "", "minting tenant id (numeric); omitted = legacy unscoped row")

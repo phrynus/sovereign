@@ -35,7 +35,7 @@ export function WebhookDialog({ open, onOpenChange, webhookForm, setWebhookForm,
           </div>
           <div>
             <Label htmlFor="auto-url">{t("auto.url")}</Label>
-            <Input id="auto-url" placeholder="https://hooks.example.com/forgec2" value={webhookForm.url} onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })} className="mt-1" />
+            <Input id="auto-url" placeholder="https://hooks.example.com/sovereign" value={webhookForm.url} onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="auto-event-type">{t("auto.event_type")}</Label>

@@ -1,10 +1,10 @@
 ---
 name: add-automation-rule
-description: Add ForgeC2 automation rules and webhooks (event triggers, actions). Use for automation, webhooks, event rules, or /add-automation-rule.
+description: Add Sovereign automation rules and webhooks (event triggers, actions). Use for automation, webhooks, event rules, or /add-automation-rule.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

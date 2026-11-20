@@ -7,7 +7,7 @@
 # Parameters:
 #   -SkipChecks   skip the frontend gates (npm run check)
 #   -SkipFrontend skip the frontend build and the webdist sync (backend only)
-#   -NoRestart    build forgec2-server.new.exe only; do not touch the running
+#   -NoRestart    build sovereign-server.new.exe only; do not touch the running
 #                 instance (scripts/deploy.ps1 owns stop/start/rollback)
 param(
     [switch]$SkipChecks,
@@ -137,8 +137,8 @@ try {
     # sibling candidate first; only a successful build is allowed to replace
     # the live executable after it has stopped.
     Write-Host "==> Building Go backend..." -ForegroundColor Cyan
-    $serverBinary = "forgec2-server.exe"
-    $candidateBinary = "forgec2-server.new.exe"
+    $serverBinary = "sovereign-server.exe"
+    $candidateBinary = "sovereign-server.new.exe"
     if (Test-Path -LiteralPath $candidateBinary) {
         Remove-Item -LiteralPath $candidateBinary -Force
     }
@@ -152,7 +152,7 @@ try {
 
     # 4. Restart server
     Write-Host "==> Restarting server..." -ForegroundColor Cyan
-    cmd /c "taskkill /f /im forgec2-server.exe >nul 2>&1"
+    cmd /c "taskkill /f /im sovereign-server.exe >nul 2>&1"
     Start-Sleep -Seconds 1
     if (Test-Path -LiteralPath $serverBinary) {
         Remove-Item -LiteralPath $serverBinary -Force
@@ -162,7 +162,7 @@ try {
     # inheritance the server keeps the parent's console handles open, and the
     # caller (CI job, or an agent shell) blocks until the process exits.
     if (-not (Test-Path "logs")) { New-Item -ItemType Directory -Path "logs" | Out-Null }
-    $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru -RedirectStandardOutput "logs\stdout.log" -RedirectStandardError "logs\stderr.log"
+    $p = Start-Process -WindowStyle Hidden -FilePath ".\sovereign-server.exe" -ArgumentList "-config config.yaml" -PassThru -RedirectStandardOutput "logs\stdout.log" -RedirectStandardError "logs\stderr.log"
 
     # 5. Health check (port is overridable via $env:FORGEC2_PORT to match server.port).
     # Retried like CI (30x1s): the server needs time for migrations + listener
@@ -203,9 +203,9 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
         if (-not $p.HasExited) {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
         }
-        if (Test-Path "logs/forgec2.log") {
-            Write-Host "--- logs/forgec2.log (tail) ---" -ForegroundColor Yellow
-            Get-Content "logs/forgec2.log" -Tail 30
+        if (Test-Path "logs/sovereign.log") {
+            Write-Host "--- logs/sovereign.log (tail) ---" -ForegroundColor Yellow
+            Get-Content "logs/sovereign.log" -Tail 30
         }
         exit 1
     }

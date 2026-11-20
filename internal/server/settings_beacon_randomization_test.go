@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // The fleet-default beacon timing randomization keys (implant.beacon_randomization

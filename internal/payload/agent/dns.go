@@ -79,7 +79,7 @@ func sendDNSBeacon(body []byte) []byte {
 // transform without a pre-shared side channel.
 func dnsObfuscateKey(agentID string) []byte {
 	if agentID == "" {
-		return []byte("forgec2")
+		return []byte("sovereign")
 	}
 	return []byte(agentID)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestDeriveRegKeyUsesMemo proves the production derivation path (not just the

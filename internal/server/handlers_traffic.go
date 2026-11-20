@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 type TrafficEntry struct {
@@ -216,7 +216,7 @@ func (s *Server) recordTrafficRequest(c *gin.Context, start time.Time) {
 func (s *Server) handleTrafficPage(c *gin.Context) {
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - Traffic Monitor",
+		"Title":     "Sovereign - Traffic Monitor",
 		"ActiveNav": "traffic",
 	}
 	for k, v := range stats {

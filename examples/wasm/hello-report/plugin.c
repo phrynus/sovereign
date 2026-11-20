@@ -1,4 +1,4 @@
-// ForgeC2 WASM plugin example — ABI v1 (see docs/PLUGIN_TIERS.md).
+// Sovereign WASM plugin example — ABI v1 (see docs/PLUGIN_TIERS.md).
 //
 // A `report` plugin that reads `params.label` out of the input JSON the host
 // wrote and answers with a markdown report echoing that label. It is

@@ -38,13 +38,13 @@ async function prepare(
   const body = JSON.stringify({ ...envelope, data: { ...envelope.data, permissions } });
   await page.addInitScript(
     ({ selectedTheme, selectedLang }) => {
-      localStorage.setItem("forgec2_theme", selectedTheme);
-      localStorage.setItem("forgec2_lang", selectedLang);
+      localStorage.setItem("sovereign_theme", selectedTheme);
+      localStorage.setItem("sovereign_lang", selectedLang);
     },
     { selectedTheme: theme, selectedLang: lang },
   );
   await page.context().addCookies([
-    { name: "forgec2_session", value: "layout-e2e", domain: "127.0.0.1", path: "/" },
+    { name: "sovereign_session", value: "layout-e2e", domain: "127.0.0.1", path: "/" },
   ]);
   await page.route("**/*", async (route: Route) => {
     const type = route.request().resourceType();

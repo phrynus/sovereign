@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/pkg/protocol"
 	"gorm.io/gorm"
 )
 
@@ -282,7 +282,7 @@ func (s *Server) handleExportIOCs(c *gin.Context) {
 			b.WriteString(fmt.Sprintf("%s,%s,%d,%s,%s\n",
 				csvSafe(e.Type), csvSafe(e.Value), e.Count, e.FirstSeen, e.LastSeen))
 		}
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="forgec2-iocs-%s.csv"`, stamp))
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="sovereign-iocs-%s.csv"`, stamp))
 		c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(b.String()))
 	default: // stix2
 		bundle := buildStixBundle(entries, stamp)
@@ -291,7 +291,7 @@ func (s *Server) handleExportIOCs(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "failed to marshal bundle")
 			return
 		}
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="forgec2-iocs-%s.stix.json"`, stamp))
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="sovereign-iocs-%s.stix.json"`, stamp))
 		c.Data(http.StatusOK, "application/stix+json; charset=utf-8", body)
 	}
 }
@@ -346,7 +346,7 @@ func buildStixBundle(entries []iocEntry, stamp string) map[string]interface{} {
 			"created":             e.FirstSeen,
 			"modified":            e.LastSeen,
 			"name":                name,
-			"description":         fmt.Sprintf("Extracted from ForgeC2 task data (%d occurrences)", e.Count),
+			"description":         fmt.Sprintf("Extracted from Sovereign task data (%d occurrences)", e.Count),
 			"pattern":             pattern,
 			"valid_from":          e.FirstSeen,
 			"labels":              []string{"malicious-activity"},
@@ -355,11 +355,11 @@ func buildStixBundle(entries []iocEntry, stamp string) map[string]interface{} {
 		})
 	}
 	return map[string]interface{}{
-		"type":            "bundle",
-		"id":              fmt.Sprintf("bundle--fc2a0000-0000-4000-8000-%s", strconv.FormatInt(time.Now().UnixNano()%1e12, 10)),
-		"timestamp":       now,
-		"x_forgec2_stamp": stamp,
-		"objects":         objects,
+		"type":              "bundle",
+		"id":                fmt.Sprintf("bundle--fc2a0000-0000-4000-8000-%s", strconv.FormatInt(time.Now().UnixNano()%1e12, 10)),
+		"timestamp":         now,
+		"x_sovereign_stamp": stamp,
+		"objects":           objects,
 	}
 }
 

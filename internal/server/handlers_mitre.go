@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // attackTechnique is the MITRE ATT&CK technique mapping used by the coverage page.
@@ -17,7 +17,7 @@ type attackTechnique struct {
 }
 
 // attackTacticMap maps each MITRE tactic to representative techniques and the
-// ForgeC2 task types that satisfy them.
+// Sovereign task types that satisfy them.
 //
 // IMPORTANT (batch-5 honesty): every entry in TaskTypes MUST be a task type the
 // Go implant actually executes (see internal/payload/agent/task_registry.go).

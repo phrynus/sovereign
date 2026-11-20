@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/peimage"
+	"github.com/r0si/sovereign/pkg/peimage"
 )
 
 // Smoke test: generate a real Windows agent with the config-blob ldflags to

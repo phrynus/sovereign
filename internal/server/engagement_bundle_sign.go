@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/bundle"
+	"github.com/r0si/sovereign/internal/bundle"
 )
 
 // Bundle manifest signing.

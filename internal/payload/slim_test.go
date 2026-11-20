@@ -218,14 +218,14 @@ func TestMaybeCompressUPXSkipPaths(t *testing.T) {
 
 func TestMaterializeWin7Shim(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module agent\n\nrequire (\n)\n\nreplace github.com/forgec2/forgec2 => C:/repo\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module agent\n\nrequire (\n)\n\nreplace github.com/r0si/sovereign => C:/repo\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := materializeWin7Shim(dir); err != nil {
 		t.Fatalf("materializeWin7Shim: %v", err)
 	}
 	for _, pkg := range []string{"internal/crypto", "pkg/protocol", "pkg/encoding"} {
-		entries, err := os.ReadDir(filepath.Join(dir, "win7shimroot/github.com/forgec2/forgec2", pkg))
+		entries, err := os.ReadDir(filepath.Join(dir, "win7shimroot/github.com/r0si/sovereign", pkg))
 		if err != nil || len(entries) == 0 {
 			t.Fatalf("shim package %s missing/empty: %v", pkg, err)
 		}
@@ -235,18 +235,18 @@ func TestMaterializeWin7Shim(t *testing.T) {
 			}
 		}
 	}
-	stubMod, err := os.ReadFile(filepath.Join(dir, "win7shimroot/github.com/forgec2/forgec2/go.mod"))
+	stubMod, err := os.ReadFile(filepath.Join(dir, "win7shimroot/github.com/r0si/sovereign/go.mod"))
 	if err != nil {
 		t.Fatalf("stub go.mod missing: %v", err)
 	}
-	if !strings.Contains(string(stubMod), "module github.com/forgec2/forgec2") || !strings.Contains(string(stubMod), "go 1.20") {
+	if !strings.Contains(string(stubMod), "module github.com/r0si/sovereign") || !strings.Contains(string(stubMod), "go 1.20") {
 		t.Fatalf("bad stub go.mod:\n%s", stubMod)
 	}
 	gomod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(gomod), "replace github.com/forgec2/forgec2 => ./win7shimroot/github.com/forgec2/forgec2") {
+	if !strings.Contains(string(gomod), "replace github.com/r0si/sovereign => ./win7shimroot/github.com/r0si/sovereign") {
 		t.Fatalf("agent go.mod replace not repointed:\n%s", gomod)
 	}
 }

@@ -120,11 +120,11 @@ export default function ReportPage() {
   };
 
   const handleExportPDF = async () => {
-    await downloadReport(htmlExportUrl(), "forgec2-report.html", "html");
+    await downloadReport(htmlExportUrl(), "sovereign-report.html", "html");
   };
 
   const handleHandover = async () => {
-    await downloadReport(paths.report.handoverExport(30), "forgec2-handover.zip", "handover");
+    await downloadReport(paths.report.handoverExport(30), "sovereign-handover.zip", "handover");
   };
 
   const handleDeleteReport = async (id: string) => {

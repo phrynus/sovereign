@@ -1,10 +1,10 @@
 ---
 name: add-api-endpoint
-description: Add REST API endpoints to ForgeC2 (route, handler, auth, OpenAPI sync). Use when adding API routes or updating api/openapi.yaml.
+description: Add REST API endpoints to Sovereign (route, handler, auth, OpenAPI sync). Use when adding API routes or updating api/openapi.yaml.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 
@@ -48,7 +48,7 @@ s.logAction(c, "your_action", "resource", id, detail)
 
 ## Auth
 
-- Session cookie: `forgec2_session` from `POST /login`
+- Session cookie: `sovereign_session` from `POST /login`
 - Roles: `admin`, `operator`, `viewer`, `guest`
 - Rate limit: `middleware/rate_limit.go` (WS and beacon exempt)
 

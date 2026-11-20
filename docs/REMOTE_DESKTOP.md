@@ -1,6 +1,6 @@
 # Remote Desktop / Screen Streaming
 
-ForgeC2's remote-desktop surface has two operator modes: the original
+Sovereign's remote-desktop surface has two operator modes: the original
 **snapshot stream** (JPEG frames plus `remote_input` tasks) and an optional
 **live WebRTC mode** (H.264 at 720p30, optionally 1080p30). It is still an
 assist channel, not a full RDP/VNC stack, and this document records the
@@ -108,7 +108,7 @@ webrtc:
   enabled: true
   turn_addr: ":3478"          # UDP listen address
   public_ip: ""               # relay address advertised to peers; empty = first non-loopback IPv4
-  realm: forgec2
+  realm: sovereign
   relay_min_port: 49152       # open UDP 3478 and this range in the firewall
   relay_max_port: 65535
   session_ttl_seconds: 3600

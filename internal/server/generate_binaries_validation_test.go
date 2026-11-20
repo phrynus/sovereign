@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // binFormCtx builds a form POST context for parseBinaryForm.

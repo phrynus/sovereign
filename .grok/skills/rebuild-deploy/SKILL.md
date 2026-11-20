@@ -1,10 +1,10 @@
 ---
 name: rebuild-deploy
-description: Rebuild ForgeC2 single binary (embedded frontend + Go server) and restart
+description: Rebuild Sovereign single binary (embedded frontend + Go server) and restart
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: deploy
 ---
 
@@ -46,13 +46,13 @@ Copy-Item -Recurse -Path "out\*" -Destination "..\internal\webdist\dist\"
 
 # 3. Build Go binary
 cd ..
-go build -o forgec2-server.exe ./cmd/server
+go build -o sovereign-server.exe ./cmd/server
 
 # 4. Stop existing process
-taskkill /f /im forgec2-server.exe 2>$null
+taskkill /f /im sovereign-server.exe 2>$null
 
 # 5. Start server
-Start-Process .\forgec2-server.exe -ArgumentList "-config config.yaml" -WindowStyle Hidden
+Start-Process .\sovereign-server.exe -ArgumentList "-config config.yaml" -WindowStyle Hidden
 
 # 6. Health check
 Start-Sleep -Seconds 3

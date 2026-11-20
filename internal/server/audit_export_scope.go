@@ -14,7 +14,7 @@ const auditExportScopeHeader = "X-Audit-Export-Scope"
 //
 // `X-Audit-Export-Filtered` already says that a selection was made - and the 199 warning says a filtered file is not a
 // contiguous chain, which is the important caveat. What neither says is **which** selection produced this file, so an
-// investigator holding `forgec2-audit-chain_filtered_....ndjson` cannot reproduce it. The scope header names every filter that
+// investigator holding `sovereign-audit-chain_filtered_....ndjson` cannot reproduce it. The scope header names every filter that
 // shaped the rows, in the same format as the task export's.
 //
 // Format: `action=login;since=2026-10-01T00:00:00Z;user=admin` - semicolon-separated, sorted by key, or `all`. `since_id` is

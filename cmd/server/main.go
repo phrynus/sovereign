@@ -12,12 +12,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/payload"
-	"github.com/forgec2/forgec2/internal/server"
-	"github.com/forgec2/forgec2/internal/server/middleware"
-	"github.com/forgec2/forgec2/internal/webdist"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/payload"
+	"github.com/r0si/sovereign/internal/server"
+	"github.com/r0si/sovereign/internal/server/middleware"
+	"github.com/r0si/sovereign/internal/webdist"
 )
 
 func main() {
@@ -56,7 +56,7 @@ func main() {
 	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 
-	slog.Info("Starting ForgeC2 Professional C2 Framework")
+	slog.Info("Starting Sovereign Professional C2 Framework")
 
 	// Load configuration
 	cfg, err := config.Load(*configPath)
@@ -142,7 +142,7 @@ func main() {
 	// Generate deployment manifest
 	server.GenerateDeployManifest(*configPath)
 
-	slog.Info("ForgeC2 ready", "web_ui", fmt.Sprintf("http://localhost:%d", cfg.Server.Port))
+	slog.Info("Sovereign ready", "web_ui", fmt.Sprintf("http://localhost:%d", cfg.Server.Port))
 
 	// Signal handling for graceful shutdown
 	sigCh := make(chan os.Signal, 2)

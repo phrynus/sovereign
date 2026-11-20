@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // callbackRecorder is a local receiver for task callbacks.
@@ -77,7 +77,7 @@ func TestExecuteTaskCallbackDelivers(t *testing.T) {
 	if got := headers[0].Get("Content-Type"); got != "application/json" {
 		t.Fatalf("content type = %q", got)
 	}
-	if got := headers[0].Get("User-Agent"); got != "ForgeC2-Callback/1.0" {
+	if got := headers[0].Get("User-Agent"); got != "Sovereign-Callback/1.0" {
 		t.Fatalf("user agent = %q", got)
 	}
 

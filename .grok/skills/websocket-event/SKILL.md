@@ -1,10 +1,10 @@
 ---
 name: websocket-event
-description: Add WebSocket real-time events in ForgeC2 (server broadcast, layout.js handler, locales). Use for live notifications, WS events, or /websocket-event.
+description: Add WebSocket real-time events in Sovereign (server broadcast, layout.js handler, locales). Use for live notifications, WS events, or /websocket-event.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

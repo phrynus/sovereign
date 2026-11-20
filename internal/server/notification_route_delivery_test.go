@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestSendNotificationRouteRevalidatesAtDelivery pins the legacy-row guard: the

@@ -251,7 +251,7 @@ func allocateLocalRX(data []byte) (uintptr, error) {
 
 func debugLog(msg string) {
 	if Debug {
-		p, _ := syscall.UTF16PtrFromString("[ForgeC2] " + msg)
+		p, _ := syscall.UTF16PtrFromString("[Sovereign] " + msg)
 		procOutputDebugStringW.Call(uintptr(unsafe.Pointer(p)))
 	}
 }
@@ -262,7 +262,7 @@ func logDebug(msg string) {
 
 func logDebugf(format string, args ...interface{}) {
 	if Debug {
-		p, _ := syscall.UTF16PtrFromString("[ForgeC2] " + fmt.Sprintf(format, args...))
+		p, _ := syscall.UTF16PtrFromString("[Sovereign] " + fmt.Sprintf(format, args...))
 		procOutputDebugStringW.Call(uintptr(unsafe.Pointer(p)))
 	}
 }

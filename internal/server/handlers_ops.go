@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // auditReadyChainWindow bounds the work /ready does on the audit chain: enough to
@@ -273,7 +273,7 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	nextPage := p.Page + 1
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":          "ForgeC2 - Build Logs",
+		"Title":          "Sovereign - Build Logs",
 		"ActiveNav":      "builds",
 		"Logs":           logs,
 		"Page":           p.Page,

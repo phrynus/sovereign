@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // TestResyncRefusedWhileSessionLive closes the UUID-existence oracle: a frame

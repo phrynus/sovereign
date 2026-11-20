@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // 鈹€鈹€ Screenshots, path/IP/geo helpers, ls normalize 鈹€鈹€鈹€
@@ -326,7 +326,7 @@ func (s *Server) executeTaskCallback(task db.Task, agentID string) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "ForgeC2-Callback/1.0")
+	req.Header.Set("User-Agent", "Sovereign-Callback/1.0")
 
 	// ssrfSafeClient re-validates every redirect hop (P1-2): the plain
 	// httpClient silently follows up to 10 redirects with no per-hop check,

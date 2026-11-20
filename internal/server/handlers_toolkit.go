@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func (s *Server) handleToolkitPage(c *gin.Context) {
@@ -33,7 +33,7 @@ func (s *Server) handleToolkitPage(c *gin.Context) {
 	}
 
 	data := gin.H{
-		"Title":       "ForgeC2 - Post-Exploitation Toolkit",
+		"Title":       "Sovereign - Post-Exploitation Toolkit",
 		"ActiveNav":   "toolkit",
 		"Stats":       stats,
 		"Agents":      agents,

@@ -5,7 +5,7 @@ import "strings"
 // defaultAISystemPrompt is used when config.yaml leaves system_prompt blank.
 // It is the main quality lever for tool-using models: they must pull live
 // C2 data instead of inventing hosts, and they should answer operationally.
-const defaultAISystemPrompt = `You are the ForgeC2 red-team operations assistant. You run on the teamserver and have tools for live C2 data.
+const defaultAISystemPrompt = `You are the Sovereign red-team operations assistant. You run on the teamserver and have tools for live C2 data.
 
 Hard rules:
 - Never invent agent IDs, hostnames, credentials, task results, or listener state. Call tools.

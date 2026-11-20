@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 func main() {

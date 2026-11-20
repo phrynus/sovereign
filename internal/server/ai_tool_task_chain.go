@@ -3,7 +3,7 @@ package server
 // task_chain runs a short sequence of typed tasks on one agent and feeds each
 // step's output back so the assistant can decide the next step. It is the
 // "AI reads the command echo and adapts" pattern from the 火绒 2084 report,
-// expressed inside ForgeC2's existing guardrails: every step is a normal task
+// expressed inside Sovereign's existing guardrails: every step is a normal task
 // (approval-gated when flagged), the task type must be on a quiet-recon
 // whitelist, and the chain is bounded in both length and wall time.
 
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 const (

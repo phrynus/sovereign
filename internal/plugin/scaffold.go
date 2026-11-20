@@ -230,7 +230,7 @@ func scaffoldFiles(opts ScaffoldOptions) (map[string]string, string, error) {
 // conventions of the bundled plugins.
 func scaffoldManifest(opts ScaffoldOptions, entry string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# ForgeC2 plugin manifest. Contract: docs/PLUGIN_AUTHORING.md\n")
+	fmt.Fprintf(&b, "# Sovereign plugin manifest. Contract: docs/PLUGIN_AUTHORING.md\n")
 	fmt.Fprintf(&b, "# Machine-readable schema: docs/schemas/plugin-manifest.schema.json\n")
 	fmt.Fprintf(&b, "# Validate: go run ./cmd/plugin-check %s -run\n", opts.Dir)
 	fmt.Fprintf(&b, "name: %s\n", opts.Name)
@@ -277,7 +277,7 @@ func yamlScalar(s string) string {
 func scaffoldHeader(opts ScaffoldOptions) string {
 	return fmt.Sprintf(`%s - %s
 
-ForgeC2 plugin contract (https://github.com/forgec2/forgec2, docs/PLUGIN_AUTHORING.md):
+Sovereign plugin contract (https://github.com/r0si/sovereign, docs/PLUGIN_AUTHORING.md):
   * the plugin runs as a child process with its own directory as the working
     directory; HOME/TMP point at the OS temp directory, not the operator profile
   * stdin  carries ONE JSON object: {"params": {...}, "config": {...}} for
@@ -579,7 +579,7 @@ func wasmCSource(opts ScaffoldOptions) string {
 	}
 	return fmt.Sprintf(`/* %s
  *
- * ForgeC2 WASM tier, ABI v1 (docs/PLUGIN_TIERS.md):
+ * Sovereign WASM tier, ABI v1 (docs/PLUGIN_TIERS.md):
  *   run(ptr, len) -> i64   the host wrote the input JSON at in[0..len).
  *                          Return the reply location packed into one i64:
  *                          ptr | (len << 32); return 0 for "no result".
@@ -657,7 +657,7 @@ func cStringLiteral(s string) string {
 
 func wasmBuildScript() string {
 	return `#!/usr/bin/env sh
-# Build plugin.wasm for the ForgeC2 WASM tier (ABI v1).
+# Build plugin.wasm for the Sovereign WASM tier (ABI v1).
 #
 # Any clang with a wasm32 backend works, with or without a sysroot: the module
 # is freestanding (-nostdlib) and declares its own host import. plugin.c also

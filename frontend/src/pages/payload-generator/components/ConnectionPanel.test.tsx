@@ -14,7 +14,7 @@ const BASE: SharedState = {
   tls_fingerprint: "stable", interval: "15", jitter: "30",
   beacon_randomization: "default", max_random_interval_ms: "",
   ua: "Mozilla/5.0", proxy: "", failover: "", crypto_key: "", beacon_key: "", profile: "",
-  dns_doh_url: "", dns_dot_addr: "", ssh_user: "forgec2", ssh_password: "", ssh_key: "", ssh_host_key: "",
+  dns_doh_url: "", dns_dot_addr: "", ssh_user: "sovereign", ssh_password: "", ssh_key: "", ssh_host_key: "",
   mtls_cert: "", mtls_key: "", mtls_ca: "",
 };
 

@@ -10,14 +10,14 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ForgeC2, please report it responsibly.
+If you discover a security vulnerability in Sovereign, please report it responsibly.
 
 **Do not** open public GitHub issues for security vulnerabilities.
 
 Use GitHub's private advisory form:
-<https://github.com/r0si/forgec2/security/advisories/new>
+<https://github.com/r0si/sovereign/security/advisories/new>
 
-Alternatively, email security details to: **security@forgec2.dev** (or the maintainer's private contact).
+Alternatively, email security details to: **security@sovereign.dev** (or the maintainer's private contact).
 
 ### What to include
 
@@ -34,13 +34,13 @@ Alternatively, email security details to: **security@forgec2.dev** (or the maint
 
 ## Security Features
 
-ForgeC2 includes the following built-in security measures:
+Sovereign includes the following built-in security measures:
 
 ### Authentication & Authorization
 
 - JWT + bcrypt password hashing
-- Session cookie `forgec2_session` is HttpOnly + Secure (when TLS enabled) + `SameSite=Lax`
-- CSRF double-submit cookie protection (`forgec2_csrf` + `X-CSRF-Token` header, HMAC-SHA256 of the session bound with independent `crypto.csrf_key`). Note: `forgec2_csrf` is intentionally readable by JS (`HttpOnly=false`) so the frontend can echo it; the session cookie itself stays HttpOnly.
+- Session cookie `sovereign_session` is HttpOnly + Secure (when TLS enabled) + `SameSite=Lax`
+- CSRF double-submit cookie protection (`sovereign_csrf` + `X-CSRF-Token` header, HMAC-SHA256 of the session bound with independent `crypto.csrf_key`). Note: `sovereign_csrf` is intentionally readable by JS (`HttpOnly=false`) so the frontend can echo it; the session cookie itself stays HttpOnly.
 - Per-route RBAC permission system (agents, listeners, settings, plugins, etc.)
 - IP-based login lockout with progressive delay
 

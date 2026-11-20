@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // RegisterTask binds a handler under the spec's canonical type plus every

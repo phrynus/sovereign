@@ -1,10 +1,10 @@
 ---
 name: add-monitor-feature
-description: Add ForgeC2 monitoring features (screenshot, keylogger, screen stream). Use for screenshot, keylog, screen monitor, or /add-monitor-feature.
+description: Add Sovereign monitoring features (screenshot, keylogger, screen stream). Use for screenshot, keylog, screen monitor, or /add-monitor-feature.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

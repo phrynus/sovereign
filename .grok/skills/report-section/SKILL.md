@@ -1,10 +1,10 @@
 ---
 name: report-section
-description: Add sections to ForgeC2 operation reports (HTML + Markdown in generator.go). Use for report chapters or /report-section.
+description: Add sections to Sovereign operation reports (HTML + Markdown in generator.go). Use for report chapters or /report-section.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

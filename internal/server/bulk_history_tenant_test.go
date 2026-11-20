@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestBulkHistoryIsTenantScoped pins the fix for a cross-tenant read: the history

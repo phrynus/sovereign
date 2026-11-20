@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // frontRefreshConcurrency bounds parallel domain probes so a large list

@@ -15,7 +15,7 @@ describe("isSafeUrl", () => {
   });
 
   it("accepts explicit http(s) URLs", () => {
-    expect(isSafeUrl("https://github.com/forgec2/forgec2/releases")).toBe(true);
+    expect(isSafeUrl("https://github.com/r0si/sovereign/releases")).toBe(true);
     expect(isSafeUrl("http://example.com/dl")).toBe(true);
   });
 

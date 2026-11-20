@@ -7,7 +7,7 @@
 > Electron 窃密 1969）、第 4 页（银狐 APC 注入 1917、DCRat 1869）、第 5 页（StilachiRAT 1830、
 > 以太坊 Node.js 远控 1842）、第 6 页（Rhadamanthys 1819、FinalShell 钓鱼 1816）与第 7 页（AI 浏览器后门 1804、
 > QQ 音乐白加黑劫持 1801、银狐迭代 1800）与第 8 页（Lumma 1777、FormBook 1770），把其中反复出现的
-> **受控端功能面**提炼成对照表，并记录 ForgeC2 已实现 / 未实现的部分，作为后续"完善远控核心功能"的选择依据。
+> **受控端功能面**提炼成对照表，并记录 Sovereign 已实现 / 未实现的部分，作为后续"完善远控核心功能"的选择依据。
 > 投递入口（HTA/SFX/钓鱼页/仓库投毒）与纯破坏性载荷（勒索、挖矿、自传播感染）不属于本仓库范围，
 > 只在"取舍"一节说明，不计入功能差距。
 
@@ -20,7 +20,7 @@
 | [多层伪装躲避防护检测！分层式模块化窃密木马](https://www.huorong.cn/document/tech/vir_report/2060)（2026-09-17） | 干扰线程（CPU/注册表/文件/GUI/进程/网络/命令噪声）+ 内联 Hook（AmsiScanBuffer/AmsiScanString/EtwEventWrite）+ 直接系统调用；**以太坊 eth_call 链上动态 C2 地址**；目录/文件/浏览器定向窃取 |
 | [GitHub 投毒暗流：上万恶意 URL](https://www.huorong.cn/document/tech/vir_report/2087)（2026-11-04） | MachineGuid 指纹 + geoip + GDI 全屏截图 multipart 回传；**Polygon eth_call 链上备用 C2**；Base64 路径 + 固定 boundary |
 | [AI 攻击实录：服务器失陷 PayPal 收款凭证成替换目标](https://www.huorong.cn/document/tech/vir_report/2084)（2026-10-28） | Agent 依据命令回显**自适应选择下一步**（提权失败换工具）；SAM/SYSTEM/SECURITY 导出；Base64 分片外带；计划任务写 ASP 木马；FRP 配置劫持 + version.dll 侧加载 |
-| ["人机验证"作掩护 ClickFix 钓鱼](https://www.huorong.cn/document/tech/vir_report/2082)（2026-10-26） | 浏览器缓存走私 + RuntimeBroker.exe 进程镂空；载荷是 **Go 远控**（屏幕实时传输、键鼠、文件、剪贴板同步——与 ForgeC2 功能面高度重合）；**Solana RPC 链上交互 + 隐藏浏览器会话** |
+| ["人机验证"作掩护 ClickFix 钓鱼](https://www.huorong.cn/document/tech/vir_report/2082)（2026-10-26） | 浏览器缓存走私 + RuntimeBroker.exe 进程镂空；载荷是 **Go 远控**（屏幕实时传输、键鼠、文件、剪贴板同步——与 Sovereign 功能面高度重合）；**Solana RPC 链上交互 + 隐藏浏览器会话** |
 | [黑产标准化三板斧｜仿冒软件下载站](https://www.huorong.cn/document/tech/vir_report/2067)（2026-09-28） | 真假混合 SFX + 环境/反调试检测；svchost 注入；**ChaCha20 加密 WebSocket C2 + 消息层加密**；vulkan-1.dll 侧加载；驱动级进程清理 |
 | [从寄生到扩散 感染型病毒与杀毒技术的攻防博弈](https://www.huorong.cn/document/tech/vir_report/2091)（2026-11-09） | Expiro：代码缝隙寄生 + 变体反射 DLL 加载 + 地区规避；**DGA：128 个 .biz 域名轮转、每 30 分钟 512 次查询**；服务"自启动 + 降权到 LocalService"融入正常服务 |
 | [GitHub"李鬼"项目 PhotoCraft 暗藏恶意链接](https://www.huorong.cn/document/tech/vir_report/2078)（2026-10-19） | **钱包文件收集（Exodus/Electrum/Ledger Live/Trezor）+ 仿冒钱包窗口骗助记词 + 剪贴板地址替换 + 远端地址回退**；UI Automation + 键盘钩子；Defender 排除项；SOCKS5 over WS |
@@ -37,12 +37,12 @@
 | [Go语言下的"伪装者"如何实现悄无声息地隐私盗窃](https://www.huorong.cn/document/tech/vir_report/1777)（2024-10-22） | Lumma：Steam 账户名**动态派生 C2 域名**（已被 DGA resolver 覆盖）+ JSON 配置驱动窃密；浏览器/Steam/Discord/邮箱数据（已被各 collection 任务覆盖） |
 | [探究窃密木马FormBook免杀手段——多变的加载器](https://www.huorong.cn/document/tech/vir_report/1770)（2024-09-11） | SMC 自修改代码 + 天堂之门免杀（已有直接系统调用策略，天堂之门为同目标另一实现） |
 
-## TTP → ForgeC2 覆盖对照
+## TTP → Sovereign 覆盖对照
 
 把 9 篇里反复出现的受控端能力归为 9 类，逐类对照（证据来自 `docs/CAPABILITY_MATRIX.md`、
 `docs/COMMAND_REFERENCE.md`、`docs/ANALYSIS-RAYBLOG.md` 与各 `task_registry_*.go`）：
 
-| 能力面（在野样本反复出现） | 出现文章 | ForgeC2 现状 | 结论 |
+| 能力面（在野样本反复出现） | 出现文章 | Sovereign 现状 | 结论 |
 |---|---|---|---|
 | 键盘记录（落盘 + 实时） | 2073, 2082 | `keylogger_start/stop/dump` + WebRTC `keys` 实时流（800ms/4KiB、`AllowKeylogger`） | **已覆盖** |
 | 剪贴板读写/同步（通用） | 2073, 2082 | `clipboard_get/set` + 双向同步 + 20 条历史 | **已覆盖** |
@@ -153,7 +153,7 @@ Critical Process 自保护/守护自愈属破坏性（蓝屏/反终止），超�
 精读/核对第 8 页：Lumma Stealer（1777）、银狐 TrueSightKiller（1772）、FormBook SMC（1770）、
 有道翻译白加黑后门（1766）、WSHRAT（1764）、易语言后门（1761）、银狐 MSI（1653）、蠕虫（1662）等。
 
-| TTP | ForgeC2 现状 / 结论 |
+| TTP | Sovereign 现状 / 结论 |
 |---|---|
 | 用 Steam 账户名动态派生 C2 域名（1777） | 已有 `c2_resolver` 的 DGA（seed 驱动域名环），同机制 |
 | SMC 自修改代码 + 天堂之门免杀（1770） | 已有直接系统调用策略；天堂之门是同目标另一实现（第 6 页已记录） |
@@ -172,7 +172,7 @@ Critical Process 自保护/守护自愈属破坏性（蓝屏/反终止），超�
 QQ 音乐白加黑 + 驱动劫持（1801）、银狐迭代（1800/1790/1784）、感染型（1797）、挖矿（1796）、
 Go 勒索（1792）、非官方火绒剑后门（1779）。
 
-| TTP | ForgeC2 现状 / 结论 |
+| TTP | Sovereign 现状 / 结论 |
 |---|---|
 | 白加黑 DLL 侧载 / svchost 内存加载 / 白进程劫持（1804/1801/1784/1779） | 已有 `byovd_load`、进程注入、反射加载、`persistence` 的 dll_search_order |
 | 银狐多阶段加载 / UAC 绕过 / PlanTask 持久化（1800/1790） | 已有 |
@@ -188,7 +188,7 @@ Go 勒索（1792）、非官方火绒剑后门（1779）。
 
 精读 Rhadamanthys（1819）与 FinalShell 钓鱼（1816）。核对结果：
 
-| TTP | ForgeC2 现状 / 结论 |
+| TTP | Sovereign 现状 / 结论 |
 |---|---|
 | 天堂之门 Hook NtCreateUserProcess / EtwEventWrite、PPID 伪造、反沙箱/反虚拟机/反调试（1819） | 已有直接系统调用策略、`edr_blind`、`PPIDSpoof`、`sandbox_detect_advanced`；天堂之门是同目标的另一种实现选择（32/64 位栈切换），非能力缺口 |
 | 钱包 / Chrome / Edge / Steam / Discord / Telegram 窃取（1819） | 已有 `wallet_collect`、`browser_steal`、`cookie_export`、`messaging_token_collect` |
@@ -203,7 +203,7 @@ Go 勒索（1792）、非官方火绒剑后门（1779）。
 
 精读 StilachiRAT（1830）与以太坊 Node.js 远控（1842）。核对结果：
 
-| TTP | ForgeC2 现状 / 结论 |
+| TTP | Sovereign 现状 / 结论 |
 |---|---|
 | 依托**以太坊**完成远控（1842） | 已被 `c2_resolver` 的 chain `eth_call` dead-drop 覆盖 |
 | 傀儡进程 dllhost.exe + token 复制 + ZwMapViewOfSection + SetThreadContext 注入（1830） | 已有进程注入 / `migrate` / token steal / 反射加载 |
@@ -219,7 +219,7 @@ Go 勒索（1792）、非官方火绒剑后门（1779）。
 扩展阅读目录第 4 页（银狐 Telegram 汉化包投毒 1917、ScreenConnect 伪装外设软件 1920、
 DCRat 盗版电影 1869、IDM 破解窃密 1889、搜狗云控篡改 1845）。逐项核对源码：
 
-| TTP | ForgeC2 现状 |
+| TTP | Sovereign 现状 |
 |---|---|
 | 多阶段 **APC 注入** WmiPrvSE.exe（1917） | 已有 `agent_windows.go` 的 `apc`/`queueapc`、`inject_basic_windows.go`、EarlyBird APC（`injection_earlybird_windows.go`）、atom bombing（`inject_atom_bombing_windows.go`） |
 | CMD/PowerShell + C# 后门内存加载（1920/1869） | 已有 `shell`、`execute_assembly`、`peloader`、`clr_exec_assembly` |

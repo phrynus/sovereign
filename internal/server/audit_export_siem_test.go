@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestAuditExportSIEMProjections covers ?format=ecs and ?format=cef.
@@ -65,7 +65,7 @@ func TestAuditExportSIEMProjections(t *testing.T) {
 		t.Fatalf("ecs line is not JSON: %v (%s)", err, lines[0])
 	}
 	inner, _ := event["event"].(map[string]interface{})
-	if inner["action"] != "task_create" || inner["outcome"] != "success" || inner["dataset"] != "forgec2.audit" {
+	if inner["action"] != "task_create" || inner["outcome"] != "success" || inner["dataset"] != "sovereign.audit" {
 		t.Fatalf("ecs event block = %v", inner)
 	}
 	if event["@timestamp"] == nil || event["@timestamp"] == "" {
@@ -80,7 +80,7 @@ func TestAuditExportSIEMProjections(t *testing.T) {
 		t.Fatalf("ecs host.id = %v", host)
 	}
 	// The hashes travel but are namespaced: a SIEM must not mistake them for something it can verify.
-	product, _ := event["forgec2"].(map[string]interface{})
+	product, _ := event["sovereign"].(map[string]interface{})
 	if product["entry_hash"] == nil {
 		t.Fatalf("ecs projection dropped the entry hash: %v", product)
 	}
@@ -94,7 +94,7 @@ func TestAuditExportSIEMProjections(t *testing.T) {
 		t.Fatalf("cef filename = %q", cd)
 	}
 	cefLine := strings.TrimSpace(cef.Body.String())
-	if !strings.HasPrefix(cefLine, "CEF:0|ForgeC2|") {
+	if !strings.HasPrefix(cefLine, "CEF:0|Sovereign|") {
 		t.Fatalf("cef line = %q", cefLine)
 	}
 	// The extension block must escape the characters that would truncate it in a collector: the resource holds a pipe and the

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestPersistTaskCreatorReportsFailure covers the attribution write that used to be fire-and-forget.

@@ -3,8 +3,8 @@ package server
 import (
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // stalledQueueSummary is the whole-fleet version of the queue report, for the readiness probe.

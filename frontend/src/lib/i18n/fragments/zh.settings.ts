@@ -25,7 +25,7 @@ export const zhSettings: Record<string, string> = {
   "settings.about.total_alloc": "累计内存分配",
   "settings.about.uptime": "运行时长",
   "settings.about.version": "版本",
-  "settings.about.version_label": "ForgeC2 v{version} • 多用户模式",
+  "settings.about.version_label": "Sovereign v{version} • 多用户模式",
   "settings.access_autotag": "自动标签",
   "settings.access_autotag_desc": "Beacon 回连时自动打标的规则",
   "settings.access_desc": "操作员账号、角色和 Beacon 标签。页面地址不变，从设置进去即可。",

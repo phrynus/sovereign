@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestLooksLikeCS pins the auto-detection heuristic for Cobalt Strike profile
@@ -23,7 +23,7 @@ func TestLooksLikeCS(t *testing.T) {
 		"set sleeptime \"60000\";",
 		"set useragent \"Mozilla\";",
 		"set jitter \"20\";",
-		"# forgec2 profile",
+		"# sovereign profile",
 	}
 	for _, in := range cs {
 		if !looksLikeCS(in) {

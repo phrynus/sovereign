@@ -37,13 +37,13 @@ var clearedTables = []string{
 }
 
 func main() {
-	dsn := flag.String("dsn", "", "PostgreSQL connection string (e.g. host=localhost user=forgec2 password=... dbname=forgec2 port=5432 sslmode=disable)")
+	dsn := flag.String("dsn", "", "PostgreSQL connection string (e.g. host=localhost user=sovereign password=... dbname=sovereign port=5432 sslmode=disable)")
 	noBackup := flag.Bool("no-backup", false, "skip pre-reset backup (not recommended)")
 	yes := flag.Bool("yes", false, "skip confirmation prompt")
 	flag.Parse()
 
 	if *dsn == "" {
-		*dsn = "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+		*dsn = "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 		fmt.Println("Using default DSN:", *dsn)
 	}
 
@@ -69,7 +69,7 @@ func main() {
 	}
 
 	if !*noBackup {
-		snap := filepath.Join(".", "forgec2-pre-reset-"+time.Now().Format("20060102-150405")+".sql")
+		snap := filepath.Join(".", "sovereign-pre-reset-"+time.Now().Format("20060102-150405")+".sql")
 		// pg_dump is the correct tool for PostgreSQL snapshots; VACUUM INTO
 		// and file-level snapshots do not exist on PostgreSQL.
 		fmt.Println("backup: run pg_dump manually to create", snap)
@@ -108,7 +108,7 @@ func main() {
 
 // pruneBackups keeps the newest keep snapshots, deleting older ones.
 func pruneBackups(dir string, keep int) {
-	entries, err := filepath.Glob(filepath.Join(dir, "forgec2-pre-reset-*.sql"))
+	entries, err := filepath.Glob(filepath.Join(dir, "sovereign-pre-reset-*.sql"))
 	if err != nil || len(entries) <= keep {
 		return
 	}

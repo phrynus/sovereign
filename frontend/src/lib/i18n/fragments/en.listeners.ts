@@ -60,7 +60,7 @@ export const enListeners: Record<string, string> = {
   "listeners.field_tags": "Tags",
   "listeners.field_type": "Type",
   "listeners.client_ca_hint": "PEM bundle used to verify client certificates. Empty inherits server.client_ca_file.",
-  "listeners.client_ca_ph": "/opt/forgec2/client-ca.pem",
+  "listeners.client_ca_ph": "/opt/sovereign/client-ca.pem",
   "listeners.field_client_ca": "Client CA file (optional)",
   "listeners.field_min_tls": "Minimum TLS version",
   "listeners.field_require_client_cert": "Require a verified client certificate",

@@ -60,7 +60,7 @@ export const zhListeners: Record<string, string> = {
   "listeners.field_tags": "标签",
   "listeners.field_type": "类型",
   "listeners.client_ca_hint": "用于校验客户端证书的 PEM 包；留空则继承 server.client_ca_file。",
-  "listeners.client_ca_ph": "/opt/forgec2/client-ca.pem",
+  "listeners.client_ca_ph": "/opt/sovereign/client-ca.pem",
   "listeners.field_client_ca": "客户端 CA 文件（可选）",
   "listeners.field_min_tls": "最低 TLS 版本",
   "listeners.field_require_client_cert": "要求并校验客户端证书",

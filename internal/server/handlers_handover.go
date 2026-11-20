@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // handleHandoverExport builds a one-shot engagement handover bundle: every
@@ -35,7 +35,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	}
 
 	stamp := time.Now().UTC().Format("20060102T150405Z")
-	filename := fmt.Sprintf("forgec2-handover-%s.zip", stamp)
+	filename := fmt.Sprintf("sovereign-handover-%s.zip", stamp)
 
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Header("Content-Type", "application/zip")
@@ -235,7 +235,7 @@ func (s *Server) handleHandoverExport(c *gin.Context) {
 	}
 
 	// ── README manifest ──
-	readme := fmt.Sprintf(`ForgeC2 Engagement Handover Bundle
+	readme := fmt.Sprintf(`Sovereign Engagement Handover Bundle
 Generated: %s
 Range: last %d days
 
@@ -249,7 +249,7 @@ Contents:
   screenshots.manifest.json    screenshot filename manifest (binaries on server)
   engagement_notes.txt         persistent AI/operator engagement memory
 
-NOTE: plaintext passwords are intentionally excluded. The live ForgeC2
+NOTE: plaintext passwords are intentionally excluded. The live Sovereign
 credential vault remains the source of truth for reusable secrets.
 `, time.Now().UTC().Format(time.RFC3339), days, agentCount, taskCount, credCount, hostCount, iocCount)
 	if w, err := zw.Create("README.txt"); err == nil {

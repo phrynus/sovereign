@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func seedWebhook(t *testing.T, s *Server, name string, tenantID uint, eventType string) db.WebhookConfig {

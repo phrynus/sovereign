@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/go-gormigrate/gormigrate/v2"
+	"github.com/r0si/sovereign/internal/crypto"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -18,7 +18,7 @@ const testHexKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccdd
 // testPostgresDSN is the DSN used by every database test in this package. Tests
 // skip when PostgreSQL is unavailable (local dev machines without a running
 // Postgres instance, CI before the postgres service is up).
-const testPostgresDSN = "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+const testPostgresDSN = "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 
 // openTestDB opens a PostgreSQL test database and returns the gorm handle, or
 // skips the test when PostgreSQL is not available.
@@ -41,7 +41,7 @@ func postgresAvailable(t *testing.T) bool {
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	crypto.InitLootEncryption(testHexKey)
-	dsn := "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+	dsn := "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Skipf("PostgreSQL unavailable for test: %v", err)

@@ -10,7 +10,7 @@ func TestSanitizeLabel(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"ForgeC2", "ForgeC2"},
+		{"Sovereign", "Sovereign"},
 		{"my agent", "my.agent"},
 		{"bad/name:with*chars", "bad.name.with.chars"},
 		{"---leading", "---leading"},

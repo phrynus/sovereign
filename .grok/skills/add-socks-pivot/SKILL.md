@@ -1,10 +1,10 @@
 ---
 name: add-socks-pivot
-description: Extend ForgeC2 SOCKS relay and pivoting (tunnel, relay sessions). Use for SOCKS, pivot, relay, or /add-socks-pivot.
+description: Extend Sovereign SOCKS relay and pivoting (tunnel, relay sessions). Use for SOCKS, pivot, relay, or /add-socks-pivot.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

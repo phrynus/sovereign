@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // handlePrivescCheck handles privilege escalation reconnaissance
@@ -135,7 +135,7 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 		Find(&tasks)
 
 	data := gin.H{
-		"Title":     "ForgeC2 - Privilege Escalation",
+		"Title":     "Sovereign - Privilege Escalation",
 		"ActiveNav": "privesc",
 		"Stats":     stats,
 		"Agents":    agents,

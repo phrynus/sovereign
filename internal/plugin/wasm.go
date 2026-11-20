@@ -20,7 +20,7 @@ import (
 // tier exists for code you do NOT trust to run natively:
 //
 //   - no WASI: the module cannot open files, sockets, environment or clocks
-//   - no imports except the tiny `forgec2` host module below
+//   - no imports except the tiny `sovereign` host module below
 //   - linear memory capped (default 16 MiB)
 //   - wall-clock timeout enforced by the runtime
 //   - stdout equivalent capped (log lines + result size)
@@ -114,7 +114,7 @@ func newWasmRunner(ctx context.Context) (*wasmRunner, error) {
 	hostMod, err := builder.Instantiate(ctx)
 	if err != nil {
 		rt.Close(ctx)
-		return nil, fmt.Errorf("failed to instantiate forgec2 host module: %w", err)
+		return nil, fmt.Errorf("failed to instantiate sovereign host module: %w", err)
 	}
 	r.hostMod = hostMod
 	return r, nil
@@ -331,7 +331,7 @@ func (r *wasmRun) stderr() []byte {
 	defer r.sink.mu.Unlock()
 	out := append([]byte(nil), r.sink.lines...)
 	if r.sink.dropped > 0 {
-		out = append(out, fmt.Sprintf("\n[forgec2: %d log bytes dropped]\n", r.sink.dropped)...)
+		out = append(out, fmt.Sprintf("\n[sovereign: %d log bytes dropped]\n", r.sink.dropped)...)
 	}
 	return out
 }

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func TestHandleLogin_LockoutAfterFailures(t *testing.T) {
@@ -97,7 +97,7 @@ func TestHandleLogout_RevokesSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/logout", nil)
-	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	c.Set("user", user.Username)
 	c.Set("user_id", user.ID)
 	s.handleLogout(c)
@@ -554,7 +554,7 @@ func TestHandleExtendSession_RotatesTokenAndCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/api/auth/extend", nil)
-	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	c.Set("user_id", user.ID)
 	c.Set("user", user.Username)
 	c.Set("user_role", user.Role)
@@ -565,17 +565,17 @@ func TestHandleExtendSession_RotatesTokenAndCookie(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 
-	// Set-Cookie: forgec2_session=<new token>; Max-Age=86400...
+	// Set-Cookie: sovereign_session=<new token>; Max-Age=86400...
 	setCookies := w.Result().Cookies()
 	var newCookie *http.Cookie
 	for _, ck := range setCookies {
-		if ck.Name == "forgec2_session" {
+		if ck.Name == "sovereign_session" {
 			newCookie = ck
 			break
 		}
 	}
 	if newCookie == nil {
-		t.Fatal("expected forgec2_session cookie to be set")
+		t.Fatal("expected sovereign_session cookie to be set")
 	}
 	if newCookie.Value == token {
 		t.Fatal("expected a rotated (different) session token")
@@ -636,7 +636,7 @@ func TestHandleExtendSession_PreservesRememberMe(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/api/auth/extend", nil)
-	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	c.Set("user_id", user.ID)
 	c.Set("user", user.Username)
 	c.Set("user_role", user.Role)
@@ -648,13 +648,13 @@ func TestHandleExtendSession_PreservesRememberMe(t *testing.T) {
 	}
 	var newCookie *http.Cookie
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "forgec2_session" {
+		if ck.Name == "sovereign_session" {
 			newCookie = ck
 			break
 		}
 	}
 	if newCookie == nil {
-		t.Fatal("expected forgec2_session cookie to be set")
+		t.Fatal("expected sovereign_session cookie to be set")
 	}
 	if newCookie.MaxAge != RememberMeMaxAgeSec {
 		t.Errorf("expected Max-Age=%d (remember-me preserved), got %d", RememberMeMaxAgeSec, newCookie.MaxAge)
@@ -677,7 +677,7 @@ func TestHandleExtendSession_Unauthenticated(t *testing.T) {
 	}
 	// No cookie should be issued for an anonymous extend.
 	for _, ck := range w.Result().Cookies() {
-		if ck.Name == "forgec2_session" {
+		if ck.Name == "sovereign_session" {
 			t.Fatalf("must not set a session cookie for unauthenticated extend")
 		}
 	}

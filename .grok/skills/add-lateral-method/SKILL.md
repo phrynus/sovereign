@@ -1,10 +1,10 @@
 ---
 name: add-lateral-method
-description: Add ForgeC2 lateral movement methods (WMI, WinRM, PsExec, DCOM, etc.). Use for lateral movement, pass-the-hash, or /add-lateral-method.
+description: Add Sovereign lateral movement methods (WMI, WinRM, PsExec, DCOM, etc.). Use for lateral movement, pass-the-hash, or /add-lateral-method.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

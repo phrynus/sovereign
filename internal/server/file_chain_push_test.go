@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 // TestPushChainCarriesAcrossChunks pins the fix for a chain that was only a chain in

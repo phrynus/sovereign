@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Notification delivery preview: "if this notification fired now, would anyone receive it".

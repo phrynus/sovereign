@@ -33,7 +33,7 @@ type macroVarPool struct {
 
 func newMacroVarPool(seed int64) *macroVarPool {
 	return &macroVarPool{
-		rng: rand.New(rand.NewSource(seed)), // #nosec G404 -- macro variable names only; not security randomness
+		rng:    rand.New(rand.NewSource(seed)), // #nosec G404 -- macro variable names only; not security randomness
 		used:   make(map[string]bool),
 		prefix: "f",
 	}
@@ -112,7 +112,7 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 	var sb strings.Builder
 
 	if config.Comments {
-		sb.WriteString("' ForgeC2 Generated Macro\n")
+		sb.WriteString("' Sovereign Generated Macro\n")
 		sb.WriteString("' Generated at: " + time.Now().Format(time.RFC3339) + "\n")
 		sb.WriteString("' Payload type: " + config.PayloadType + "\n")
 		sb.WriteString("' C2 URL: " + config.C2URL + "\n")

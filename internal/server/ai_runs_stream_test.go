@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/google/uuid"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestAIRunTerminal pins which statuses count as finished.

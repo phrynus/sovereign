@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func integrationCtx(method, body string, uid uint, params gin.Params) (*gin.Context, *httptest.ResponseRecorder) {

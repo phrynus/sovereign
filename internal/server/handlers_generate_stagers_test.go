@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // stagerMTLSForm builds a DNS stager form (no listener lookup needed) with the

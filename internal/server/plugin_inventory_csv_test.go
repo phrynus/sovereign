@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestPluginInventoryCSVExport covers ?format=csv on the plugin list.
@@ -22,7 +22,7 @@ func TestPluginInventoryCSVExport(t *testing.T) {
 
 	if err := s.db.Create(&db.Plugin{
 		Name: "hello-report", Version: "1.2.0", Type: "report", Category: "reporting",
-		Author: "forgec2-ai", Enabled: true,
+		Author: "sovereign-ai", Enabled: true,
 	}).Error; err != nil {
 		t.Fatalf("seed plugin: %v", err)
 	}

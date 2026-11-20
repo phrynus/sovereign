@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // TestReloadKeepsEnvironmentOverrides pins the fix for a silent, wide-reaching bug:
@@ -24,7 +24,7 @@ server:
   data_dir: data
   port: 8000
 database:
-  path: data/db/forgec2.db
+  path: data/db/sovereign.db
 crypto:
   loot_key: ""
 plugins:

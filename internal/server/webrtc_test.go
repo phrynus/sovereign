@@ -4,14 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 func testWebRTCConfig() *config.Config {
 	cfg := &config.Config{}
 	cfg.WebRTC.Enabled = true
 	cfg.WebRTC.TurnAddr = ":3478"
-	cfg.WebRTC.Realm = "forgec2"
+	cfg.WebRTC.Realm = "sovereign"
 	cfg.WebRTC.RelayMinPort = 49152
 	cfg.WebRTC.RelayMaxPort = 65535
 	cfg.WebRTC.SessionTTLSeconds = 3600
@@ -115,14 +115,14 @@ func TestWebRTCTURNCredentials(t *testing.T) {
 	}
 	defer sess.end("test")
 
-	key, ok := h.authenticateTURN(sess.TurnUser, "forgec2")
+	key, ok := h.authenticateTURN(sess.TurnUser, "sovereign")
 	if !ok || len(key) == 0 {
 		t.Fatal("valid TURN credentials must authenticate")
 	}
 	if _, ok := h.authenticateTURN(sess.TurnUser, "other-realm"); ok {
 		t.Fatal("realm mismatch must fail")
 	}
-	if _, ok := h.authenticateTURN("no-such-user", "forgec2"); ok {
+	if _, ok := h.authenticateTURN("no-such-user", "sovereign"); ok {
 		t.Fatal("unknown TURN user must fail")
 	}
 
@@ -131,14 +131,14 @@ func TestWebRTCTURNCredentials(t *testing.T) {
 	cred.expires = time.Now().Add(-time.Second)
 	h.turn[sess.TurnUser] = cred
 	sess.hub.mu.Unlock()
-	if _, ok := h.authenticateTURN(sess.TurnUser, "forgec2"); ok {
+	if _, ok := h.authenticateTURN(sess.TurnUser, "sovereign"); ok {
 		t.Fatal("expired TURN credentials must fail")
 	}
 }
 
 func TestWebRTCTURNUsesConfiguredRealmFallback(t *testing.T) {
 	cfg := testWebRTCConfig()
-	cfg.WebRTC.Realm = "" // ensureTURN advertises "forgec2" in this case
+	cfg.WebRTC.Realm = "" // ensureTURN advertises "sovereign" in this case
 	h := newWebRTCHub(cfg)
 	sess, _, err := h.createSession("agent-1", 1, 0, webrtcStartOptions{}, time.Minute)
 	if err != nil {
@@ -146,9 +146,9 @@ func TestWebRTCTURNUsesConfiguredRealmFallback(t *testing.T) {
 	}
 	defer sess.end("test")
 
-	key, ok := h.authenticateTURN(sess.TurnUser, "forgec2")
+	key, ok := h.authenticateTURN(sess.TurnUser, "sovereign")
 	if !ok || len(key) == 0 {
-		t.Fatal("empty configured realm must fall back to forgec2")
+		t.Fatal("empty configured realm must fall back to sovereign")
 	}
 	if _, ok := h.authenticateTURN(sess.TurnUser, "other-realm"); ok {
 		t.Fatal("realm mismatch must still fail with the fallback realm")

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/scripting"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/scripting"
 	"gorm.io/gorm"
 )
 
@@ -392,7 +392,7 @@ func (s *Server) executeWebhook(params struct {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "ForgeC2-Automation/1.0")
+	req.Header.Set("User-Agent", "Sovereign-Automation/1.0")
 
 	// Add custom headers
 	for k, v := range params.Headers {
@@ -403,7 +403,7 @@ func (s *Server) executeWebhook(params struct {
 	if params.Secret != "" {
 		h := hmac.New(sha256.New, []byte(params.Secret))
 		h.Write(body)
-		req.Header.Set("X-ForgeC2-Signature", hex.EncodeToString(h.Sum(nil)))
+		req.Header.Set("X-Sovereign-Signature", hex.EncodeToString(h.Sum(nil)))
 	}
 
 	resp, err := ssrfSafeClient(s.httpClient).Do(req)

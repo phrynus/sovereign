@@ -64,7 +64,7 @@ const (
 	SC2Mode = "afeaf44263386975:yYudLgxODAc=" // "failover"
 
 	// Agent banner
-	SForgeC2 = "53d73755f69c1260d7:CJFYJ5H5UVKK" // "[ForgeC2]"
+	SSovereign = "53d73755f69c1260d7:CJFYJ5H5UVKK" // "[Sovereign]"
 
 	// Default C2 URL fallback (used only when no config blob is injected)
 	SC2DefaultURL = "48b37a32e5dd291af634488823fc2aacae9f43c43b:IMcOQt/yBivEA2a4DcwEnZSnc/wL" // "http://127.0.0.1:8080"

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestAuditExportFilters covers the investigation filters added to the export.
@@ -183,7 +183,7 @@ func TestAuditExportReportsTruncation(t *testing.T) {
 		t.Fatalf("rows = %q, want 2", got)
 	}
 	// The audit filename gained a timestamp too, so repeated downloads do not overwrite each other.
-	if cd := limited.Header().Get("Content-Disposition"); !strings.Contains(cd, "_2026-") && !strings.Contains(cd, "forgec2-audit-chain_") {
+	if cd := limited.Header().Get("Content-Disposition"); !strings.Contains(cd, "_2026-") && !strings.Contains(cd, "sovereign-audit-chain_") {
 		t.Fatalf("Content-Disposition = %q", cd)
 	}
 }

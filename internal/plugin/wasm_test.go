@@ -67,7 +67,7 @@ const testResultPages = 9
 
 // buildResultModule produces a module that exports memory and
 // run(ptr,len)->i64 and returns a preloaded JSON result. That is exactly
-// the ForgeC2 WASM ABI contract.
+// the Sovereign WASM ABI contract.
 func buildResultModule(t *testing.T, resultJSON string, memoryPages uint32) []byte {
 	t.Helper()
 	return buildStaticDataModule(t, resultJSON, testResultOffset, memoryPages)

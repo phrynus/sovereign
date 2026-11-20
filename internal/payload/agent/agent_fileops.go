@@ -58,7 +58,7 @@ var chunkChain = struct {
 
 func fileChainKey() []byte {
 	if len(fileChainKeyDerived) == 0 {
-		fileChainKeyDerived = hkdfSHA256(loadAgentRegKey(), []byte("forgec2-filechain-v1"), []byte("file-transfer"))
+		fileChainKeyDerived = hkdfSHA256(loadAgentRegKey(), []byte("sovereign-filechain-v1"), []byte("file-transfer"))
 	}
 	return fileChainKeyDerived
 }

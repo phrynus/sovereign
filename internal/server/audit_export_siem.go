@@ -28,7 +28,7 @@ func auditEventOutcome(success bool) string {
 // auditToECS renders one row as an Elastic Common Schema event.
 //
 // Field names follow ECS 8 (event.*, user.name, source.ip, host.id, message) with the product's own fields namespaced under
-// `forgec2.*` rather than scattered into ECS top level, where a SIEM would index them as something they are not.
+// `sovereign.*` rather than scattered into ECS top level, where a SIEM would index them as something they are not.
 func auditToECS(row auditChainExportRow) map[string]interface{} {
 	message := row.Action
 	if row.Resource != "" {
@@ -43,11 +43,11 @@ func auditToECS(row auditChainExportRow) map[string]interface{} {
 			"action":  row.Action,
 			"outcome": auditEventOutcome(row.Success),
 			"kind":    "event",
-			"dataset": "forgec2.audit",
+			"dataset": "sovereign.audit",
 			"id":      strconv.FormatUint(uint64(row.ID), 10),
 		},
 		"message": message,
-		"forgec2": map[string]interface{}{
+		"sovereign": map[string]interface{}{
 			"tenant_id":  row.TenantID,
 			"resource":   row.Resource,
 			"details":    row.Details,
@@ -80,7 +80,7 @@ func auditToCEF(row auditChainExportRow, productVersion string) string {
 	}
 	header := []string{
 		"CEF:0",
-		"ForgeC2",
+		"Sovereign",
 		cefHeaderEscape(productVersion),
 		"audit",
 		cefHeaderEscape(row.Action),

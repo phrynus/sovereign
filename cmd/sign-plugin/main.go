@@ -1,4 +1,4 @@
-// Command sign-plugin stamps a ForgeC2 plugin package with a canonical digest
+// Command sign-plugin stamps a Sovereign plugin package with a canonical digest
 // and an Ed25519 signature, and can verify an already-stamped package.
 //
 // Usage:
@@ -28,7 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 func main() {

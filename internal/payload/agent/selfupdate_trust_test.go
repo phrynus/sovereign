@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // withPinnedKey temporarily sets the compile-time trust root and restores it.

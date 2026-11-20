@@ -1,4 +1,4 @@
-// Command plugin-check validates a ForgeC2 plugin package the way the server
+// Command plugin-check validates a Sovereign plugin package the way the server
 // loads it: manifest, entry, package digest/signature, tier-specific structure
 // (the WASM ABI surface is inspected with the server's own runtime) and, with
 // -run, one real execution through the server's executor followed by the
@@ -24,7 +24,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 func main() {

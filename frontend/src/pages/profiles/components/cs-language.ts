@@ -42,7 +42,7 @@ export const csLanguage = StreamLanguage.define<null>({
     if (stream.match(/^[A-Za-z_][\w-]*/)) {
       const word = stream.current().toLowerCase();
       if (word === "set") return "keyword";
-      if (/^(http-(get|post|config|stager)|client|server|metadata|id|output|forgec2|post-ex|process-inject|stage|ssl-certificate|dns-beacon)$/.test(word)) {
+      if (/^(http-(get|post|config|stager)|client|server|metadata|id|output|sovereign|post-ex|process-inject|stage|ssl-certificate|dns-beacon)$/.test(word)) {
         return "typeName";
       }
       return "variableName";
@@ -124,7 +124,7 @@ export const csHighlighting = syntaxHighlighting(HighlightStyle.define([
 
 const topLevelBlocks = [
   "http-get", "http-post", "http-config", "http-stager", "post-ex",
-  "process-inject", "stage", "ssl-certificate", "dns-beacon", "forgec2",
+  "process-inject", "stage", "ssl-certificate", "dns-beacon", "sovereign",
 ];
 
 const topLevelSets = [
@@ -178,7 +178,7 @@ function csCompletions(context: CompletionContext): CompletionResult | null {
     let values = topLevelSets;
     if (path.includes("http-get") || path.includes("http-post")) values = httpSets;
     else if (path.includes("http-config")) values = configSets;
-    else if (path.includes("forgec2")) values = forgeSets;
+    else if (path.includes("sovereign")) values = forgeSets;
     return { from: word.from, options: setCompletions(values) };
   }
 
@@ -210,7 +210,7 @@ function csCompletions(context: CompletionContext): CompletionResult | null {
   if (top === "http-config") {
     return { from: word.from, options: [{ label: "set", type: "keyword" }, { label: "header", type: "property" }] };
   }
-  if (top === "forgec2") {
+  if (top === "sovereign") {
     return { from: word.from, options: setCompletions(forgeSets) };
   }
 
@@ -220,7 +220,7 @@ function csCompletions(context: CompletionContext): CompletionResult | null {
       snippetCompletion(`${label} {\n  \${}\n}`, {
         label,
         type: "keyword",
-        detail: label === "forgec2" ? "ForgeC2 extension" : "CS block",
+        detail: label === "sovereign" ? "Sovereign extension" : "CS block",
       })),
   ];
   return { from: word.from, options };
@@ -229,9 +229,9 @@ function csCompletions(context: CompletionContext): CompletionResult | null {
 export const csAutocompletion = autocompletion({ override: [csCompletions] });
 
 export function starterProfile(name = "new_profile"): string {
-  return `# ForgeC2 Malleable C2 profile: ${name}
-# Edit freely using Cobalt Strike profile syntax. The forgec2 { ... } block
-# preserves ForgeC2-only fields; unsupported CS blocks are kept in source and
+  return `# Sovereign Malleable C2 profile: ${name}
+# Edit freely using Cobalt Strike profile syntax. The sovereign { ... } block
+# preserves Sovereign-only fields; unsupported CS blocks are kept in source and
 # reported as warnings by the validator.
 
 set sleeptime "30000";
@@ -259,7 +259,7 @@ http-post {
   }
 }
 
-forgec2 {
+sovereign {
   set content_length_jitter "256";
 }
 `;

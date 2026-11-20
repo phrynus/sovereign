@@ -1,27 +1,27 @@
-# ⚒️ ForgeC2
+# ⚒️ Sovereign
 
 **Self-hosted, open-source command and control (C2) that ships as a single binary.** <!--fact:tasks-->227<!--/fact--> implant tasks, 9 transports, an in-browser payload factory and an AI copilot — with signed releases and hot updates that roll back on failure. Built for authorized red team operations and adversary simulation.
 
-Website: [https://r0si.github.io/forgec2/](https://r0si.github.io/forgec2/) · Source & releases: <https://github.com/r0si/forgec2/releases>
+Website: [https://r0si.github.io/sovereign/](https://r0si.github.io/sovereign/) · Source & releases: <https://github.com/r0si/sovereign/releases>
 
-[![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/forgec2/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/r0si/forgec2)](https://github.com/r0si/forgec2/releases)
-[![Downloads](https://img.shields.io/github/downloads/r0si/forgec2/total)](https://github.com/r0si/forgec2/releases)
-[![Stars](https://img.shields.io/github/stars/r0si/forgec2)](https://github.com/r0si/forgec2/stargazers)
-[![Contributors](https://img.shields.io/github/contributors/r0si/forgec2)](https://github.com/r0si/forgec2/graphs/contributors)
-[![Last commit](https://img.shields.io/github/last-commit/r0si/forgec2)](https://github.com/r0si/forgec2/commits/main)
+[![CI](https://github.com/r0si/sovereign/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/sovereign/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/r0si/sovereign)](https://github.com/r0si/sovereign/releases)
+[![Downloads](https://img.shields.io/github/downloads/r0si/sovereign/total)](https://github.com/r0si/sovereign/releases)
+[![Stars](https://img.shields.io/github/stars/r0si/sovereign)](https://github.com/r0si/sovereign/stargazers)
+[![Contributors](https://img.shields.io/github/contributors/r0si/sovereign)](https://github.com/r0si/sovereign/graphs/contributors)
+[![Last commit](https://img.shields.io/github/last-commit/r0si/sovereign)](https://github.com/r0si/sovereign/commits/main)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 
 **English** · [中文](README.zh.md) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Documentation](#documentation)
 
-> ⚠️ **Authorized security testing only.** You must hold explicit written permission from the system owner before using ForgeC2 against anything. See [Legal](#legal).
+> ⚠️ **Authorized security testing only.** You must hold explicit written permission from the system owner before using Sovereign against anything. See [Legal](#legal).
 
-![ForgeC2 operations dashboard](docs/assets/screens/dashboard.png)
+![Sovereign operations dashboard](docs/assets/screens/dashboard.png)
 
 ## Live demo
 
-[Open the read-only ForgeC2 demo](http://43.143.162.139:8000/) using username `demo` and password `ForgeC2Demo2026!`.
+[Open the read-only Sovereign demo](http://43.143.162.139:8000/) using username `demo` and password `SovereignDemo2026!`.
 
 The public account has an isolated observer role with read-only Agent, listener, and task access. The gateway rejects business-data writes, Beacon endpoints, and WebSocket upgrades. The instance contains no production data. Because this temporary demo uses plain HTTP, do not enter any other credentials or sensitive information.
 
@@ -37,20 +37,20 @@ The image is a **multi-arch manifest**: `linux/amd64` (Intel/AMD) and `linux/arm
 
 ```bash
 # a release (recommended): v2.7.2 and 2.7.2 both exist, plus :latest
-docker pull ghcr.io/r0si/forgec2:2.7.2
+docker pull ghcr.io/r0si/sovereign:2.7.2
 
 # the rolling development build
-docker pull ghcr.io/r0si/forgec2:edge
+docker pull ghcr.io/r0si/sovereign:edge
 ```
 
 `edge` is a rolling development tag, not a stable release. Every **release tag**
 publishes the same image three ways: `vX.Y.Z`, `X.Y.Z` and `:latest`, each a
 multi-arch manifest. For reproducible deployments, pin the image **digest**
-(`docker pull ghcr.io/r0si/forgec2@sha256:…`) or a `sha-<commit>` tag.
+(`docker pull ghcr.io/r0si/sovereign@sha256:…`) or a `sha-<commit>` tag.
 If the package is private, authenticate with `docker login ghcr.io` using an account
 with package access; never put a token directly in a command or configuration file.
 Check what a tag actually resolves to with `docker buildx imagetools inspect
-ghcr.io/r0si/forgec2:<tag>`.
+ghcr.io/r0si/sovereign:<tag>`.
 
 ### Build from source
 
@@ -95,7 +95,7 @@ Full per-task, per-OS matrix (including C-implant deltas): [docs/CAPABILITY_MATR
 
 ## Screenshots
 
-![ForgeC2 sign-in](docs/assets/screens/login.png)
+![Sovereign sign-in](docs/assets/screens/login.png)
 
 The console ships <!--fact:routes-->44<!--/fact--> routed pages: a live operations
 dashboard, the payload generator, agent detail (files, terminal, persistence,
@@ -133,7 +133,7 @@ C2 infrastructure is a high-value target, so the release path is built to be che
 
 ## How it compares
 
-| | **ForgeC2** | Sliver | Mythic | Havoc | Cobalt Strike |
+| | **Sovereign** | Sliver | Mythic | Havoc | Cobalt Strike |
 |---|---|---|---|---|---|
 | **Packaging** | One binary, embedded web UI | Server + CLI client | Docker Compose stack | Teamserver + Qt client | Java teamserver + desktop client |
 | **Web console** | ✅ built in | ❌ | ✅ | ❌ (Qt desktop) | ❌ (desktop) |
@@ -151,7 +151,7 @@ rates.*
 
 ```
                     ┌───────────────────────────────────────────────────────────────┐
-   Operators ──────▶│ ForgeC2 — one binary, one port :8000                          │
+   Operators ──────▶│ Sovereign — one binary, one port :8000                          │
                     │                                                               │
                     │    ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │
                     │    │    Web UI    │  │   REST API   │  │      Beacon       │  │
@@ -201,7 +201,7 @@ first boot and stored in the same file with `0600` permissions.
 
 ## Legal
 
-ForgeC2 is for **authorized security testing only**. You must have explicit
+Sovereign is for **authorized security testing only**. You must have explicit
 written permission from the owner before using it against any system. See
 [LICENSE](LICENSE).
 

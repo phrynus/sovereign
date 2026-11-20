@@ -1,12 +1,12 @@
 # Architecture
 
-ForgeC2 is a single-binary C2 framework with an embedded Vite-built web console. This document describes the system architecture, component interactions, and data flows.
+Sovereign is a single-binary C2 framework with an embedded Vite-built web console. This document describes the system architecture, component interactions, and data flows.
 
 ## System Overview
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    ForgeC2 Server                        │
+│                    Sovereign Server                        │
 │                  (Go + Gin + SQLite)                     │
 │                                                         │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  │
@@ -153,7 +153,7 @@ Request flows through these middleware in order:
 3. IP-based lockout check (5 attempts / 15min window)
 4. JWT token generated with user ID, role, expiry
 5. Session cookie set (`HttpOnly`, `Secure`, `SameSite=Lax`)
-6. CSRF cookie set (`forgec2_csrf`)
+6. CSRF cookie set (`sovereign_csrf`)
 7. All subsequent requests validated via `AuthRequired` middleware
 
 ### Agent Encryption
@@ -176,10 +176,10 @@ Request flows through these middleware in order:
 ### Single Binary
 
 ```
-forgec2-server.exe (or ./forgec2-server)
+sovereign-server.exe (or ./sovereign-server)
 ├── config.yaml (mounted or embedded)
 ├── data/
-│   ├── forgec2.db (SQLite)
+│   ├── sovereign.db (SQLite)
 │   ├── server.crt / server.key (TLS)
 │   └── plugins/ (plugin data)
 └── logs/ (audit, application logs)
@@ -189,7 +189,7 @@ forgec2-server.exe (or ./forgec2-server)
 
 ```yaml
 services:
-  forgec2:
+  sovereign:
     build: .
     ports: ["8000:8000"]
     volumes:

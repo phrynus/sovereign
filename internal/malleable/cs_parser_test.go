@@ -198,7 +198,7 @@ http-post {
   set uri "/x";
   client { header "X-Test" "yes"; }
 }
-forgec2 {
+sovereign {
   set content_length_jitter "128";
   set jitter_uri "true";
   set jitter_parameter "true";
@@ -247,7 +247,7 @@ http-post {
   client { id { base64; } }
   server { output { base64; } }
 }
-forgec2 {
+sovereign {
   set method "GET";
   set beacon_uri "/forced";
   set header "X-Ext" "yes";
@@ -323,7 +323,7 @@ http-post {
   }
   server { output { base64; } }
 }
-forgec2 {
+sovereign {
   set request_header "X-Test" "one";
   set request_header_pool "X-Pool: two";
   set user_agents "UA2";

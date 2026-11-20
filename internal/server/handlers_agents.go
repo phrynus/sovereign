@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/payload"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/payload"
+	"github.com/r0si/sovereign/pkg/protocol"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )
@@ -74,7 +74,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 	prevPage := p.Page - 1
 	nextPage := p.Page + 1
 	data := gin.H{
-		"Title":      "ForgeC2 - Agents",
+		"Title":      "Sovereign - Agents",
 		"ActiveNav":  "agents",
 		"Agents":     agents,
 		"Search":     search,
@@ -240,7 +240,7 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	agentAgeStr := formatDuration(agentAge)
 
 	data := gin.H{
-		"Title":             fmt.Sprintf("ForgeC2 - Agent %s", agent.Hostname),
+		"Title":             fmt.Sprintf("Sovereign - Agent %s", agent.Hostname),
 		"ActiveNav":         "agents",
 		"Agent":             agent,
 		"Tasks":             tasks,
@@ -915,7 +915,7 @@ func (s *Server) writeAgentListJSON(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the fleet list")
 			return
 		}
-		name := "forgec2_fleet_" + time.Now().Format("2006-01-02_150405") + ".csv"
+		name := "sovereign_fleet_" + time.Now().Format("2006-01-02_150405") + ".csv"
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		// A page is not the fleet: say so rather than letting a paged file look complete.
 		if int64(page*pageSize) < total {

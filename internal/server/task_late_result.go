@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // captureLateResult preserves a result that arrived after the operator

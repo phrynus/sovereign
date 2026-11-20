@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/testutil"
 	"regexp"
 	"sort"
 	"strings"

@@ -6,7 +6,7 @@ package main
 import (
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 func TestValidateTransportMigrationAgent(t *testing.T) {

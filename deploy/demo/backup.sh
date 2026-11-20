@@ -5,16 +5,16 @@
 #
 #   sudo bash deploy/demo/backup.sh [--keep N] [--out DIR]
 #
-# Defaults: keep 7 days of dumps in /var/backups/forgec2-demo. Runs fine
+# Defaults: keep 7 days of dumps in /var/backups/sovereign-demo. Runs fine
 # from cron or a systemd timer, e.g.:
-#   0 2 * * * root /opt/forgec2-demo/compose/backup.sh
+#   0 2 * * * root /opt/sovereign-demo/compose/backup.sh
 # Requires the same .env the server uses (DB_PASSWORD); pass BACKUP_ENV to
 # override.
 set -euo pipefail
 
 KEEP=7
-OUT=/var/backups/forgec2-demo
-ENV_FILE="${BACKUP_ENV:-/opt/forgec2-demo/compose/.env}"
+OUT=/var/backups/sovereign-demo
+ENV_FILE="${BACKUP_ENV:-/opt/sovereign-demo/compose/.env}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,12 +31,12 @@ done
 
 mkdir -p "$OUT"
 stamp=$(date +%F-%H%M%S)
-file="$OUT/forgec2-$stamp.sql.gz"
+file="$OUT/sovereign-$stamp.sql.gz"
 
-PGPASSWORD="$DB_PASSWORD" pg_dump -h 127.0.0.1 -U forgec2 -d forgec2 \
+PGPASSWORD="$DB_PASSWORD" pg_dump -h 127.0.0.1 -U sovereign -d sovereign \
   --no-owner --no-privileges | gzip > "$file.tmp"
 mv "$file.tmp" "$file"
 echo "backup written: $file ($(stat -c%s "$file") bytes)"
 
 # Prune everything older than KEEP days.
-find "$OUT" -name 'forgec2-*.sql.gz' -mtime +"$KEEP" -print -delete
+find "$OUT" -name 'sovereign-*.sql.gz' -mtime +"$KEEP" -print -delete

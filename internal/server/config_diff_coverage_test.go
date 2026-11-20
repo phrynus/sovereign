@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // TestDiffConfigTokenCoverage locks the hot-reload contract: every classified

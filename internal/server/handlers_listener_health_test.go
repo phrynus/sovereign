@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── Original probes (restored) ──────────────────────────────────────────────
@@ -86,7 +86,7 @@ func TestProbeSSHReadsBanner(t *testing.T) {
 			if err != nil {
 				return
 			}
-			_, _ = conn.Write([]byte("SSH-2.0-ForgeC2-test\r\n"))
+			_, _ = conn.Write([]byte("SSH-2.0-Sovereign-test\r\n"))
 			conn.Close()
 		}
 	}()
@@ -230,7 +230,7 @@ func sshBannerListener(t *testing.T) string {
 			}
 			go func(c net.Conn) {
 				defer c.Close()
-				_, _ = c.Write([]byte("SSH-2.0-ForgeC2-test\r\n"))
+				_, _ = c.Write([]byte("SSH-2.0-Sovereign-test\r\n"))
 				buf := make([]byte, 1)
 				_, _ = c.Read(buf)
 			}(conn)

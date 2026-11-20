@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // These handlers used to log a database failure and fall through to a

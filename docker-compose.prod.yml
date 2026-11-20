@@ -9,7 +9,7 @@
 # than left to first-run auto-generation so backups/restores stay portable.
 
 services:
-  forgec2:
+  sovereign:
     read_only: true
     tmpfs:
       - /tmp

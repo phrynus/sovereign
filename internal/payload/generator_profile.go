@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/malleable"
+	"github.com/r0si/sovereign/internal/malleable"
 )
 
 // splitPoolHeaderLine splits a "Name: value" pool line. Shared with the
@@ -647,7 +647,7 @@ func looksLikeCSProfile(s string) bool {
 	}
 	low := strings.ToLower(trimmed)
 	return strings.Contains(low, "http-get") || strings.Contains(low, "http-post") ||
-		strings.Contains(low, "http-config") || strings.Contains(low, "forgec2") ||
+		strings.Contains(low, "http-config") || strings.Contains(low, "sovereign") ||
 		strings.Contains(low, "set sleeptime") || strings.Contains(low, "set useragent") ||
 		strings.Contains(low, "set jitter")
 }

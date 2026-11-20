@@ -35,7 +35,7 @@ export const zhPhishing: Record<string, string> = {
   "phishing.entra_device_started": "设备码会话已启动",
   "phishing.entra_device_title": "设备码",
   "phishing.entra_failed": "Entra 身份请求失败",
-  "phishing.entra_lab_only": "仅限授权实验室。请使用自己的应用注册——ForgeC2 不内置 Microsoft client_id。",
+  "phishing.entra_lab_only": "仅限授权实验室。请使用自己的应用注册——Sovereign 不内置 Microsoft client_id。",
   "phishing.entra_redirect": "重定向 URI",
   "phishing.entra_redirect_ph": "https://c2.lab/phishing/oauth/callback",
   "phishing.entra_scope": "范围",

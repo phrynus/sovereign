@@ -3,10 +3,10 @@
 // Dockerfile copies into it.
 //
 // Why this exists: stage 2 of the Dockerfile COPYs cmd/, internal/ and pkg/ — and omitted
-// api/, while internal/server/handlers_api_docs.go imports github.com/forgec2/forgec2/api
+// api/, while internal/server/handlers_api_docs.go imports github.com/r0si/sovereign/api
 // (a package that //go:embed's openapi.yaml so the docs endpoint works in packaged
 // releases). `docker build` failed with "no required module provides package
-// github.com/forgec2/forgec2/api" while `go build ./...` stayed green on every real
+// github.com/r0si/sovereign/api" while `go build ./...` stayed green on every real
 // checkout, because on a checkout api/ EXISTS. Only the image context was missing it.
 // The same archive-vs-embed mismatch is what check-runtime-paths.mjs documents; this gate
 // closes the Docker half of that story.

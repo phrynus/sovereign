@@ -193,7 +193,7 @@ test.describe("legacy routes redirect to the renamed destinations", () => {
 test.describe("generate workspace (static export)", () => {
   test("payload panel renders its lazy chunk and tabs switch", async ({ page }) => {
     // Force the UI language so the assertions can use the en strings.
-    await page.addInitScript(() => localStorage.setItem("forgec2_lang", "en"));
+    await page.addInitScript(() => localStorage.setItem("sovereign_lang", "en"));
     await mockAuthedApis(page);
     const res = await page.goto("/payload-generator.html");
     expect(res?.ok() || res?.status() === 200).toBeTruthy();

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // postBeaconFrom is v2Post with a chosen client address, so the handler's

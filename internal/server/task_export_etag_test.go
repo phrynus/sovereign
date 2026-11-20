@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestTaskExportETag covers revalidation of the task CSV export.
@@ -175,7 +175,7 @@ func TestTaskExportIsSentWhole(t *testing.T) {
 		t.Fatalf("X-Task-Export-Truncated = %q, want false", got)
 	}
 	// The filename carries a time, so two exports in one day do not overwrite each other.
-	if cd := w.Header().Get("Content-Disposition"); !regexp.MustCompile(`forgec2_tasks_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}\.csv`).MatchString(cd) {
+	if cd := w.Header().Get("Content-Disposition"); !regexp.MustCompile(`sovereign_tasks_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}\.csv`).MatchString(cd) {
 		t.Fatalf("Content-Disposition = %q, want a timestamped filename", cd)
 	}
 	// An unfiltered export says `all`, and a filtered one names every filter: the receiver of the file has no other way to tell

@@ -40,7 +40,7 @@ func TestInjectIconResourceUsesUnprefixedOriginalFilename(t *testing.T) {
 	if bytes.Contains(data, utf16LE("deadbeef_report.pdf.exe")) {
 		t.Fatal("OriginalFilename leaked the server's uniqueness prefix")
 	}
-	if bytes.Contains(data, utf16LE("forgec2_agent.exe")) {
+	if bytes.Contains(data, utf16LE("sovereign_agent.exe")) {
 		t.Fatal("OriginalFilename leaked the internal default build name")
 	}
 }

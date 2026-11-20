@@ -1,4 +1,4 @@
-# verify-all.ps1 — One-line comprehensive optimize/verify/build/deploy for ForgeC2
+# verify-all.ps1 — One-line comprehensive optimize/verify/build/deploy for Sovereign
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts/verify-all.ps1
 #   powershell -File scripts/verify-all.ps1 -SkipGolangci -SkipVulnCheck -SkipE2E   # default
@@ -141,8 +141,8 @@ try {
     } finally { Pop-Location }
     Ok "webdist + bundle"
 
-    Step " go build -o forgec2-server.exe ./cmd/server"
-    & go build -o forgec2-server.exe ./cmd/server 2>&1 | ForEach-Object { Write-Host $_ }
+    Step " go build -o sovereign-server.exe ./cmd/server"
+    & go build -o sovereign-server.exe ./cmd/server 2>&1 | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0) { throw "go build failed" } else { Ok "go build" }
 
     if (-not $SkipE2E) {
@@ -155,9 +155,9 @@ try {
         Warn "deploy skipped (-NoDeploy)"
     } else {
         Step "4/7 Deploy — restart + health + smoke"
-        cmd /c "taskkill /f /im forgec2-server.exe >nul 2>&1"
+        cmd /c "taskkill /f /im sovereign-server.exe >nul 2>&1"
         Start-Sleep -Seconds 1
-        $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru
+        $p = Start-Process -WindowStyle Hidden -FilePath ".\sovereign-server.exe" -ArgumentList "-config config.yaml" -PassThru
         Start-Sleep -Seconds 3
         $healthPort = if ($env:FORGEC2_PORT) { $env:FORGEC2_PORT } else { "8000" }
         $tries = 0; $health = $null

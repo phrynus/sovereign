@@ -30,7 +30,7 @@ export function parseRetryAfterSeconds(value: string | null, now = Date.now()): 
 
 function readCsrfCookie(): string {
   if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|;\s*)forgec2_csrf=([^;]*)/);
+  const match = document.cookie.match(/(?:^|;\s*)sovereign_csrf=([^;]*)/);
   if (!match) return "";
   // A malformed cookie value ("%zz") must not throw URIError here — this
   // runs synchronously before EVERY mutation request, and an uncaught throw

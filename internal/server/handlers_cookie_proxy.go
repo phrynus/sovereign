@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Isolated cookie browser: a 127.0.0.1 HTTP proxy that injects harvested

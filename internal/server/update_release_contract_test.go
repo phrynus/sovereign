@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// multiPlatformReleaseAssets mirrors what a real ForgeC2 release publishes:
+// multiPlatformReleaseAssets mirrors what a real Sovereign release publishes:
 // one raw server binary per platform, its checksum, its detached signature,
 // an SBOM, and the one-click bundles. The hot update has to pick the right
 // binary out of this list on every platform - the v2.7.0 bugs (a checksum
@@ -24,21 +24,21 @@ func multiPlatformReleaseAssets(baseURL string) []GitHubAsset {
 		assets = append(assets, GitHubAsset{Name: name, BrowserDownloadURL: baseURL + "/download/" + name})
 	}
 	for _, bin := range []string{
-		"forgec2-server-linux-amd64",
-		"forgec2-server-linux-arm64",
-		"forgec2-server-windows-amd64.exe",
-		"forgec2-server-windows-arm64.exe",
-		"forgec2-server-darwin-amd64",
-		"forgec2-server-darwin-arm64",
+		"sovereign-server-linux-amd64",
+		"sovereign-server-linux-arm64",
+		"sovereign-server-windows-amd64.exe",
+		"sovereign-server-windows-arm64.exe",
+		"sovereign-server-darwin-amd64",
+		"sovereign-server-darwin-arm64",
 	} {
 		add(bin)
 		add(bin + ".sha256")
 		add(bin + ".sha256.sig")
 	}
-	add("forgec2-server-linux-amd64.sbom.json")
-	add("forgec2-server-v9.9.9-linux-amd64.tar.gz")
-	add("forgec2-server-v9.9.9-linux-amd64.zip")
-	add("forgec2-server-v9.9.9-windows-amd64.zip")
+	add("sovereign-server-linux-amd64.sbom.json")
+	add("sovereign-server-v9.9.9-linux-amd64.tar.gz")
+	add("sovereign-server-v9.9.9-linux-amd64.zip")
+	add("sovereign-server-v9.9.9-windows-amd64.zip")
 	add("QUICKSTART.txt")
 	return assets
 }
@@ -85,14 +85,14 @@ func TestGitHubReleaseAPIContract(t *testing.T) {
 		updateCheckURLFmt, releaseAssetsURLFmt = previousCheck, previousAssets
 	}()
 
-	version, err := fetchLatestVersion("acme/forgec2")
+	version, err := fetchLatestVersion("acme/sovereign")
 	if err != nil {
 		t.Fatalf("fetchLatestVersion: %v", err)
 	}
 	if version != "v9.9.9" {
 		t.Fatalf("version = %q, want v9.9.9", version)
 	}
-	assets, err := fetchReleaseAssets("acme/forgec2", version)
+	assets, err := fetchReleaseAssets("acme/sovereign", version)
 	if err != nil {
 		t.Fatalf("fetchReleaseAssets: %v", err)
 	}
@@ -111,15 +111,15 @@ func TestGitHubReleaseAPIContract(t *testing.T) {
 	if seen[0].method != http.MethodGet {
 		t.Fatalf("method = %s, want GET", seen[0].method)
 	}
-	if seen[0].path != "/repos/acme/forgec2/releases/latest" {
+	if seen[0].path != "/repos/acme/sovereign/releases/latest" {
 		t.Fatalf("path = %q", seen[0].path)
 	}
 	for _, r := range seen {
 		if !strings.Contains(r.accept, "application/json") {
 			t.Fatalf("request %s %s did not ask for JSON (Accept=%q)", r.method, r.path, r.accept)
 		}
-		if !strings.HasPrefix(r.agent, "ForgeC2/") {
-			t.Fatalf("request %s %s has User-Agent %q, want ForgeC2/*", r.method, r.path, r.agent)
+		if !strings.HasPrefix(r.agent, "Sovereign/") {
+			t.Fatalf("request %s %s has User-Agent %q, want Sovereign/*", r.method, r.path, r.agent)
 		}
 	}
 	if !strings.Contains(seen[1].path, "/releases/tags/v9.9.9") {
@@ -134,12 +134,12 @@ func TestGitHubReleaseAPIContract(t *testing.T) {
 func TestMultiPlatformReleaseResolvesTheRunningBinaryAndItsOwnSidecars(t *testing.T) {
 	assets := multiPlatformReleaseAssets("https://example.invalid")
 	cases := []struct{ goos, goarch, want string }{
-		{"linux", "amd64", "forgec2-server-linux-amd64"},
-		{"linux", "arm64", "forgec2-server-linux-arm64"},
-		{"windows", "amd64", "forgec2-server-windows-amd64.exe"},
-		{"windows", "arm64", "forgec2-server-windows-arm64.exe"},
-		{"darwin", "amd64", "forgec2-server-darwin-amd64"},
-		{"darwin", "arm64", "forgec2-server-darwin-arm64"},
+		{"linux", "amd64", "sovereign-server-linux-amd64"},
+		{"linux", "arm64", "sovereign-server-linux-arm64"},
+		{"windows", "amd64", "sovereign-server-windows-amd64.exe"},
+		{"windows", "arm64", "sovereign-server-windows-arm64.exe"},
+		{"darwin", "amd64", "sovereign-server-darwin-amd64"},
+		{"darwin", "arm64", "sovereign-server-darwin-arm64"},
 	}
 	for _, tc := range cases {
 		got, err := selectBinaryAsset(assets, tc.goos, tc.goarch)
@@ -159,10 +159,10 @@ func TestMultiPlatformReleaseResolvesTheRunningBinaryAndItsOwnSidecars(t *testin
 	}
 	// The bundle, the SBOM and the quickstart are never installable.
 	for _, name := range []string{
-		"forgec2-server-v9.9.9-linux-amd64.tar.gz",
-		"forgec2-server-linux-amd64.sbom.json",
+		"sovereign-server-v9.9.9-linux-amd64.tar.gz",
+		"sovereign-server-linux-amd64.sbom.json",
 		"QUICKSTART.txt",
-		"forgec2-server-linux-amd64.sha256",
+		"sovereign-server-linux-amd64.sha256",
 	} {
 		if _, _, ok := matchAssetPlatform(name); ok {
 			t.Fatalf("%q was accepted as a server binary", name)

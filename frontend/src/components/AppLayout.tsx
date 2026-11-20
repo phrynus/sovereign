@@ -101,7 +101,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!pathname || pathname === "/login") return;
     const titleKey = getPageTitleKey(pathname);
     if (!titleKey) return;
-    document.title = `${t(titleKey)} — ForgeC2`;
+    document.title = `${t(titleKey)} — Sovereign`;
   }, [pathname, t]);
 
   const handleMenuToggle = useCallback(() => {

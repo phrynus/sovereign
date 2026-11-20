@@ -17,18 +17,18 @@ import (
 // sides must keep these parameters identical.
 
 const (
-	regKeySalt  = "forgec2-reg-v2"
-	sessKeySalt = "forgec2-session-v2"
+	regKeySalt  = "sovereign-reg-v2"
+	sessKeySalt = "sovereign-session-v2"
 
 	// v3 per-implant registration secrets (see RegSecretStore). Each built
 	// implant embeds a unique random secret instead of the fleet master key,
 	// so extracting one binary no longer compromises the whole engagement.
-	regSecretStoreSaltV3 = "forgec2-regstore-v3"
+	regSecretStoreSaltV3 = "sovereign-regstore-v3"
 
 	// fileChainSalt / fileChainInfo derive the per-implant file-transfer
 	// integrity key from the registration key (see DeriveFileChainKey).
 	// The agent mirrors this in internal/payload/agent/agent_fileops.go.
-	fileChainSalt = "forgec2-filechain-v1"
+	fileChainSalt = "sovereign-filechain-v1"
 	fileChainInfo = "file-transfer"
 )
 
@@ -125,7 +125,7 @@ func FileChunkMAC(chainKey, prevMAC, chunkData []byte) []byte {
 // Kill-switch derivation parameters. The agent mirrors these byte-for-byte
 // (internal/payload/agent/cipher.go) — see agent_killswitch_test.go.
 const (
-	killSwitchSalt = "forgec2-killswitch-v1"
+	killSwitchSalt = "sovereign-killswitch-v1"
 	killSwitchInfo = "killswitch"
 )
 

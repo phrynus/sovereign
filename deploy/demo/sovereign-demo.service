@@ -1,0 +1,23 @@
+# DEPRECATED - the demo now runs as a container (docker-compose.yml, started by
+# deploy.sh). This unit is kept only so a host migrated from the native layout
+# can be rolled back; deploy.sh disables it when it exists.
+[Unit]
+Description=Sovereign isolated read-only demo backend
+After=network.target
+
+[Service]
+Type=simple
+User=sovereigndemo
+Group=sovereigndemo
+WorkingDirectory=/opt/sovereign-demo
+ExecStart=/opt/sovereign-demo/sovereign-server -config /opt/sovereign-demo/config.yaml -log-format json -log-file /opt/sovereign-demo/logs/sovereign.log
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sovereign-demo/data /opt/sovereign-demo/logs /opt/sovereign-demo/config.yaml
+
+[Install]
+WantedBy=multi-user.target

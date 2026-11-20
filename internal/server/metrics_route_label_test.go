@@ -43,7 +43,7 @@ func TestMetricsRequestDurationUsesRouteTemplate(t *testing.T) {
 	}
 	var labels []string
 	for _, f := range families {
-		if f.GetName() != "forgec2_request_duration_seconds" {
+		if f.GetName() != "sovereign_request_duration_seconds" {
 			continue
 		}
 		for _, m := range f.GetMetric() {

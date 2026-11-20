@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/forgec2/forgec2/internal/auditchain"
+	"github.com/r0si/sovereign/internal/auditchain"
 )
 
 func main() {

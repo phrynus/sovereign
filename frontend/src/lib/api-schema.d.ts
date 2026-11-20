@@ -12502,7 +12502,7 @@ export interface operations {
             /** @description Login successful (redirect to dashboard) */
             302: {
                 headers: {
-                    /** @description forgec2_session cookie */
+                    /** @description sovereign_session cookie */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };

@@ -114,9 +114,9 @@ func TestDataDirEnvOverrideRebasesDerivedPaths(t *testing.T) {
 	body := "server:\n" +
 		"  data_dir: data\n" +
 		"  cert_file: data/server.crt\n" +
-		"  key_file: /etc/forgec2/tls.key\n" +
+		"  key_file: /etc/sovereign/tls.key\n" +
 		"database:\n" +
-		"  path: data/db/forgec2.db\n"
+		"  path: data/db/sovereign.db\n"
 	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -130,14 +130,14 @@ func TestDataDirEnvOverrideRebasesDerivedPaths(t *testing.T) {
 	if cfg.Server.DataDir != newRoot {
 		t.Fatalf("data_dir = %q, want %q", cfg.Server.DataDir, newRoot)
 	}
-	if want := filepath.Join(newRoot, "db", "forgec2.db"); filepath.Clean(cfg.Database.Path) != want {
+	if want := filepath.Join(newRoot, "db", "sovereign.db"); filepath.Clean(cfg.Database.Path) != want {
 		t.Fatalf("database.path = %q, want %q", cfg.Database.Path, want)
 	}
 	if want := filepath.Join(newRoot, "server.crt"); cfg.Server.CertFile != want {
 		t.Fatalf("cert_file = %q, want %q", cfg.Server.CertFile, want)
 	}
 	// Explicit absolute operator value must survive.
-	if cfg.Server.KeyFile != "/etc/forgec2/tls.key" {
+	if cfg.Server.KeyFile != "/etc/sovereign/tls.key" {
 		t.Fatalf("explicit key_file overwritten: %q", cfg.Server.KeyFile)
 	}
 }

@@ -8,17 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func backupTestManager(t *testing.T) *BackupManager {
 	t.Helper()
 	ginSetTestMode(t)
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "forgec2.db")
+	dbPath := filepath.Join(dir, "sovereign.db")
 	database := testutil.SetupTestDB(t)
 	bm, err := NewBackupManager(database, dbPath, filepath.Join(dir, "backups"), testStorageKeyHex)
 	if err != nil {
@@ -87,7 +87,7 @@ func TestBackupRetentionIsConfigurable(t *testing.T) {
 }
 
 func backupNameForTest(i int) string {
-	return "forgec2_backup_2026010" + string(rune('0'+i)) + "_000000.fbk"
+	return "sovereign_backup_2026010" + string(rune('0'+i)) + "_000000.fbk"
 }
 
 // TestBackupHealthTracksResults proves freshness state is recorded for both

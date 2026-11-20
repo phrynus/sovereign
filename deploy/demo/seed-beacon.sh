@@ -22,14 +22,14 @@
 # override.
 set -euo pipefail
 
-ENV_FILE="${BACKUP_ENV:-/opt/forgec2-demo/compose/.env}"
+ENV_FILE="${BACKUP_ENV:-/opt/sovereign-demo/compose/.env}"
 [ -r "$ENV_FILE" ] || { echo "env file not readable: $ENV_FILE" >&2; exit 1; }
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 : "${DB_PASSWORD:?DB_PASSWORD missing in $ENV_FILE}"
 export PGPASSWORD="$DB_PASSWORD"
 
-psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U forgec2 -d forgec2 <<'SQL'
+psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U sovereign -d sovereign <<'SQL'
 \set beacon_id 'a3f1c2d4-5e6b-4c7d-8e9f-0a1b2c3d4e5f'
 
 -- The beacon itself. Offline on purpose: nothing is really checking in, and
@@ -51,7 +51,7 @@ INSERT INTO implants (
     true, false,
     'Demo beacon for the public demo (read-only).',
     'demo,windows',
-    '2.7.1', 1, 4242, 'forgec2.exe', 'High', 'CORP',
+    '2.7.1', 1, 4242, 'sovereign.exe', 'High', 'CORP',
     60, 10, 'chrome_auto', true,
     now() - interval '3 days', now()
 ) ON CONFLICT (id) DO NOTHING;

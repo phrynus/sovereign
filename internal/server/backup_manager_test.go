@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/glebarez/sqlite"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +49,7 @@ func TestCreateBackupProducesEncryptedRestorableSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createBackup: %v", err)
 	}
-	if !strings.HasPrefix(name, "forgec2_backup_") || !strings.HasSuffix(name, ".fbk") {
+	if !strings.HasPrefix(name, "sovereign_backup_") || !strings.HasSuffix(name, ".fbk") {
 		t.Fatalf("backup name = %q", name)
 	}
 	if size <= 0 {
@@ -94,7 +94,7 @@ func TestCreateBackupProducesEncryptedRestorableSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".forgec2-snapshot-") {
+		if strings.HasPrefix(e.Name(), ".sovereign-snapshot-") {
 			t.Fatalf("snapshot temp file left behind: %s", e.Name())
 		}
 	}
@@ -136,7 +136,7 @@ func TestCleanupOldBackupsKeepsRetention(t *testing.T) {
 
 	// Five backups with increasing mtimes, plus a stray file.
 	for i := 0; i < 5; i++ {
-		name := filepath.Join(backupDir, "forgec2_backup_2026010"+string(rune('0'+i))+"_000000.fbk")
+		name := filepath.Join(backupDir, "sovereign_backup_2026010"+string(rune('0'+i))+"_000000.fbk")
 		if err := os.WriteFile(name, []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -297,10 +297,10 @@ func TestCleanupRemovesStaleBackupTemps(t *testing.T) {
 		return path
 	}
 
-	staleSnapshot := mk(".forgec2-snapshot-1700000000000000000.tmp", old)
-	staleOut := mk("forgec2_backup_20260101_000000.fbk.tmp", old)
-	freshOut := mk("forgec2_backup_20260101_000001.fbk.tmp", time.Now())
-	keep := mk("forgec2_backup_20260101_000002.fbk", time.Now())
+	staleSnapshot := mk(".sovereign-snapshot-1700000000000000000.tmp", old)
+	staleOut := mk("sovereign_backup_20260101_000000.fbk.tmp", old)
+	freshOut := mk("sovereign_backup_20260101_000001.fbk.tmp", time.Now())
+	keep := mk("sovereign_backup_20260101_000002.fbk", time.Now())
 
 	bm.cleanupOldBackups()
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 type lootScreenshotDTO struct {
@@ -154,7 +154,7 @@ func (s *Server) handleLootPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":         "ForgeC2 - Loot",
+		"Title":         "Sovereign - Loot",
 		"ActiveNav":     "loot",
 		"Agents":        agents,
 		"Screenshots":   allScreenshots,

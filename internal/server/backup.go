@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 	"gorm.io/gorm"
 )
 
@@ -325,7 +325,7 @@ func (bm *BackupManager) createBackup() (string, int64, error) {
 	// Snapshot inside the backup dir (same filesystem for the later rename,
 	// 0600 from creation). os.TempDir() may live on another volume and with
 	// looser ACLs.
-	snapshotPath := filepath.Join(bm.backupDir, fmt.Sprintf(".forgec2-snapshot-%d.tmp", time.Now().UnixNano()))
+	snapshotPath := filepath.Join(bm.backupDir, fmt.Sprintf(".sovereign-snapshot-%d.tmp", time.Now().UnixNano()))
 	defer os.Remove(snapshotPath)
 
 	// VACUUM INTO is the only snapshot path: the old BEGIN IMMEDIATE +
@@ -346,7 +346,7 @@ func (bm *BackupManager) createBackup() (string, int64, error) {
 	}
 
 	timestamp := time.Now().Format(backupTimestamp)
-	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("forgec2_backup_%s.fbk", timestamp))
+	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("sovereign_backup_%s.fbk", timestamp))
 	// Two backups can land in the same second (the scheduler fires on Start and a
 	// manual run arrives immediately after). Without a suffix the second rename
 	// overwrites the first on Unix and fails outright on Windows.
@@ -354,7 +354,7 @@ func (bm *BackupManager) createBackup() (string, int64, error) {
 		if _, statErr := os.Stat(backupFile); os.IsNotExist(statErr) {
 			break
 		}
-		backupFile = filepath.Join(bm.backupDir, fmt.Sprintf("forgec2_backup_%s_%d.fbk", timestamp, i))
+		backupFile = filepath.Join(bm.backupDir, fmt.Sprintf("sovereign_backup_%s_%d.fbk", timestamp, i))
 	}
 
 	data, err := os.ReadFile(snapshotPath)
@@ -459,7 +459,7 @@ func (bm *BackupManager) removeStaleTempFiles(files []os.DirEntry) {
 			continue
 		}
 		name := file.Name()
-		if !strings.HasSuffix(name, ".fbk.tmp") && !strings.HasPrefix(name, ".forgec2-snapshot-") {
+		if !strings.HasSuffix(name, ".fbk.tmp") && !strings.HasPrefix(name, ".sovereign-snapshot-") {
 			continue
 		}
 		info, err := file.Info()

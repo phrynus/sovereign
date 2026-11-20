@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -895,7 +895,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":           "ForgeC2 - Credential Center",
+		"Title":           "Sovereign - Credential Center",
 		"ActiveNav":       "credentials",
 		"VaultEntries":    enriched,
 		"CredsTasks":      credsTasks,

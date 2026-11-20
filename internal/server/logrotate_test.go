@@ -62,7 +62,7 @@ func TestFanoutWriterReportsTotalFailure(t *testing.T) {
 }
 
 // TestSetupLogRotationWritesAFile is the end-to-end check: the rotating file really receives
-// what the logger writes, so "logs go to logs/forgec2.log" is verified rather than assumed.
+// what the logger writes, so "logs go to logs/sovereign.log" is verified rather than assumed.
 //
 // os.MkdirTemp instead of t.TempDir: lumberjack holds the file open, so TempDir's cleanup
 // cannot delete it on Windows. The writer is closed before cleanup, and the stdlib logger is
@@ -102,7 +102,7 @@ func TestSetupLogRotationWritesAFile(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	path := filepath.Join(dir, "forgec2.log")
+	path := filepath.Join(dir, "sovereign.log")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("log file not written: %v", err)

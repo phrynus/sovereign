@@ -30,7 +30,7 @@ import (
 // the artifact small and free of control-plane state.
 const (
 	resultsSpoolMagic = "FC2SP1"
-	resultsSpoolInfo  = "forgec2-results-spool-v1"
+	resultsSpoolInfo  = "sovereign-results-spool-v1"
 	// Sanity cap for reads. The queue bound is 16 MiB of raw output, and the
 	// in-flight set rides on top of it while a beacon is outstanding, so a
 	// worst-case JSON snapshot (control bytes escape to six characters) is

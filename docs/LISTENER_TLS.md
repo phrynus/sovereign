@@ -1,6 +1,6 @@
 # Per-listener TLS posture (`https` / `tls` listeners)
 
-ForgeC2 has two layers of TLS hardening for beacon termination points:
+Sovereign has two layers of TLS hardening for beacon termination points:
 
 | Layer | Where it lives | What it covers |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ below the TLS 1.2 floor, or come up without a CA to verify against.
 | Listener value | Effective behaviour |
 | --- | --- |
 | `client_ca_file: ""` | the server-wide `server.client_ca_file` is used once client certificates are required |
-| `client_ca_file: /etc/forgec2/client-ca.pem` | this listener verifies client certificates against that PEM bundle |
+| `client_ca_file: /etc/sovereign/client-ca.pem` | this listener verifies client certificates against that PEM bundle |
 | `require_client_cert: false` | client certificates are required only if `server.require_client_cert` is true |
 | `require_client_cert: true` | always `tls.RequireAndVerifyClientCert` on this listener |
 | `min_tls_version: ""` | TLS 1.2 floor (the server-wide floor) |
@@ -59,7 +59,7 @@ curl -s -X POST http://127.0.0.1:8000/api/listeners \
     "host": "0.0.0.0",
     "port": 8443,
     "scheme": "https",
-    "client_ca_file": "/etc/forgec2/client-ca.pem",
+    "client_ca_file": "/etc/sovereign/client-ca.pem",
     "require_client_cert": true,
     "min_tls_version": "1.3"
   }'

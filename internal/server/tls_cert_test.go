@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 // TestTLSCertLoaderHotReload proves regenerate-style replacement takes

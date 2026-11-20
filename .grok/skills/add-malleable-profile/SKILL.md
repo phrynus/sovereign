@@ -1,10 +1,10 @@
 ---
 name: add-malleable-profile
-description: Add malleable C2 profiles to ForgeC2 (HTTP traffic shaping, sleep, UA, profile lock on generate page). Use for malleable profiles or C2 traffic disguise.
+description: Add malleable C2 profiles to Sovereign (HTTP traffic shaping, sleep, UA, profile lock on generate page). Use for malleable profiles or C2 traffic disguise.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

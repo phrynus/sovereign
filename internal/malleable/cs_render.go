@@ -7,7 +7,7 @@ import (
 )
 
 // RenderCS serializes a v2 profile into a Cobalt Strike-style profile. It emits
-// the HTTP blocks ForgeC2 can compile plus a documented forgec2 { ... }
+// the HTTP blocks Sovereign can compile plus a documented sovereign { ... }
 // extension block for fields CS does not model. The result is intended for the
 // online profile editor; builds continue to consume the compiled JSON.
 func RenderCS(p *ProfileV2) string {
@@ -17,9 +17,9 @@ func RenderCS(p *ProfileV2) string {
 	var b strings.Builder
 	name := strings.TrimSpace(p.Name)
 	if name != "" {
-		fmt.Fprintf(&b, "# ForgeC2 Malleable C2 profile: %s\n", name)
+		fmt.Fprintf(&b, "# Sovereign Malleable C2 profile: %s\n", name)
 	}
-	b.WriteString("# Syntax-compatible with Cobalt Strike; forgec2 { ... } preserves ForgeC2-only fields.\n\n")
+	b.WriteString("# Syntax-compatible with Cobalt Strike; sovereign { ... } preserves Sovereign-only fields.\n\n")
 
 	if p.Description != "" {
 		fmt.Fprintf(&b, "set description %s;\n", csQuote(p.Description))
@@ -63,7 +63,7 @@ func RenderCS(p *ProfileV2) string {
 		renderHTTPBlock(&b, "http-post", "POST", uris, p.Headers, nil, p.ClientID, p.ServerOutput, p.Parameter)
 	}
 
-	renderForgec2(&b, p, method)
+	renderSovereign(&b, p, method)
 	return b.String()
 }
 
@@ -131,7 +131,7 @@ func renderSteps(b *strings.Builder, steps []StepV2) {
 	}
 }
 
-func renderForgec2(b *strings.Builder, p *ProfileV2, method string) {
+func renderSovereign(b *strings.Builder, p *ProfileV2, method string) {
 	has := p.Prepend != "" || p.Append != "" || p.RequestPrepend != "" || p.RequestAppend != "" ||
 		len(p.RequestHeaders) > 0 || len(p.RequestHeaderPool) > 0 || len(p.UserAgents) > 0 ||
 		len(p.ParameterNames) > 0 || len(p.Placements) > 0 || p.ContentLengthJitter != 0 ||
@@ -140,7 +140,7 @@ func renderForgec2(b *strings.Builder, p *ProfileV2, method string) {
 	if !has {
 		return
 	}
-	b.WriteString("forgec2 {\n")
+	b.WriteString("sovereign {\n")
 	if p.Prepend != "" {
 		fmt.Fprintf(b, "  set prepend %s;\n", csQuote(p.Prepend))
 	}

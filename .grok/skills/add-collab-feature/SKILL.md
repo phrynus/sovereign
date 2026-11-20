@@ -1,10 +1,10 @@
 ---
 name: add-collab-feature
-description: Extend ForgeC2 multi-operator collaboration (WS presence, agent locks, page sync). Use for collab, operator online, agent lock, or /add-collab-feature.
+description: Extend Sovereign multi-operator collaboration (WS presence, agent locks, page sync). Use for collab, operator online, agent lock, or /add-collab-feature.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

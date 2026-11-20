@@ -36,14 +36,14 @@ interface ProgressState {
 }
 
 /** Custom event to open the dialog from anywhere: `openUpdateDialog(info)`. */
-export const OPEN_UPDATE_DIALOG = "forgec2:open-update-dialog";
+export const OPEN_UPDATE_DIALOG = "sovereign:open-update-dialog";
 
 /**
  * Session flag set right before the page reloads after a hot update, so the
  * reloaded console can tell the operator that the new build is the one they
  * are looking at now.
  */
-const UPDATED_FLAG = "forgec2:updated-to";
+const UPDATED_FLAG = "sovereign:updated-to";
 
 export function openUpdateDialog(info: UpdateDialogInfo) {
   window.dispatchEvent(new CustomEvent<UpdateDialogInfo>(OPEN_UPDATE_DIALOG, { detail: info }));

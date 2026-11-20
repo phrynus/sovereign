@@ -199,12 +199,12 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 	} else {
 		// No DSN: construct a default local PostgreSQL DSN. The operator
 		// must have PostgreSQL running (see docker-compose.yml --profile postgres).
-		defaultDSN := "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+		defaultDSN := "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 		db, err = gorm.Open(postgres.Open(defaultDSN), gormConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL (default DSN %s): %w", defaultDSN, err)
 		}
-		slog.Info("Database initialized (PostgreSQL)", "dsn", "host=localhost user=forgec2 dbname=forgec2 port=5432 sslmode=disable")
+		slog.Info("Database initialized (PostgreSQL)", "dsn", "host=localhost user=sovereign dbname=sovereign port=5432 sslmode=disable")
 	}
 
 	sqlDB, err := db.DB()

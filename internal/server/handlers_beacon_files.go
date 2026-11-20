@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // persistFileChunk writes one upload/download chunk to disk and returns the

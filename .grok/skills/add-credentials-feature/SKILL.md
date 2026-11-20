@@ -1,10 +1,10 @@
 ---
 name: add-credentials-feature
-description: Extend ForgeC2 credential vault (harvest, store, browser creds, mimikatz). Use for credentials, cred vault, mimikatz, or /add-credentials-feature.
+description: Extend Sovereign credential vault (harvest, store, browser creds, mimikatz). Use for credentials, cred vault, mimikatz, or /add-credentials-feature.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

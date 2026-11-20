@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/scripting"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/scripting"
 	"gorm.io/gorm"
 )
 
@@ -33,7 +33,7 @@ func (s *Server) handleScriptingPage(c *gin.Context) {
 		return
 	}
 	data := gin.H{
-		"Title":     "ForgeC2 - Scripting Console",
+		"Title":     "Sovereign - Scripting Console",
 		"ActiveNav": "scripting",
 		"Stats":     stats,
 		"Scripts":   scripts,

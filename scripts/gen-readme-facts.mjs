@@ -2,7 +2,7 @@
 // Keep the volatile numbers in README.md / README.zh.md in sync with the code.
 //
 // Sources of truth:
-//   VERSION                            -> archive names (forgec2-vX.Y.Z-*)
+//   VERSION                            -> archive names (sovereign-vX.Y.Z-*)
 //   pkg/protocol/taskspec_data.go      -> TaskSpec entries
 //   plugins/**/manifest.yaml           -> bundled plugins
 //   frontend/src/lib/route-imports.ts  -> routed console pages
@@ -65,7 +65,7 @@ function applyFacts(text, facts) {
     const marker = new RegExp(`<!--fact:${key}-->[\\s\\S]*?<!--/fact-->`, "g");
     next = next.replace(marker, `<!--fact:${key}-->${facts[key]}<!--/fact-->`);
   }
-  next = next.replace(/forgec2-v\d+\.\d+\.\d+-/g, `forgec2-v${facts.version}-`);
+  next = next.replace(/sovereign-v\d+\.\d+\.\d+-/g, `sovereign-v${facts.version}-`);
   next = next.replace(/go-\d+\.\d+-00ADD8/g, `go-${facts.go}-00ADD8`);
   return next;
 }

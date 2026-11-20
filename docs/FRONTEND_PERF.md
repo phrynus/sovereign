@@ -1,6 +1,6 @@
 # Embedded frontend delivery (serving contract)
 
-How `forgec2-server` serves the embedded SPA (`internal/webdist/dist`, embedded
+How `sovereign-server` serves the embedded SPA (`internal/webdist/dist`, embedded
 with `//go:embed all:dist`) over HTTP: cache policy, conditional requests,
 on-the-fly compression and what the shell loads before first paint. This is the
 reference for the numbers quoted in `CHANGELOG.md` and for judging future

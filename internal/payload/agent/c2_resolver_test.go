@@ -89,7 +89,7 @@ func TestIsSafeResolvedURL(t *testing.T) {
 }
 
 func TestDGADeterministicAndBounded(t *testing.T) {
-	spec := c2ResolverSpec{Kind: c2ResolverKindDGA, Seed: "forgec2", TLD: "biz", Count: 128, PeriodMinutes: 30}
+	spec := c2ResolverSpec{Kind: c2ResolverKindDGA, Seed: "sovereign", TLD: "biz", Count: 128, PeriodMinutes: 30}
 	now := time.Unix(1_700_000_000, 0)
 	a := dgaDomains(spec, now)
 	b := dgaDomains(spec, now)

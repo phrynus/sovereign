@@ -1,10 +1,10 @@
 ---
 name: add-timeline-loot
-description: Extend ForgeC2 operation timeline and loot collection pages. Use for timeline, loot, operation history, or /add-timeline-loot.
+description: Extend Sovereign operation timeline and loot collection pages. Use for timeline, loot, operation history, or /add-timeline-loot.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

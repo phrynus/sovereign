@@ -26,7 +26,7 @@ export const enSettings: Record<string, string> = {
   "settings.about.total_alloc": "Total Alloc",
   "settings.about.uptime": "Uptime",
   "settings.about.version": "Version",
-  "settings.about.version_label": "ForgeC2 v{version} • Multi-user mode",
+  "settings.about.version_label": "Sovereign v{version} • Multi-user mode",
   "settings.access_autotag": "Auto-tag",
   "settings.access_autotag_desc": "Rules that stamp tags when a beacon checks in",
   "settings.access_desc": "Operator accounts, roles, and beacon labels. These pages stay at their URLs; Settings is just the door.",

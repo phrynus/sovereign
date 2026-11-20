@@ -24,7 +24,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// Create temp build dir
-	tmpDir, err := os.MkdirTemp("", "forgec2-agent-*")
+	tmpDir, err := os.MkdirTemp("", "sovereign-agent-*")
 	if err != nil {
 		return "", err
 	}
@@ -60,7 +60,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if outName == "" {
 		// Empty form values are legal; never let two concurrent builds share a
 		// default output path.
-		outName = uniqueBuildName("forgec2_agent", ".exe")
+		outName = uniqueBuildName("sovereign_agent", ".exe")
 	}
 	// Disguise filename via the shared helper (single source of truth).
 	outName = ApplyDisguiseFilename(outName, cfg.DisguiseAs)
@@ -244,7 +244,7 @@ func GeneratePowerShell(cfg ImplantConfig, outputDir string) (string, error) {
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = "forgec2_agent.ps1"
+		outName = "sovereign_agent.ps1"
 	}
 	outName = safeBuildFileName(outName)
 	outPath := filepath.Join(outputDir, outName)
@@ -272,7 +272,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		cfg.UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
 	}
 
-	tmpDir, err := os.MkdirTemp("", "forgec2-agent-linux-*")
+	tmpDir, err := os.MkdirTemp("", "sovereign-agent-linux-*")
 	if err != nil {
 		return "", err
 	}
@@ -300,7 +300,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = uniqueBuildName("forgec2_agent", "")
+		outName = uniqueBuildName("sovereign_agent", "")
 	}
 	// Linux binaries typically have no .exe
 	if strings.HasSuffix(strings.ToLower(outName), ".exe") {
@@ -363,7 +363,7 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		cfg.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 	}
 
-	tmpDir, err := os.MkdirTemp("", "forgec2-agent-macos-*")
+	tmpDir, err := os.MkdirTemp("", "sovereign-agent-macos-*")
 	if err != nil {
 		return "", err
 	}
@@ -391,7 +391,7 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = uniqueBuildName("forgec2_agent", "")
+		outName = uniqueBuildName("sovereign_agent", "")
 	}
 	outName = safeBuildFileName(outName)
 	outPath, buildPath, err := prepareBuildOutput(outputDir, outName)

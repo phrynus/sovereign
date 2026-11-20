@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // TestRunServesThenShutsDown boots the real server on a free loopback port,

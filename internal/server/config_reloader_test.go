@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

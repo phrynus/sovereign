@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // sendUDPBeacon sends the (already envelope-wrapped) beacon payload as UDP

@@ -5,10 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestPublicRoutesRateLimitConfigured verifies login and public download

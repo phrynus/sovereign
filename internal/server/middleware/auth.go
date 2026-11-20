@@ -15,10 +15,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -407,9 +407,9 @@ func authFail(c *gin.Context, logMsg string, args ...any) {
 	c.Abort()
 }
 
-// clearSessionCookie removes the forgec2_session cookie (used on auth failures).
+// clearSessionCookie removes the sovereign_session cookie (used on auth failures).
 func clearSessionCookie(c *gin.Context) {
-	SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+	SetCookieWithSameSite(c, "sovereign_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
 }
 
 // AuthRequired middleware for web UI - validates JWT + DB user active
@@ -462,7 +462,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		tokenStr, err := c.Cookie("forgec2_session")
+		tokenStr, err := c.Cookie("sovereign_session")
 		if err != nil {
 			authFail(c, "Auth failed: no session token", "path", c.Request.URL.Path, "ip", c.ClientIP())
 			return

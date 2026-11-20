@@ -145,7 +145,7 @@ const defaultMaxConcurrentPlugins = 4
 // past the timeout and the guard never runs.
 const pluginWaitDelay = 5 * time.Second
 
-const truncatedOutputNote = "\n[forgec2: output truncated at 2 MiB]"
+const truncatedOutputNote = "\n[sovereign: output truncated at 2 MiB]"
 
 // cappedBuffer is a bytes.Buffer that discards writes beyond max bytes.
 type cappedBuffer struct {
@@ -276,8 +276,8 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 		// Do not let a plugin write __pycache__ into its own directory: runtime
 		// artifacts would otherwise invalidate the package digest on first run.
 		"PYTHONDONTWRITEBYTECODE=1",
-		"GOCACHE=" + filepath.Join(os.TempDir(), "forgec2-plugin-gocache"),
-		"GOPATH=" + filepath.Join(os.TempDir(), "forgec2-plugin-gopath"),
+		"GOCACHE=" + filepath.Join(os.TempDir(), "sovereign-plugin-gocache"),
+		"GOPATH=" + filepath.Join(os.TempDir(), "sovereign-plugin-gopath"),
 		"PLUGIN_NAME=" + m.Name,
 		"PLUGIN_VERSION=" + m.Version,
 	}

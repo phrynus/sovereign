@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +24,7 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":           "ForgeC2 - User Management",
+		"Title":           "Sovereign - User Management",
 		"ActiveNav":       "settings",
 		"Users":           users,
 		"AllRoles":        db.GetAllRoles(),

@@ -18,7 +18,7 @@ func TestSmokeSignedWindowsArtifacts(t *testing.T) {
 	if os.Getenv("FORGEC2_SMOKE_BUILD") != "1" {
 		t.Skip("set FORGEC2_SMOKE_BUILD=1 to run the real agent build")
 	}
-	outDir, err := os.MkdirTemp("", "forgec2-sign-smoke-")
+	outDir, err := os.MkdirTemp("", "sovereign-sign-smoke-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func assertSmokeSigned(t *testing.T, path, originalName string) {
 	if !bytes.Contains(data, utf16LE(originalName)) {
 		t.Fatalf("%s: OriginalFilename %q missing from VersionInfo", filepath.Base(path), originalName)
 	}
-	if bytes.Contains(data, []byte("forgec2_agent")) {
+	if bytes.Contains(data, []byte("sovereign_agent")) {
 		t.Fatalf("%s: internal build name leaked into the binary", filepath.Base(path))
 	}
 }

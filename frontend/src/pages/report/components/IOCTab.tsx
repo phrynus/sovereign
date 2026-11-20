@@ -69,7 +69,7 @@ export default function IOCTab() {
     if (downloading) return;
     setDownloading(format);
     try {
-      const fallback = `forgec2-iocs-${days}d.${format === "stix2" ? "json" : "csv"}`;
+      const fallback = `sovereign-iocs-${days}d.${format === "stix2" ? "json" : "csv"}`;
       const { blob, filename } = await api.downloadGet(paths.report.iocExport(format, Number(days)), fallback);
       downloadBlob(blob, filename);
     } catch {

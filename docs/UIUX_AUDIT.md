@@ -1067,7 +1067,7 @@ was tested. The strings are verifiable in the served bytes: the EN chunk carries
 lab session, `/beacons`) confirms the rendering side: the toolbar search input's
 placeholder is `Search beacons… ( / )`, the primary button reads **Generate
 Payload**, neither `Search agents` nor `Generate Implant` appears anywhere in the
-page, and `document.title` is `🐝 Beacons — ForgeC2`.
+page, and `document.title` is `🐝 Beacons — Sovereign`.
 
 **Linux set (landed).** The CI frontend job compares against the **linux** files,
 which come from the dispatch-only `visual-baselines.yml` (the workflow renders and

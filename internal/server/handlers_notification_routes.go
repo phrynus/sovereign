@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // severityRank orders severities so a route with min_severity=warning only
@@ -214,7 +214,7 @@ func (s *Server) handleListNotificationRoutes(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the delivery status")
 			return
 		}
-		name := "forgec2_notification-routes_" + time.Now().Format("2006-01-02_150405") + ".csv"
+		name := "sovereign_notification-routes_" + time.Now().Format("2006-01-02_150405") + ".csv"
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		// The counters start with the process, so the file says so rather than implying a window it does not have.
 		applyExportScope(c, "counters since process start")
@@ -447,7 +447,7 @@ func (s *Server) handleTestNotificationRoute(c *gin.Context) {
 	}
 	test := &db.Notification{
 		Type:     "test",
-		Title:    "ForgeC2 test notification",
+		Title:    "Sovereign test notification",
 		Message:  "If you can read this, the \"" + route.Name + "\" route works.",
 		Severity: "info",
 	}

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func newLoginTestServer(t *testing.T) *Server {
@@ -176,9 +176,9 @@ func TestHandleLogin_SetsSessionBoundCsrfCookie(t *testing.T) {
 	var session, csrf string
 	for _, ck := range w.Result().Cookies() {
 		switch ck.Name {
-		case "forgec2_session":
+		case "sovereign_session":
 			session = ck.Value
-		case "forgec2_csrf":
+		case "sovereign_csrf":
 			csrf = ck.Value
 		}
 	}

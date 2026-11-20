@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // writeTestCert writes a self-signed cert+key pair into dir (server.crt /
@@ -33,10 +33,10 @@ func writeTestCert(t *testing.T, dir string, notAfter time.Time) string {
 	}
 	tmpl := x509.Certificate{
 		SerialNumber:          big.NewInt(4242),
-		Subject:               pkix.Name{CommonName: "forgec2-test"},
+		Subject:               pkix.Name{CommonName: "sovereign-test"},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              notAfter,
-		DNSNames:              []string{"forgec2.test"},
+		DNSNames:              []string{"sovereign.test"},
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		IsCA:                  true,
 		BasicConstraintsValid: true,
@@ -104,7 +104,7 @@ func TestGetCertInfoParsesFields(t *testing.T) {
 		t.Fatalf("status=%d body=%s, want 200", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	for _, want := range []string{"forgec2-test", "forgec2.test", "4242"} {
+	for _, want := range []string{"sovereign-test", "sovereign.test", "4242"} {
 		if !bytes.Contains([]byte(body), []byte(want)) {
 			t.Fatalf("cert info missing %q: %s", want, body)
 		}

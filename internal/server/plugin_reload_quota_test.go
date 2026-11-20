@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 // TestReloadAppliesPluginQuotas pins the half of the plugin policy that a reload used

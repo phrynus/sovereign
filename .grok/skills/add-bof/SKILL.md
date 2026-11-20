@@ -1,10 +1,10 @@
 ---
 name: add-bof
-description: Extend ForgeC2 BOF management (upload, run, edit, repo import). Use for BOF features, beacon object files, or /add-bof.
+description: Extend Sovereign BOF management (upload, run, edit, repo import). Use for BOF features, beacon object files, or /add-bof.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/infrastructure"
+	"github.com/r0si/sovereign/internal/infrastructure"
 )
 
 // redirectorHostPattern is a hostname or IPv4 literal. Deliberately strict: the value is written

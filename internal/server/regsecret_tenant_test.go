@@ -4,9 +4,9 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
-	"github.com/forgec2/forgec2/pkg/encoding"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
+	"github.com/r0si/sovereign/pkg/encoding"
 )
 
 // v3 registration secrets carry the minting tenant: the implant an operator

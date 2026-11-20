@@ -110,7 +110,7 @@ jobs:
             echo 'tags<<TAGS_EOF'
             echo "$IMAGE:$IMAGE_TAG"
             # A release tag publishes both spellings: v2.7.2 and 2.7.2. The
-            # bare one is what `docker pull forgec2:2.7.2` reads naturally.
+            # bare one is what `docker pull sovereign:2.7.2` reads naturally.
             if [[ "$IMAGE_TAG" =~ ^v[0-9] ]]; then
               echo "$IMAGE:${IMAGE_TAG#v}"
             fi

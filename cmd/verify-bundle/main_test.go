@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/bundle"
+	"github.com/r0si/sovereign/internal/bundle"
 )
 
 // TestExitCode covers the decision a pipeline makes, which is the whole point of the flags: without -require-trusted an

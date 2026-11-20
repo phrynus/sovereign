@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── P0-3: rportfwd server-side relay (binds local port, relays via beacon) ─

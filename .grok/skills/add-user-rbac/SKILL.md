@@ -1,10 +1,10 @@
 ---
 name: add-user-rbac
-description: Extend ForgeC2 user management and RBAC (roles, permissions). Use for users, roles, RBAC, or /add-user-rbac.
+description: Extend Sovereign user management and RBAC (roles, permissions). Use for users, roles, RBAC, or /add-user-rbac.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

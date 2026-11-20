@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/payload"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // moduleForm builds a minimal valid binary generation form (DNS path, no

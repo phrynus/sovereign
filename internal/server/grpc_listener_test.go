@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/testutil"
-	"github.com/forgec2/forgec2/pkg/c2pb"
+	"github.com/r0si/sovereign/internal/testutil"
+	"github.com/r0si/sovereign/pkg/c2pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

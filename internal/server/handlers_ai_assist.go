@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -563,7 +563,7 @@ func (s *Server) handleAIGeneratePlaybook(c *gin.Context) {
 		}
 	}
 
-	system := `You are a red-team playbook designer for Windows/Linux implants managed by ForgeC2. Given a goal (and optional target profile), draft a step-by-step macro. Reply with ONLY JSON: {"name":"snake_case_name","description":"one line","steps":[{"command":"shell command","shell":"cmd.exe|powershell.exe|/bin/sh","rationale":"why this step"}]}.
+	system := `You are a red-team playbook designer for Windows/Linux implants managed by Sovereign. Given a goal (and optional target profile), draft a step-by-step macro. Reply with ONLY JSON: {"name":"snake_case_name","description":"one line","steps":[{"command":"shell command","shell":"cmd.exe|powershell.exe|/bin/sh","rationale":"why this step"}]}.
 Rules: 2-8 steps, each step self-contained and quiet (prefer built-in tools over downloads). Steps run sequentially on ONE agent. No destructive or persistence-without-consent steps. Use powershell.exe shell for PowerShell cmdlets, /bin/sh on non-Windows targets.`
 
 	text, err := s.aiOneShot(c.Request.Context(), system, "Goal: "+strings.TrimSpace(req.Goal)+contextLine, 1400)

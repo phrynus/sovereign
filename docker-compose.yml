@@ -1,7 +1,7 @@
 services:
-  forgec2:
+  sovereign:
     build: .
-    container_name: forgec2
+    container_name: sovereign
     restart: unless-stopped
     ports:
       - "${FORGEC2_PORT:-8000}:8000"
@@ -14,7 +14,7 @@ services:
       # config.yaml MUST exist first (cp config.example.yaml config.yaml) —
       # otherwise Docker creates a directory here and the server won't start.
       - ./config.yaml:/data/config.yaml:ro
-      - forgec2_data:/data
+      - sovereign_data:/data
     environment:
       - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:-}
       - FORGEC2_AI_API_KEY=${FORGEC2_AI_API_KEY:-}
@@ -31,8 +31,8 @@ services:
       # FORGEC2_DB_DRIVER=postgres + FORGEC2_DB_DSN and enable the profile below:
       #   docker compose --profile postgres up -d --build
       - FORGEC2_DB_DRIVER=${FORGEC2_DB_DRIVER:-postgres}
-      - FORGEC2_DB_PATH=${FORGEC2_DB_PATH:-/data/db/forgec2.db}
-      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-host=postgres user=forgec2 password=${DB_PASSWORD} dbname=forgec2 port=5432 sslmode=disable}
+      - FORGEC2_DB_PATH=${FORGEC2_DB_PATH:-/data/db/sovereign.db}
+      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-host=postgres user=sovereign password=${DB_PASSWORD} dbname=sovereign port=5432 sslmode=disable}
       - TZ=${TZ:-UTC}
     depends_on:
       postgres:
@@ -52,12 +52,12 @@ services:
   postgres:
     profiles: ["postgres"]
     image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
-    container_name: forgec2-db
+    container_name: sovereign-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: forgec2
+      POSTGRES_USER: sovereign
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD when using --profile postgres}
-      POSTGRES_DB: forgec2
+      POSTGRES_DB: sovereign
     volumes:
       # PostgreSQL 18 changed the image layout: PGDATA is now
       # /var/lib/postgresql/<major>/docker and the declared volume moved to
@@ -76,11 +76,11 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "forgec2"]
+      test: ["CMD", "pg_isready", "-U", "sovereign"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
-  forgec2_data:
+  sovereign_data:
   postgres_data:

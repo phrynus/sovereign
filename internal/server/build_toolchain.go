@@ -132,7 +132,7 @@ func directoryWritable(dir string) (bool, string) {
 	if !info.IsDir() {
 		return false, "is a file, not a directory"
 	}
-	probe, err := os.CreateTemp(dir, "forgec2-cache-probe-*")
+	probe, err := os.CreateTemp(dir, "sovereign-cache-probe-*")
 	if err != nil {
 		return false, "the account cannot create files here"
 	}

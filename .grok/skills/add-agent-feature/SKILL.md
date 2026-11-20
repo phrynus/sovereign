@@ -1,10 +1,10 @@
 ---
 name: add-agent-feature
-description: Add cross-platform implant features in ForgeC2 (Windows/Linux/macOS build tags, generator ldflags, task handlers). Use for agent changes, darwin/linux stubs, or /add-agent-feature.
+description: Add cross-platform implant features in Sovereign (Windows/Linux/macOS build tags, generator ldflags, task handlers). Use for agent changes, darwin/linux stubs, or /add-agent-feature.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

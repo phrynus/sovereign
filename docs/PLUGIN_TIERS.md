@@ -1,6 +1,6 @@
-# ForgeC2 plugin tiers
+# Sovereign plugin tiers
 
-Plugins are executable code. ForgeC2 therefore treats them in two tiers:
+Plugins are executable code. Sovereign therefore treats them in two tiers:
 
 | Tier | `interpreter:` | Isolation | Use for |
 |------|----------------|-----------|---------|
@@ -36,10 +36,10 @@ The pair is packed rather than returned as two values on purpose: a
 clang lowers a two-field struct return to an indirect (sret) parameter — so the
 multi-value form would have excluded exactly the languages this tier targets.
 
-Optional import (module `forgec2`):
+Optional import (module `sovereign`):
 
 ```wat
-(func $log (import "forgec2" "log") (param i32 i32))
+(func $log (import "sovereign" "log") (param i32 i32))
 ```
 
 Diagnostics are capped at 256 KiB per run and surface as plugin stderr.
@@ -93,7 +93,7 @@ carry the two shims; without them wasm-ld fails with
 ```yaml
 digest: "sha256:<hex>"     # canonical hash over every package file
 signature: "<hex>"         # Ed25519 signature over that digest string
-publisher: "forgec2"
+publisher: "sovereign"
 includes: ["lib"]          # shared paths (relative to the scanned tree) that
                            # also belong to this package
 ```

@@ -80,11 +80,11 @@ func materializeWin7Shim(buildDir string) error {
 			}
 		}
 	}
-	if err := os.WriteFile(filepath.Join(stubRoot, "go.mod"), []byte("module github.com/forgec2/forgec2\n\ngo 1.20\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(stubRoot, "go.mod"), []byte("module github.com/r0si/sovereign\n\ngo 1.20\n"), 0o600); err != nil {
 		return err
 	}
-	// Repoint the parent replace at the stub. forgeC2ModuleReplace emits a
-	// single `replace github.com/forgec2/forgec2 => <repodir>` line.
+	// Repoint the parent replace at the stub. sovereignModuleReplace emits a
+	// single `replace github.com/r0si/sovereign => <repodir>` line.
 	gomodPath := filepath.Join(buildDir, "go.mod")
 	raw, err := os.ReadFile(gomodPath)
 	if err != nil {
@@ -93,8 +93,8 @@ func materializeWin7Shim(buildDir string) error {
 	lines := strings.Split(string(raw), "\n")
 	rewrote := false
 	for i, ln := range lines {
-		if strings.HasPrefix(strings.TrimSpace(ln), "replace github.com/forgec2/forgec2 =>") {
-			lines[i] = "replace github.com/forgec2/forgec2 => ./" + win7ShimModulePath
+		if strings.HasPrefix(strings.TrimSpace(ln), "replace github.com/r0si/sovereign =>") {
+			lines[i] = "replace github.com/r0si/sovereign => ./" + win7ShimModulePath
 			rewrote = true
 		}
 	}
@@ -109,11 +109,11 @@ func materializeWin7Shim(buildDir string) error {
 // for Win7 (see NormalizeImplantConfig), so grpc/quic never appear here.
 //
 // The replace block is load-bearing, not cosmetic: the agent imports
-// github.com/forgec2/forgec2/pkg/*, whose parent module requires MODERN
+// github.com/r0si/sovereign/pkg/*, whose parent module requires MODERN
 // dependency versions — without replaces, MVS would lift every pin back
 // to the modern line and go1.20 would fail with "requires go >=".
 func buildGoModWin7() string {
-	replaceDir := forgeC2ModuleReplace()
+	replaceDir := sovereignModuleReplace()
 	deps := append([]string{}, win7Pins()...)
 	base := "module agent\n\ngo 1.20\n\nrequire (\n"
 	base += strings.Join(deps, "\n") + "\n)\n"
@@ -145,7 +145,7 @@ func appendUniqueModDep(deps []string, line string) []string {
 }
 
 func buildGoMod(goos string, isDLL bool, slim bool, win7 bool, withWebRTC ...bool) string {
-	replaceDir := forgeC2ModuleReplace()
+	replaceDir := sovereignModuleReplace()
 	if win7 {
 		return buildGoModWin7()
 	}

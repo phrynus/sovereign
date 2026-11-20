@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TestAgentBeaconCompression covers the implant's half of the negotiation:

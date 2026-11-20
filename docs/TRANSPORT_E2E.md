@@ -4,7 +4,7 @@ Authorized lab validation only. Goal: prove **Generate → Listener → Check-in
 
 ## Common prerequisites
 
-1. Server running (`forgec2-server.exe -config config.yaml`), `/health` → `ok`.
+1. Server running (`sovereign-server.exe -config config.yaml`), `/health` → `ok`.
 2. Operator logged into UI with generate + listeners permissions.
 3. Implant host can reach the listener (firewall, NAT, TLS certs as needed).
 4. After implant code/ldflags change: **regenerate** payload (do not rely on `set_sleep` alone).
@@ -73,7 +73,7 @@ Pass criteria:
 | 5 | Restart the agent: it starts from the persisted applied config, not the original build-time values | |
 | 6 | Toggle the network (Wi-Fi/VPN unplug/replug); the agent wakes within ~40 s instead of sleeping out the interval and reconnects | |
 | 7 | Set the agent host clock 10 minutes behind (or ahead) and restart it: the first registration is rejected, the agent learns the offset from the response `Date`, and the next attempt succeeds without touching the server | |
-| 8 | Lower `rate_limit.beacon`, exceed it, and scrape `/metrics`: `forgec2_beacon_rate_limited_total` increases while the 429 keeps `Retry-After` | |
+| 8 | Lower `rate_limit.beacon`, exceed it, and scrape `/metrics`: `sovereign_beacon_rate_limited_total` increases while the 429 keeps `Retry-After` | |
 | 9 | Mint a secret and leave it unused past `server.reg_secret_orphan_ttl_hours` (age the row to avoid waiting): registration is refused before the hourly sweep runs | |
 | 10 | Use a secret that is already bound to a deployed agent after any TTL: it still authenticates | |
 | 11 | Enable a sleep mask (`set_sleep_mask`) or evasion on a build with a long sleep, then change networks during the sleep | |

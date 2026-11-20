@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestCreateTaskIdempotencyKey verifies duplicate creation with the same key

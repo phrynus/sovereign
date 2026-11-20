@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // procCtx builds an operator-authenticated form POST pointed at :id = agentID.

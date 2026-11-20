@@ -5,27 +5,27 @@ import (
 	"testing"
 )
 
-// releaseAssetsFixture is the asset list of a real ForgeC2 release (v2.7.0).
+// releaseAssetsFixture is the asset list of a real Sovereign release (v2.7.0).
 // It carries one raw binary per platform, a checksum and a signature per
 // binary, an SBOM and the one-click bundles.
 func releaseAssetsFixture() []GitHubAsset {
 	names := []string{
-		"forgec2-server-linux-amd64",
-		"forgec2-server-linux-amd64.sbom.json",
-		"forgec2-server-linux-amd64.sha256",
-		"forgec2-server-linux-amd64.sha256.sig",
-		"forgec2-server-linux-arm64",
-		"forgec2-server-linux-arm64.sha256",
-		"forgec2-server-linux-arm64.sha256.sig",
-		"forgec2-server-windows-amd64.exe",
-		"forgec2-server-windows-amd64.exe.sha256",
-		"forgec2-server-windows-amd64.exe.sha256.sig",
-		"forgec2-server-windows-arm64.exe",
-		"forgec2-server-windows-arm64.exe.sha256",
-		"forgec2-server-windows-arm64.exe.sha256.sig",
-		"forgec2-v2.7.0-linux-amd64.tar.gz",
-		"forgec2-v2.7.0-linux-amd64.tar.gz.sha256",
-		"forgec2-v2.7.0-windows-amd64.zip",
+		"sovereign-server-linux-amd64",
+		"sovereign-server-linux-amd64.sbom.json",
+		"sovereign-server-linux-amd64.sha256",
+		"sovereign-server-linux-amd64.sha256.sig",
+		"sovereign-server-linux-arm64",
+		"sovereign-server-linux-arm64.sha256",
+		"sovereign-server-linux-arm64.sha256.sig",
+		"sovereign-server-windows-amd64.exe",
+		"sovereign-server-windows-amd64.exe.sha256",
+		"sovereign-server-windows-amd64.exe.sha256.sig",
+		"sovereign-server-windows-arm64.exe",
+		"sovereign-server-windows-arm64.exe.sha256",
+		"sovereign-server-windows-arm64.exe.sha256.sig",
+		"sovereign-v2.7.0-linux-amd64.tar.gz",
+		"sovereign-v2.7.0-linux-amd64.tar.gz.sha256",
+		"sovereign-v2.7.0-windows-amd64.zip",
 	}
 	assets := make([]GitHubAsset, 0, len(names))
 	for _, n := range names {
@@ -43,10 +43,10 @@ func TestSelectBinaryAssetPicksTheRunningPlatform(t *testing.T) {
 		goos, goarch string
 		want         string
 	}{
-		{"linux", "amd64", "forgec2-server-linux-amd64"},
-		{"linux", "arm64", "forgec2-server-linux-arm64"},
-		{"windows", "amd64", "forgec2-server-windows-amd64.exe"},
-		{"windows", "arm64", "forgec2-server-windows-arm64.exe"},
+		{"linux", "amd64", "sovereign-server-linux-amd64"},
+		{"linux", "arm64", "sovereign-server-linux-arm64"},
+		{"windows", "amd64", "sovereign-server-windows-amd64.exe"},
+		{"windows", "arm64", "sovereign-server-windows-arm64.exe"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.goos+"/"+tc.goarch, func(t *testing.T) {
@@ -85,8 +85,8 @@ func TestSelectBinaryAssetNeverPicksASidecarOrBundle(t *testing.T) {
 // fails loudly instead of installing a binary for another platform.
 func TestSelectBinaryAssetRefusesWhenThePlatformIsMissing(t *testing.T) {
 	assets := []GitHubAsset{
-		{Name: "forgec2-server-windows-amd64.exe"},
-		{Name: "forgec2-server-windows-amd64.exe.sha256"},
+		{Name: "sovereign-server-windows-amd64.exe"},
+		{Name: "sovereign-server-windows-amd64.exe.sha256"},
 	}
 	if _, err := selectBinaryAsset(assets, "linux", "amd64"); err == nil {
 		t.Fatal("a Windows-only release was accepted on Linux")
@@ -100,8 +100,8 @@ func TestSelectBinaryAssetRefusesWhenThePlatformIsMissing(t *testing.T) {
 // to guess when two assets match the platform.
 func TestSelectBinaryAssetRefusesAnAmbiguousRelease(t *testing.T) {
 	assets := []GitHubAsset{
-		{Name: "forgec2-server-linux-x86_64"},
-		{Name: "forgec2-server-linux-x64"},
+		{Name: "sovereign-server-linux-x86_64"},
+		{Name: "sovereign-server-linux-x64"},
 	}
 	_, err := selectBinaryAsset(assets, "linux", "amd64")
 	if err == nil {
@@ -116,14 +116,14 @@ func TestSelectBinaryAssetRefusesAnAmbiguousRelease(t *testing.T) {
 // name wins even when another asset would also match the platform.
 func TestSelectBinaryAssetPrefersTheCanonicalName(t *testing.T) {
 	assets := []GitHubAsset{
-		{Name: "forgec2-server-linux-amd64"},
-		{Name: "forgec2-server-linux-amd64-v2"},
+		{Name: "sovereign-server-linux-amd64"},
+		{Name: "sovereign-server-linux-amd64-v2"},
 	}
 	got, err := selectBinaryAsset(assets, "linux", "amd64")
 	if err != nil {
 		t.Fatalf("selectBinaryAsset: %v", err)
 	}
-	if got.Name != "forgec2-server-linux-amd64" {
+	if got.Name != "sovereign-server-linux-amd64" {
 		t.Fatalf("selected %q, want the canonical name", got.Name)
 	}
 }
@@ -133,29 +133,29 @@ func TestSelectBinaryAssetPrefersTheCanonicalName(t *testing.T) {
 // never matches inside "arm64".
 func TestSelectBinaryAssetUnderstandsArchitectureAliases(t *testing.T) {
 	assets := []GitHubAsset{
-		{Name: "forgec2-server-linux-x86_64"},
-		{Name: "forgec2-server-linux-aarch64"},
-		{Name: "forgec2-server-linux-arm"},
+		{Name: "sovereign-server-linux-x86_64"},
+		{Name: "sovereign-server-linux-aarch64"},
+		{Name: "sovereign-server-linux-arm"},
 	}
 	got, err := selectBinaryAsset(assets, "linux", "amd64")
 	if err != nil {
 		t.Fatalf("amd64: %v", err)
 	}
-	if got.Name != "forgec2-server-linux-x86_64" {
+	if got.Name != "sovereign-server-linux-x86_64" {
 		t.Fatalf("amd64 selected %q", got.Name)
 	}
 	got, err = selectBinaryAsset(assets, "linux", "arm64")
 	if err != nil {
 		t.Fatalf("arm64: %v", err)
 	}
-	if got.Name != "forgec2-server-linux-aarch64" {
+	if got.Name != "sovereign-server-linux-aarch64" {
 		t.Fatalf("arm64 selected %q", got.Name)
 	}
 	got, err = selectBinaryAsset(assets, "linux", "arm")
 	if err != nil {
 		t.Fatalf("arm: %v", err)
 	}
-	if got.Name != "forgec2-server-linux-arm" {
+	if got.Name != "sovereign-server-linux-arm" {
 		t.Fatalf("arm selected %q", got.Name)
 	}
 }
@@ -174,10 +174,10 @@ func TestChecksumAssetBelongsToTheBinary(t *testing.T) {
 	if !ok {
 		t.Fatalf("no checksum for %s", binary.Name)
 	}
-	if !strings.HasSuffix(checksum.Name, "forgec2-server-windows-amd64.exe.sha256") {
+	if !strings.HasSuffix(checksum.Name, "sovereign-server-windows-amd64.exe.sha256") {
 		t.Fatalf("checksum asset = %q", checksum.Name)
 	}
-	if _, ok := findAssetByName(assets, "forgec2-server-linux-amd64.sha256"); !ok {
+	if _, ok := findAssetByName(assets, "sovereign-server-linux-amd64.sha256"); !ok {
 		t.Fatal("the linux checksum was not found")
 	}
 }
@@ -185,16 +185,16 @@ func TestChecksumAssetBelongsToTheBinary(t *testing.T) {
 // TestMatchAssetPlatformIgnoresBundles proves the platform matcher only
 // accepts raw binaries.
 func TestMatchAssetPlatformIgnoresBundles(t *testing.T) {
-	if _, _, ok := matchAssetPlatform("forgec2-v2.7.0-linux-amd64.tar.gz"); ok {
+	if _, _, ok := matchAssetPlatform("sovereign-v2.7.0-linux-amd64.tar.gz"); ok {
 		t.Fatal("a bundle was accepted as a binary")
 	}
-	if _, _, ok := matchAssetPlatform("forgec2-server-linux-amd64.sbom.json"); ok {
+	if _, _, ok := matchAssetPlatform("sovereign-server-linux-amd64.sbom.json"); ok {
 		t.Fatal("an SBOM was accepted as a binary")
 	}
-	if _, _, ok := matchAssetPlatform("forgec2-server-linux-amd64.sha256"); ok {
+	if _, _, ok := matchAssetPlatform("sovereign-server-linux-amd64.sha256"); ok {
 		t.Fatal("a checksum file was accepted as a binary")
 	}
-	os, arch, ok := matchAssetPlatform("forgec2-server-linux-amd64")
+	os, arch, ok := matchAssetPlatform("sovereign-server-linux-amd64")
 	if !ok || os != "linux" || arch != "amd64" {
 		t.Fatalf("platform = %q/%q ok=%v", os, arch, ok)
 	}

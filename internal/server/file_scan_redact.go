@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/json"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 const fileScanRedactionNote = "Sensitive values are available only in the encrypted task result. AI, callbacks and exports receive redacted findings."

@@ -18,7 +18,7 @@ import (
 // registration secret to the network-config encryption key. Changing it
 // invalidates every previously issued over-the-wire config, so it doubles as a
 // version pin.
-const NetworkConfigOverWireInfo = "forgec2-network-config-v1"
+const NetworkConfigOverWireInfo = "sovereign-network-config-v1"
 
 // NetworkConfig is the subset of an implant's operational configuration that
 // the server delivers to the agent at registration time, encrypted under a key

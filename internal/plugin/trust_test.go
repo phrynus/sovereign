@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func writePackage(t *testing.T, dir string, files map[string]string) {

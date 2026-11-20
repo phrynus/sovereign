@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestParseAndStoreCredentialsDedupes pins the harvesting contract: the parsed

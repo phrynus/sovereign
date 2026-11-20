@@ -51,7 +51,7 @@ func wallpaperDestPath(src string) string {
 			ext = cand
 		}
 	}
-	return filepath.Join(os.TempDir(), "forgec2-wallpaper"+ext)
+	return filepath.Join(os.TempDir(), "sovereign-wallpaper"+ext)
 }
 
 func validWallpaperExt(ext string) bool {

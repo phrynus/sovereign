@@ -135,7 +135,7 @@ func writeRestoredDB(src io.Reader, dbPath string) error {
 		return fmt.Errorf("prepare database directory: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".forgec2-restore-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".sovereign-restore-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
@@ -330,7 +330,7 @@ func (s *Server) handleDBBackupPlaintext(c *gin.Context) {
 	}
 
 	ts := time.Now().Format("20060102_150405")
-	backupName := fmt.Sprintf("forgec2_%s.db", ts)
+	backupName := fmt.Sprintf("sovereign_%s.db", ts)
 	backupPath := filepath.Join(dir, backupName)
 
 	// Use SQLite's VACUUM INTO to produce a consistent snapshot. A raw file

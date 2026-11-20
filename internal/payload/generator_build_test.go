@@ -172,12 +172,12 @@ func TestValidateMachO(t *testing.T) {
 }
 
 func TestUniqueBuildName(t *testing.T) {
-	a := uniqueBuildName("forgec2_agent", ".exe")
-	b := uniqueBuildName("forgec2_agent", ".exe")
+	a := uniqueBuildName("sovereign_agent", ".exe")
+	b := uniqueBuildName("sovereign_agent", ".exe")
 	if a == b {
 		t.Fatalf("uniqueBuildName produced duplicate %q", a)
 	}
-	if !strings.HasSuffix(a, ".exe") || !strings.HasPrefix(a, "forgec2_agent_") {
+	if !strings.HasSuffix(a, ".exe") || !strings.HasPrefix(a, "sovereign_agent_") {
 		t.Fatalf("unexpected default name %q", a)
 	}
 }
@@ -234,7 +234,7 @@ func TestCommitBuildOutputPublishesAtomically(t *testing.T) {
 }
 
 func TestReplaceModuleDirective(t *testing.T) {
-	in := "module github.com/forgec2/forgec2\n\ngo 1.26.0\n"
+	in := "module github.com/r0si/sovereign\n\ngo 1.26.0\n"
 	got := replaceModuleDirective(in, "agent")
 	if !strings.HasPrefix(got, "module agent\n") {
 		t.Fatalf("module directive not replaced:\n%s", got)
@@ -261,7 +261,7 @@ func TestStageRootAgentModule(t *testing.T) {
 	if !strings.HasPrefix(text, "module agent\n") {
 		t.Fatalf("staged module has wrong name:\n%s", text)
 	}
-	if !strings.Contains(text, "replace github.com/forgec2/forgec2 =>") {
+	if !strings.Contains(text, "replace github.com/r0si/sovereign =>") {
 		t.Fatalf("staged module missing local replace:\n%s", text)
 	}
 	sum, err := os.ReadFile(filepath.Join(dir, "go.sum"))

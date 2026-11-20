@@ -42,7 +42,7 @@ export function firstNumber(data: unknown, keys: string[], fallback = 0): number
 }
 
 /**
- * Normalize list envelopes commonly used by ForgeC2:
+ * Normalize list envelopes commonly used by Sovereign:
  * bare array | { data } | { agents/Agents } | { logs/Logs } | { users/Users } | { builds }
  */
 export function normalizeListEnvelope(

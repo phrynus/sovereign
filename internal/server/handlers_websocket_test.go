@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func TestHandleOperatorWS_RequiresAuth(t *testing.T) {
@@ -42,7 +42,7 @@ func TestHandleOperatorWS_RequiresAuth(t *testing.T) {
 	})
 
 	t.Run("invalid cookie rejects", func(t *testing.T) {
-		w := doRequest(&http.Cookie{Name: "forgec2_session", Value: "not-a-real-token"})
+		w := doRequest(&http.Cookie{Name: "sovereign_session", Value: "not-a-real-token"})
 		if w.Code != http.StatusUnauthorized {
 			t.Fatalf("invalid token: got %d, want 401", w.Code)
 		}
@@ -79,7 +79,7 @@ func TestHandleOperatorWS_AcceptsValidSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/ws/operator", nil)
-	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	s.handleOperatorWS(c)
 
 	// The handler authenticates first, then attempts the WebSocket upgrade.
@@ -275,7 +275,7 @@ func TestOperatorWS_SyncSnapshotOnConnect(t *testing.T) {
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws/operator"
 	header := http.Header{}
-	header.Add("Cookie", "forgec2_session="+token)
+	header.Add("Cookie", "sovereign_session="+token)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
 	if err != nil {
 		t.Fatalf("dial /ws/operator: %v", err)
@@ -343,7 +343,7 @@ func TestHandleWebSocket_PingPong(t *testing.T) {
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
 	header := http.Header{}
-	header.Add("Cookie", "forgec2_session="+token)
+	header.Add("Cookie", "sovereign_session="+token)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
 	if err != nil {
 		t.Fatalf("dial /ws: %v", err)

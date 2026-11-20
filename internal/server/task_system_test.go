@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // TestCreateSystemTaskParity proves system-path creation carries the same

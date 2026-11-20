@@ -313,7 +313,7 @@ func renderRestartScript(goos string, p restartPlan) (string, error) {
 func renderUnixRestartScript(p restartPlan) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
-	b.WriteString("# ForgeC2 hot-update restarter (generated; safe to delete).\n")
+	b.WriteString("# Sovereign hot-update restarter (generated; safe to delete).\n")
 	b.WriteString("set -u\n\n")
 	fmt.Fprintf(&b, "EXE=%s\n", quoteSh(p.Exe))
 	fmt.Fprintf(&b, "NEW=%s\n", quoteSh(p.New))
@@ -423,7 +423,7 @@ func unixArgSuffix(args []string) string {
 // Windows release.
 func renderWindowsRestartScript(p restartPlan) string {
 	var b strings.Builder
-	b.WriteString("# ForgeC2 hot-update restarter (generated; safe to delete).\n")
+	b.WriteString("# Sovereign hot-update restarter (generated; safe to delete).\n")
 	b.WriteString("$ErrorActionPreference = 'Continue'\n\n")
 	fmt.Fprintf(&b, "$Exe = %s\n", quotePs(p.Exe))
 	fmt.Fprintf(&b, "$New = %s\n", quotePs(p.New))

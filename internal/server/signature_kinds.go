@@ -1,9 +1,9 @@
 package server
 
 import (
-	"github.com/forgec2/forgec2/internal/auditchain"
-	"github.com/forgec2/forgec2/internal/bundle"
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/auditchain"
+	"github.com/r0si/sovereign/internal/bundle"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 // The four things this system calls a "signature", named so a response can say which one it means.

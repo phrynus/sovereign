@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // autoAdaptMinInterval rate-limits the server-side auto-adapt loop so a broken

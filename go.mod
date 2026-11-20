@@ -1,4 +1,4 @@
-module github.com/forgec2/forgec2
+module github.com/r0si/sovereign
 
 go 1.26.0
 

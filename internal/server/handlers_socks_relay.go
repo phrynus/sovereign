@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 

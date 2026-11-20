@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // seedReportFixture builds a tenant-1 dataset plus a tenant-2 row that must
@@ -80,7 +80,7 @@ func TestHandleGenerateReportJSON(t *testing.T) {
 		} `json:"audit"`
 	}
 	unmarshalData(t, w.Body.Bytes(), &report)
-	if report.Title != "ForgeC2 Action Report" {
+	if report.Title != "Sovereign Action Report" {
 		t.Fatalf("title = %q", report.Title)
 	}
 	if report.Partial {
@@ -127,7 +127,7 @@ func TestHandleGenerateReportHTML(t *testing.T) {
 		t.Fatalf("content type = %q", ct)
 	}
 	body := w.Body.String()
-	for _, want := range []string{"ForgeC2 Action Report", "rep-host-a", "whoami"} {
+	for _, want := range []string{"Sovereign Action Report", "rep-host-a", "whoami"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("html report missing %q", want)
 		}

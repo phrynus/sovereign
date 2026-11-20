@@ -8,10 +8,10 @@ import { createStatsSlice } from "./stats";
 import type { AppStore } from "./types";
 
 // Persist key for UI preferences. Values are also seeded from the legacy
-// single-key storage entries (forgec2_sidebar_collapsed / forgec2_density /
-// forgec2_focus_mode) via the slice initializers, so pre-persist settings
+// single-key storage entries (sovereign_sidebar_collapsed / sovereign_density /
+// sovereign_focus_mode) via the slice initializers, so pre-persist settings
 // survive the migration.
-const UI_PREFS_KEY = "forgec2_ui_prefs_v1";
+const UI_PREFS_KEY = "sovereign_ui_prefs_v1";
 
 export const useAppStore = create<AppStore>()(
   persist(

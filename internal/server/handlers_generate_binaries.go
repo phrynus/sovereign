@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/payload"
-	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/payload"
+	"github.com/r0si/sovereign/internal/util"
 	"golang.org/x/crypto/ssh"
 )
 

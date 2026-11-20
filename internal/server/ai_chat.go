@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── AI Chat Page ──────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ func (s *Server) handleAIPage(c *gin.Context) {
 	aiEnabled, _ := publicConfig["enabled"].(bool)
 	aiHasAPIKey, _ := publicConfig["has_api_key"].(bool)
 	data := gin.H{
-		"Title":      "ForgeC2 - AI Assistant",
+		"Title":      "Sovereign - AI Assistant",
 		"ActiveNav":  "ai",
 		"IsFullPage": true,
 		// Never embed the raw AIConfig: it carries the provider API key. Send a
@@ -207,7 +207,7 @@ const aiChatSuccessor = "/api/ai/runs"
 func (s *Server) markAIChatDeprecated(c *gin.Context) {
 	c.Header("Deprecation", "true")
 	c.Header("Link", "<"+aiChatSuccessor+">; rel=\"successor-version\"")
-	c.Header("X-ForgeC2-Deprecated-Endpoint", aiChatSuccessor)
+	c.Header("X-Sovereign-Deprecated-Endpoint", aiChatSuccessor)
 	username, _ := c.Get("user")
 	slog.Info("legacy AI chat endpoint used; prefer "+aiChatSuccessor,
 		"user", username,

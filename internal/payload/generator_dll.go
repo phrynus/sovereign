@@ -98,7 +98,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "forgec2-agent-dll-*")
+	tmpDir, err := os.MkdirTemp("", "sovereign-agent-dll-*")
 	if err != nil {
 		return "", err
 	}
@@ -126,7 +126,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 	outName := cfg.Filename
 	if outName == "" {
-		outName = uniqueBuildName("forgec2_agent", ".dll")
+		outName = uniqueBuildName("sovereign_agent", ".dll")
 	}
 	if !strings.HasSuffix(strings.ToLower(outName), ".dll") {
 		outName += ".dll"

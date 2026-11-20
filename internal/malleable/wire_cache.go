@@ -70,5 +70,3 @@ func resetParsedWireCache() {
 	parsedWireCache = make(map[string]parsedWireEntry, parsedWireCacheMax)
 	parsedWireMu.Unlock()
 }
-
-

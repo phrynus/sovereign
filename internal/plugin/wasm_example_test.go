@@ -11,7 +11,7 @@ import (
 // the real manifest from examples/wasm/hello-report, runs the committed
 // plugin.wasm through the real executor, and checks that the label travelled
 // from params.label into the report title, the (base64-encoded) body and the
-// forgec2.log diagnostics. Rebuilding the example without rebuilding the host
+// sovereign.log diagnostics. Rebuilding the example without rebuilding the host
 // side of the ABI still has to satisfy this test.
 func TestWasmExamplePlugin(t *testing.T) {
 	dir := filepath.Join("..", "..", "examples", "wasm", "hello-report")
@@ -44,6 +44,6 @@ func TestWasmExamplePlugin(t *testing.T) {
 		t.Fatalf("report body %q does not carry the label", report.Content)
 	}
 	if !strings.Contains(string(res.Stderr), label) {
-		t.Fatalf("forgec2.log diagnostics missing from stderr: %q", res.Stderr)
+		t.Fatalf("sovereign.log diagnostics missing from stderr: %q", res.Stderr)
 	}
 }

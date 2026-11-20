@@ -1,10 +1,10 @@
 ---
 name: edr-evasion
-description: Configure and extend ForgeC2 EDR evasion (sleep obfuscation, evasion flags, AMSI/ETW stubs). Use for EDR bypass, evasion, sleep mask.
+description: Configure and extend Sovereign EDR evasion (sleep obfuscation, evasion flags, AMSI/ETW stubs). Use for EDR bypass, evasion, sleep mask.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

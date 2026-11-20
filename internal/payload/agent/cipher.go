@@ -19,8 +19,8 @@ import (
 
 const (
 	// v2 key derivation salts — MUST mirror internal/crypto/keys.go.
-	regKeySaltV2  = "forgec2-reg-v2"
-	sessKeySaltV2 = "forgec2-session-v2"
+	regKeySaltV2  = "sovereign-reg-v2"
+	sessKeySaltV2 = "sovereign-session-v2"
 )
 
 var (

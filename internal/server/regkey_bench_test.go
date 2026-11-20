@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // BenchmarkRegKeyDerivation measures the two shapes of v3 registration-key

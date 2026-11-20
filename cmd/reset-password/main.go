@@ -1,4 +1,4 @@
-// Command reset-password updates a user's password in the ForgeC2 database.
+// Command reset-password updates a user's password in the Sovereign database.
 // Usage: go run ./cmd/reset-password -dsn "host=..." -user labtest -pass newpassword
 // Prefer -pass-stdin (or FORGEC2_RESET_PASS env) over -pass: argv is visible
 // in process listings and shell history.
@@ -47,7 +47,7 @@ func checkPasswordPolicy(password string) error {
 }
 
 func main() {
-	dsn := flag.String("dsn", "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable", "PostgreSQL connection string")
+	dsn := flag.String("dsn", "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable", "PostgreSQL connection string")
 	username := flag.String("user", "", "username to reset password for (required)")
 	password := flag.String("pass", "", "new password (required unless -pass-stdin)")
 	passStdin := flag.Bool("pass-stdin", false, "read new password from stdin (avoids argv exposure)")

@@ -3,7 +3,7 @@ package server
 import (
 	"time"
 
-	"github.com/forgec2/forgec2/internal/server/middleware"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func (s *Server) registerPublicRoutes() {

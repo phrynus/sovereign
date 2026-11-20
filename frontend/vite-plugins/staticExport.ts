@@ -97,7 +97,7 @@ export const STATIC_ROUTES: string[] = [
 
 export function staticExportPlugin(): Plugin {
   return {
-    name: "forgec2-static-export",
+    name: "sovereign-static-export",
     apply: "build",
     enforce: "post",
     generateBundle(_options, bundle) {

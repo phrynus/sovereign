@@ -51,8 +51,8 @@ COPY api/ ./api/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 ARG VERSION=dev
-ARG SOURCE_REPO=r0si/forgec2
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w -X github.com/forgec2/forgec2/internal/server.ServerVersion=${VERSION} -X github.com/forgec2/forgec2/internal/buildinfo.Repo=${SOURCE_REPO}" -o forgec2-server ./cmd/server
+ARG SOURCE_REPO=r0si/sovereign
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w -X github.com/r0si/sovereign/internal/server.ServerVersion=${VERSION} -X github.com/r0si/sovereign/internal/buildinfo.Repo=${SOURCE_REPO}" -o sovereign-server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
 # Seed /data with nonroot ownership in the builder (which has a shell).
 # NOTE: no RUN in the distroless stage — it has no shell and the build fails.
@@ -62,9 +62,9 @@ RUN mkdir -p /data && chown -R 65532:65532 /data
 
 # Stage 3: Runtime — distroless for minimal attack surface
 FROM gcr.io/distroless/static-debian12:latest@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
-LABEL org.opencontainers.image.title="ForgeC2"
+LABEL org.opencontainers.image.title="Sovereign"
 LABEL org.opencontainers.image.description="Command & Control Framework"
-COPY --from=backend-builder /build/forgec2-server /usr/local/bin/
+COPY --from=backend-builder /build/sovereign-server /usr/local/bin/
 COPY --from=backend-builder /build/healthcheck /usr/local/bin/healthcheck
 # Docker copies image content (including ownership) into a fresh named volume,
 # so the server can write its data there despite running as nonroot.
@@ -72,5 +72,5 @@ COPY --from=backend-builder --chown=nonroot:nonroot /data /data
 EXPOSE 8000 443 8443 53
 USER nonroot:nonroot
 WORKDIR /home/nonroot
-ENTRYPOINT ["forgec2-server"]
+ENTRYPOINT ["sovereign-server"]
 CMD ["-config", "/data/config.yaml"]

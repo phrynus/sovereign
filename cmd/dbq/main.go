@@ -1,11 +1,11 @@
-// Command dbq runs a SQL query against the ForgeC2 PostgreSQL database and
+// Command dbq runs a SQL query against the Sovereign PostgreSQL database and
 // prints the results.
 //
 // Usage: go run ./cmd/dbq <dsn> <query>
 //
 // Example:
 //
-//	go run ./cmd/dbq "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable" "SELECT * FROM users"
+//	go run ./cmd/dbq "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable" "SELECT * FROM users"
 package main
 
 import (

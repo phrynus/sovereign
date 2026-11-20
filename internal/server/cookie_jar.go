@@ -121,7 +121,7 @@ func chromeExpiryUnix(expires int64) int64 {
 func netscapeCookieFile(jars []cookieJarEntry) string {
 	var b strings.Builder
 	b.WriteString("# Netscape HTTP Cookie File\n")
-	b.WriteString("# ForgeC2 isolated cookie jar — import into a dedicated browser profile.\n")
+	b.WriteString("# Sovereign isolated cookie jar — import into a dedicated browser profile.\n")
 	b.WriteString("# HTTPS cookie injection via this proxy is CONNECT-tunnel only (no MITM).\n")
 	for _, c := range jars {
 		if c.Name == "" {

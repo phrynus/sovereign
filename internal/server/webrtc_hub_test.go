@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // newWSConnPair returns a connected (server-side, client-side) websocket pair

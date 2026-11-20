@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/opsec"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/opsec"
 )
 
 // handleOpsecCheck performs OPSEC validation before executing a task.

@@ -1,4 +1,4 @@
-# Copy outside the repository to /opt/forgec2-demo/compose/config.yaml and
+# Copy outside the repository to /opt/sovereign-demo/compose/config.yaml and
 # mount it read-only at /data/config.yaml. deploy.sh writes the live file with
 # freshly generated keys; this example documents the same sections, so keep
 # the two in sync.

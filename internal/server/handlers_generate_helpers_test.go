@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/obfuscation"
+	"github.com/r0si/sovereign/internal/obfuscation"
 )
 
 func TestClampIntervalJitter_Defaults(t *testing.T) {

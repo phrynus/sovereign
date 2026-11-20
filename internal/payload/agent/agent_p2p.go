@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // p2pCleanupStaleChildren prunes child UUIDs/results/tasks not seen in 10 minutes.

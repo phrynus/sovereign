@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // handleTemplatesPage renders the command templates page
@@ -25,7 +25,7 @@ func (s *Server) handleTemplatesPage(c *gin.Context) {
 	}
 
 	data := gin.H{
-		"Title":      "ForgeC2 - Command Templates",
+		"Title":      "Sovereign - Command Templates",
 		"ActiveNav":  "templates",
 		"Stats":      stats,
 		"Templates":  templates,

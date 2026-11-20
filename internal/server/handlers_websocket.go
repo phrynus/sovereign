@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/util"
 )
 
 func gzipCompress(data []byte) ([]byte, error) {
@@ -722,7 +722,7 @@ func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn) {
 }
 
 // handleOperatorWS handles operator WebSocket connections for real-time updates.
-// Requires a valid forgec2_session cookie (unlike agent beacons which use the
+// Requires a valid sovereign_session cookie (unlike agent beacons which use the
 // transport envelope for auth).
 func (s *Server) handleOperatorWS(c *gin.Context) {
 	claims, tokenStr, ok := s.authenticateOperatorWS(c)

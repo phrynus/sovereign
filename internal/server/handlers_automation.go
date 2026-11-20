@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // validateExternalURL guards server-initiated fetches against SSRF. It accepts
@@ -414,7 +414,7 @@ func (s *Server) handlePluginList(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the plugin inventory")
 			return
 		}
-		name := "forgec2_plugins_" + time.Now().Format("2006-01-02_150405") + ".csv"
+		name := "sovereign_plugins_" + time.Now().Format("2006-01-02_150405") + ".csv"
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		// The list is capped at 200 rows, and a capped inventory that looks complete is the same lie as a capped export.
 		if len(plugins) >= 200 {

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/miekg/dns"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Listener self-check heartbeat: periodically probes every enabled listener
@@ -395,7 +395,7 @@ func probeDNS(ctx context.Context, host string, port int, zone string) (bool, er
 	if err != nil {
 		return false, err
 	}
-	// The ForgeC2 handler answers every query (even unknown UUIDs) — any
+	// The Sovereign handler answers every query (even unknown UUIDs) — any
 	// response proves the UDP socket is being served.
 	return true, nil
 }

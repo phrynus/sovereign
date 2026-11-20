@@ -1,10 +1,10 @@
 ---
 name: remote-desktop
-description: Extend ForgeC2 interactive remote desktop (screen stream + input relay). Use for remote control, remote_input, mouse keyboard injection.
+description: Extend Sovereign interactive remote desktop (screen stream + input relay). Use for remote control, remote_input, mouse keyboard injection.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

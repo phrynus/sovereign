@@ -1,10 +1,10 @@
 ---
 name: add-transport-protocol
-description: Add ForgeC2 implant transport protocols (DNS, ICMP, SMB, TCP). Use for DNS beacon, ICMP C2, SMB pipe, or /add-transport-protocol.
+description: Add Sovereign implant transport protocols (DNS, ICMP, SMB, TCP). Use for DNS beacon, ICMP C2, SMB pipe, or /add-transport-protocol.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

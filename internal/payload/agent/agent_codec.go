@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	mathRand "math/rand"
 
-	"github.com/forgec2/forgec2/pkg/encoding"
+	"github.com/r0si/sovereign/pkg/encoding"
 )
 
 // encodeBeacon marshals a BeaconRequest using multi-format rotation.
@@ -59,5 +59,5 @@ func newCryptoRand() *lockedRand {
 	rand.Read(seed)
 	// #nosec G404 -- math/rand here is only a shuffle order seeded from crypto/rand; no key material is drawn from it.
 	src := mathRand.NewSource(int64(binary.LittleEndian.Uint64(seed))) // #nosec G404
-	return &lockedRand{r: mathRand.New(src)}                              // #nosec G404
+	return &lockedRand{r: mathRand.New(src)}                           // #nosec G404
 }

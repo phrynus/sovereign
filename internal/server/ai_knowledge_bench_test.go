@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/config"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // BenchmarkAISearchKnowledgeLat measures searchAIKnowledge over a corpus
@@ -16,7 +16,8 @@ import (
 // returned first.
 //
 // Run with:
-//   go test ./internal/server/ -run XXX -bench BenchmarkAISearchKnowledgeLat -benchtime 5x -v
+//
+//	go test ./internal/server/ -run XXX -bench BenchmarkAISearchKnowledgeLat -benchtime 5x -v
 //
 // Measured 2026-11-07 (PostgreSQL 18, local): ~241ms/op (665KB/op) for a
 // two-term query against 10k chunks — ~50x faster than the previous

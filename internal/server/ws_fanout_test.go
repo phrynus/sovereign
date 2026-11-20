@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // newTestWSPair returns the server-side and browser-side ends of one real

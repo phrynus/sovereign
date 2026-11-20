@@ -68,7 +68,7 @@ func buildFailureText(err error) string {
 	case strings.Contains(lowered, "missing go.sum entry") || strings.Contains(lowered, "go.sum") &&
 		strings.Contains(lowered, "missing"):
 		return "The Go module sum file is incomplete while building: " + message +
-			"\n(hint: run `go mod tidy` in the forgec2 root to regenerate go.sum)"
+			"\n(hint: run `go mod tidy` in the sovereign root to regenerate go.sum)"
 	}
 	return message
 }
@@ -181,7 +181,7 @@ func buildFailureHint(err error) BuildFailureHint {
 		strings.Contains(lowered, "missing"):
 		return BuildFailureHint{
 			Code: HintGoSumMissing,
-			Text: "The Go module sum file is incomplete; run `go mod tidy` in the forgec2 root to regenerate go.sum.",
+			Text: "The Go module sum file is incomplete; run `go mod tidy` in the sovereign root to regenerate go.sum.",
 		}
 	case strings.Contains(lowered, "undefined:") || strings.Contains(lowered, "syntax error") ||
 		strings.Contains(lowered, "cannot use") || strings.Contains(lowered, "exit status 1"):

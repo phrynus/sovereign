@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── Shell dispatch + task queries ─────────────────────────────────────────
@@ -88,7 +88,7 @@ func (s *Server) handleShellPage(c *gin.Context) {
 	s.configMu.RUnlock()
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":            fmt.Sprintf("ForgeC2 - Shell %s", agent.Hostname),
+		"Title":            fmt.Sprintf("Sovereign - Shell %s", agent.Hostname),
 		"ActiveNav":        "agents",
 		"Agent":            agent,
 		"IsFullPage":       true,

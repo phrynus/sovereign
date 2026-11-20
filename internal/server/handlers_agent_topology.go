@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // handlePivoting shows SOCKS / proxy status and agents useful for pivoting
@@ -22,7 +22,7 @@ func (s *Server) handlePivoting(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - Tunnels & Proxies (Pivoting)",
+		"Title":     "Sovereign - Tunnels & Proxies (Pivoting)",
 		"ActiveNav": "pivoting",
 		"Agents":    recentAgents,
 	}
@@ -37,7 +37,7 @@ func (s *Server) handlePivoting(c *gin.Context) {
 func (s *Server) handleTopologyPage(c *gin.Context) {
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - Network Topology",
+		"Title":     "Sovereign - Network Topology",
 		"ActiveNav": "topology",
 	}
 	for k, v := range stats {

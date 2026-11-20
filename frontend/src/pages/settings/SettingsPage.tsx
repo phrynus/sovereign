@@ -180,7 +180,7 @@ export default function SettingsPage() {
   const handleApplyTheme = (th: string) => {
     setTheme(th);
     try {
-      localStorage.setItem("forgec2_theme", th);
+      localStorage.setItem("sovereign_theme", th);
       const root = document.documentElement;
       if (th === "dark") root.classList.add("dark");
       else if (th === "light") root.classList.remove("dark");
@@ -212,7 +212,7 @@ export default function SettingsPage() {
   const { mutate: downloadBackup, isPending: savingBackup } = useMutation({
     fn: async () => {
       const { blob } = await api.download(paths.settings.dbBackup);
-      downloadBlob(blob, `forgec2_backup_${Date.now()}.db`);
+      downloadBlob(blob, `sovereign_backup_${Date.now()}.db`);
     },
     onSuccess: () => toast.success(t("settings.toast.backup_done")),
     onError: (e) => toastError(e, "settings.toast.backup_failed"),
@@ -225,7 +225,7 @@ export default function SettingsPage() {
   const handleDownloadDB = async () => {
     try {
       const { blob } = await api.downloadGet(paths.settings.configDownload);
-      downloadBlob(blob, "forgec2.db");
+      downloadBlob(blob, "sovereign.db");
     } catch (e) { toastError(e, "settings.toast.download_failed"); }
   };
 

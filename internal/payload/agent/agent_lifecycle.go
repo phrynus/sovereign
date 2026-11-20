@@ -39,7 +39,7 @@ func addPersistence() {
 func uninstallSelf() (string, error) {
 	// best effort cleanup — remove BOTH persistence naming schemes
 	// (auto-install: WindowsUpdate/AdobeUpdateTask/svchost.exe and explicit:
-	// ForgeC2/ForgeC2Update/ForgeC2.exe) so nothing is left behind regardless
+	// Sovereign/SovereignUpdate/Sovereign.exe) so nothing is left behind regardless
 	// of which install path was used.
 	if runtime.GOOS == "windows" {
 		for _, name := range []string{persistencePrefix, "WindowsUpdate"} {

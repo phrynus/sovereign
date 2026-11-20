@@ -1,4 +1,4 @@
-# ForgeC2 Capability Matrix
+# Sovereign Capability Matrix
 
 > Status of implant tasks / transports as of **v2.7.1**.
 > Quality: **Core** (production) · **Hardened** (usable OPSEC) · **Scripted** (PS/external) · **Experimental** · **Stub** (Windows-only or incomplete).  

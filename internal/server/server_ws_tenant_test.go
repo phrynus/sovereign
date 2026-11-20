@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func tenantFanoutServer(t *testing.T) (*Server, map[string]chan []byte) {

@@ -220,7 +220,7 @@ export function I18nProvider({ children, full = true }: { children: ReactNode; f
   useEffect(() => {
     let saved: string | null = null;
     try {
-      saved = localStorage.getItem("forgec2_lang");
+      saved = localStorage.getItem("sovereign_lang");
     } catch {
       // Browser privacy policies can disable storage without disabling the UI.
     }
@@ -250,12 +250,12 @@ export function I18nProvider({ children, full = true }: { children: ReactNode; f
     // A same-language selection must also cancel an opposite pending load.
     pendingRef.current = newLocale;
     try {
-      localStorage.setItem("forgec2_lang", newLocale);
+      localStorage.setItem("sovereign_lang", newLocale);
     } catch {
       // Persisting a preference is optional; switching in memory still works.
     }
     try {
-      document.cookie = "forgec2_lang=" + newLocale + "; path=/; max-age=31536000; SameSite=Strict";
+      document.cookie = "sovereign_lang=" + newLocale + "; path=/; max-age=31536000; SameSite=Strict";
     } catch {
       // Cookie access can be restricted independently of localStorage.
     }

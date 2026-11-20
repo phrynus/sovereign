@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestHandleExportAuditChainStreamsVerifiableRows pins the offline-verification
@@ -38,8 +38,8 @@ func TestHandleExportAuditChainStreamsVerifiableRows(t *testing.T) {
 	}
 	// The filename carries a timestamp on purpose: two exports in one day must not overwrite each other in a browser.
 	// Assert the prefix and the extension rather than the whole name, so the test is about the contract and not the clock.
-	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "forgec2-audit-chain") || !strings.Contains(cd, ".ndjson") {
-		t.Fatalf("disposition = %q, want forgec2-audit-chain*.ndjson", cd)
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "sovereign-audit-chain") || !strings.Contains(cd, ".ndjson") {
+		t.Fatalf("disposition = %q, want sovereign-audit-chain*.ndjson", cd)
 	}
 
 	var rows []auditChainExportRow

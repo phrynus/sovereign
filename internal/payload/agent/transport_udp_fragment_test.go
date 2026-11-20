@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TestUDPBeaconFragmentation is a real datagram round trip: a request larger

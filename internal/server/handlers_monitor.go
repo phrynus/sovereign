@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 const (
@@ -791,7 +791,7 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - Screen Monitoring",
+		"Title":     "Sovereign - Screen Monitoring",
 		"Agent":     agent,
 		"ActiveNav": "agents",
 		"Online":    time.Since(agent.LastSeen) < s.offlineThreshold(),

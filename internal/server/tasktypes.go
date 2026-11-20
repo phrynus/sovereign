@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TaskTypeParam describes a single parameter for a task type.

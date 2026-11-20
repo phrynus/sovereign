@@ -1,4 +1,4 @@
-# ForgeC2 C-implant local E2E: throwaway server, minted secret, real tasks.
+# Sovereign C-implant local E2E: throwaway server, minted secret, real tasks.
 #
 #   powershell -NoProfile -File scripts\e2e-c-implant-local.ps1
 #
@@ -25,7 +25,7 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot,
-    [string]$WorkDir = (Join-Path $env:TEMP 'forgec2-c-implant-e2e'),
+    [string]$WorkDir = (Join-Path $env:TEMP 'sovereign-c-implant-e2e'),
     [int]$Port = 8100,
     [string]$User = 'admin',
     [string]$Password,
@@ -93,7 +93,7 @@ try {
     $pushed = $true
 
     Step '1/8 build the throwaway server'
-    go build -o "$WorkDir/forgec2-server.exe" ./cmd/server
+    go build -o "$WorkDir/sovereign-server.exe" ./cmd/server
     if ($LASTEXITCODE -ne 0) { throw 'server build failed' }
 
     Step '2/8 write the throwaway config'
@@ -105,7 +105,7 @@ try {
     # No end-of-line anchor: the example carries a trailing comment on the
     # data_dir line, and the trailing text must survive the rewrite.
     $cfg = $cfg -replace '(?m)^([ \t]*)data_dir: data\b', "`${1}data_dir: $WorkDir/data"
-    $cfg = $cfg -replace '(?m)^(\s*)path: data/db/forgec2.db', "`${1}path: $WorkDir/data/db/forgec2.db"
+    $cfg = $cfg -replace '(?m)^(\s*)path: data/db/sovereign.db', "`${1}path: $WorkDir/data/db/sovereign.db"
     $cfg = $cfg -replace '(?m)^(\s*)beacon_key: ""', "`${1}beacon_key: `"$BeaconKey`""
     $cfg = $cfg -replace '(?m)^(\s*)default_password: ""', "`${1}default_password: `"$Password`""
     # The two-man rule is a server-side gate with its own tests; this script
@@ -116,7 +116,7 @@ try {
     if ($cfg -notmatch "port: $Port" -or $cfg -notmatch 'tls_enabled: false' -or
         $cfg -notmatch 'require_tls_for_auth: false' -or $cfg -notmatch 'require_approval: false' -or
         $cfg -notmatch [regex]::Escape("data_dir: $WorkDir/data") -or
-        $cfg -notmatch [regex]::Escape("path: $WorkDir/data/db/forgec2.db") -or
+        $cfg -notmatch [regex]::Escape("path: $WorkDir/data/db/sovereign.db") -or
         $cfg -notmatch [regex]::Escape($Password) -or $cfg -notmatch [regex]::Escape($BeaconKey)) {
         throw 'config rewrite did not apply cleanly - is config.example.yaml unchanged?'
     }
@@ -126,7 +126,7 @@ try {
     Write-Host "  wrote $WorkDir/config.e2e.yaml"
 
     Step "3/8 start the throwaway server on 127.0.0.1:$Port"
-    $server = Start-Process -FilePath "$WorkDir/forgec2-server.exe" `
+    $server = Start-Process -FilePath "$WorkDir/sovereign-server.exe" `
         -ArgumentList '-config', "$WorkDir/config.e2e.yaml" -WorkingDirectory $WorkDir -PassThru -WindowStyle Hidden
     $healthy = $false
     for ($i = 0; $i -lt 80; $i++) {
@@ -148,7 +148,7 @@ try {
     if ($code -ne '302' -and $code -ne '200') {
         throw "login failed with HTTP ${code}: $(Get-Content "$WorkDir/login-body.txt" -Raw)"
     }
-    $mint = & go run ./cmd/mint-reg-secret -db "$WorkDir/data/db/forgec2.db" -beacon-key $BeaconKey
+    $mint = & go run ./cmd/mint-reg-secret -db "$WorkDir/data/db/sovereign.db" -beacon-key $BeaconKey
     if ($LASTEXITCODE -ne 0) { throw 'cmd/mint-reg-secret failed' }
     $sid = (($mint | Where-Object { $_ -like 'set SECRET_ID=*' }) -replace '^set SECRET_ID=', '')
     $sb64 = (($mint | Where-Object { $_ -like 'set SECRET_B64=*' }) -replace '^set SECRET_B64=', '')

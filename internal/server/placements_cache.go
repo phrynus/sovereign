@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/malleable"
+	"github.com/r0si/sovereign/internal/malleable"
 )
 
 // Bounds on the placed-body scan (extractPlacedBody). A real beacon sends one value of a

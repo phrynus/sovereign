@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 func newProfileTestServer(t *testing.T) *Server {
@@ -47,7 +47,7 @@ http-post {
   client { header "Accept" "*/*"; }
   server { output { base64; } }
 }
-forgec2 {
+sovereign {
   set request_header "X-Test" "one";
 }
 `

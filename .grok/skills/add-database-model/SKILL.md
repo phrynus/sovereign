@@ -1,16 +1,16 @@
 ---
 name: add-database-model
-description: Add GORM models and migrations to ForgeC2 SQLite database. Use for new DB tables, schema changes, or /add-database-model.
+description: Add GORM models and migrations to Sovereign SQLite database. Use for new DB tables, schema changes, or /add-database-model.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 
 ## When to use
 
-Add a new persisted entity or column to the ForgeC2 database.
+Add a new persisted entity or column to the Sovereign database.
 
 ## Key files
 
@@ -18,7 +18,7 @@ Add a new persisted entity or column to the ForgeC2 database.
 |------|------|
 | `internal/db/models.go` | GORM struct definitions |
 | `internal/db/db.go` | `AutoMigrate` list |
-| `config.yaml` | `database.path` (default `data/db/forgec2.db`) |
+| `config.yaml` | `database.path` (default `data/db/sovereign.db`) |
 
 ## Add model checklist
 

@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 var (

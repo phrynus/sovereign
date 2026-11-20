@@ -11,7 +11,7 @@ import (
 //
 // The release pipeline publishes one raw server binary per platform named
 //
-//	forgec2-server-<os>-<arch>[.exe]
+//	sovereign-server-<os>-<arch>[.exe]
 //
 // plus a "<binary>.sha256" checksum, a "<binary>.sha256.sig" detached
 // signature, an SBOM and the one-click bundles. Only the raw binary may be
@@ -26,7 +26,7 @@ import (
 // was taken from whichever ".sha256" happened to be listed first.
 
 // serverBinaryPrefix is the asset name prefix of the raw server binary.
-const serverBinaryPrefix = "forgec2-server-"
+const serverBinaryPrefix = "sovereign-server-"
 
 // nonBinarySuffixes are the sidecar/bundle suffixes that must never be
 // mistaken for the server binary.

@@ -1,6 +1,6 @@
 // Package bundle verifies an engagement handover archive independently of the server that produced it.
 //
-// It exists because the receiving side of a handover is usually NOT a ForgeC2 operator: a customer, an after-action
+// It exists because the receiving side of a handover is usually NOT a Sovereign operator: a customer, an after-action
 // reviewer or a lawyer holds a zip and needs to answer three questions without a running console - did the files survive
 // transit, does the manifest still describe them, and was the manifest signed by the key we already trust.
 //

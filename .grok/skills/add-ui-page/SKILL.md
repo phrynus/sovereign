@@ -1,10 +1,10 @@
 ---
 name: add-ui-page
-description: Add a new ForgeC2 page (Vite + React Router route, layout nav, i18n, API wiring)
+description: Add a new Sovereign page (Vite + React Router route, layout nav, i18n, API wiring)
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

@@ -41,7 +41,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let initial = DEFAULT_THEME;
     try {
-      initial = resolveStoredTheme(localStorage.getItem("forgec2_theme"));
+      initial = resolveStoredTheme(localStorage.getItem("sovereign_theme"));
     } catch {
       // Storage restrictions must not prevent the application from mounting.
     }
@@ -75,7 +75,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     themeRef.current = next;
     setThemeState(next);
     try {
-      localStorage.setItem("forgec2_theme", next);
+      localStorage.setItem("sovereign_theme", next);
     } catch {
       // The in-memory preference remains authoritative when persistence fails.
     }

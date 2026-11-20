@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/malleable"
 )
 
 func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {

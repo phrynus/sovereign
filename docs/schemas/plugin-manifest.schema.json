@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ForgeC2 plugin manifest",
+  "title": "Sovereign plugin manifest",
   "description": "Schema for a plugin package's manifest.yaml (package schema v2). The authoritative loader is internal/plugin/manifest.go and manifest.Validate(); `go run ./cmd/plugin-check <dir>` applies this schema plus the tier rules (entry file, package digest/signature, WASM ABI surface). Unknown keys are ignored by the loader but may be rejected by future schema revisions, so keep the manifest clean.",
   "type": "object",
   "required": ["name", "version", "type", "entry", "interpreter"],

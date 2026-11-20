@@ -21,10 +21,10 @@ interface UiSlice {
 
 // Legacy localStorage keys — read once to seed values for users who set prefs
 // before the persist middleware existed. New writes go through the persist
-// blob ("forgec2_ui_prefs_v1").
-const SIDEBAR_LEGACY_KEY = "forgec2_sidebar_collapsed";
-const DENSITY_LEGACY_KEY = "forgec2_density";
-const FOCUS_LEGACY_KEY = "forgec2_focus_mode";
+// blob ("sovereign_ui_prefs_v1").
+const SIDEBAR_LEGACY_KEY = "sovereign_sidebar_collapsed";
+const DENSITY_LEGACY_KEY = "sovereign_density";
+const FOCUS_LEGACY_KEY = "sovereign_focus_mode";
 
 function legacyBool(key: string): boolean | null {
   if (typeof window === "undefined") return null;

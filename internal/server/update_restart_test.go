@@ -25,7 +25,7 @@ func TestUpdatePendingRoundTrip(t *testing.T) {
 		To:        "v2.7.1",
 		PID:       4242,
 		StartedAt: time.Now().UTC().Truncate(time.Second),
-		Exe:       filepath.Join(dir, "forgec2-server.exe"),
+		Exe:       filepath.Join(dir, "sovereign-server.exe"),
 		New:       filepath.Join(dir, updateNewFile),
 		Prev:      filepath.Join(dir, updatePrevFile),
 		WorkDir:   dir,
@@ -155,12 +155,12 @@ func TestAcquireUpdateLockReclaimsAStaleLock(t *testing.T) {
 // started with "-config other.yaml" came back on the default configuration.
 func TestRestartScriptKeepsTheOriginalCommandLine(t *testing.T) {
 	plan := restartPlan{
-		Exe:     `/opt/forgec2/forgec2-server`,
-		WorkDir: `/opt/forgec2`,
-		Args:    []string{"-config", "/etc/forgec2/config.yaml", "-log-format", "json"},
+		Exe:     `/opt/sovereign/sovereign-server`,
+		WorkDir: `/opt/sovereign`,
+		Args:    []string{"-config", "/etc/sovereign/config.yaml", "-log-format", "json"},
 	}
 	unix := renderUnixRestartScript(plan)
-	if !strings.Contains(unix, `'/etc/forgec2/config.yaml'`) {
+	if !strings.Contains(unix, `'/etc/sovereign/config.yaml'`) {
 		t.Fatalf("the unix script lost the config flag:\n%s", unix)
 	}
 	if !strings.Contains(unix, `'-log-format'`) || !strings.Contains(unix, `'json'`) {
@@ -171,7 +171,7 @@ func TestRestartScriptKeepsTheOriginalCommandLine(t *testing.T) {
 	if !strings.Contains(win, `-ArgumentList $ArgLine`) {
 		t.Fatalf("the windows script does not pass the command line:\n%s", win)
 	}
-	if !strings.Contains(win, `-config /etc/forgec2/config.yaml`) {
+	if !strings.Contains(win, `-config /etc/sovereign/config.yaml`) {
 		t.Fatalf("the windows script lost the config flag:\n%s", win)
 	}
 }
@@ -233,14 +233,14 @@ func TestWindowsQuoteArgFollowsCommandLineRules(t *testing.T) {
 			t.Fatalf("windowsQuoteArg(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
-	line := windowsArgLine([]string{"-config", `C:\Program Files\forgec2\config.yaml`})
+	line := windowsArgLine([]string{"-config", `C:\Program Files\sovereign\config.yaml`})
 	if !strings.Contains(line, `"-config"`) {
 		// A flag without spaces needs no quotes.
 		if !strings.Contains(line, "-config") {
 			t.Fatalf("command line lost the flag: %q", line)
 		}
 	}
-	if !strings.Contains(line, `"C:\Program Files\forgec2\config.yaml"`) {
+	if !strings.Contains(line, `"C:\Program Files\sovereign\config.yaml"`) {
 		t.Fatalf("command line lost the quoted path: %q", line)
 	}
 }
@@ -289,7 +289,7 @@ func newRestarterFixture(t *testing.T, helperMode string) *restarterFixture {
 		t.Fatalf("read test binary: %v", err)
 	}
 
-	exeName := "forgec2-server"
+	exeName := "sovereign-server"
 	if runtime.GOOS == "windows" {
 		exeName += ".exe"
 	}
@@ -305,7 +305,7 @@ func newRestarterFixture(t *testing.T, helperMode string) *restarterFixture {
 	// The downloaded build differs in size from the installed one, so the
 	// test can tell which one is in place after the swap.
 	newPath := filepath.Join(updateDir, updateNewFile)
-	newData := append(append([]byte{}, selfData...), []byte("FORGEC2-UPDATE-MARKER")...)
+	newData := append(append([]byte{}, selfData...), []byte("SOVEREIGN-UPDATE-MARKER")...)
 	if err := os.WriteFile(newPath, newData, 0o700); err != nil {
 		t.Fatalf("seed downloaded binary: %v", err)
 	}

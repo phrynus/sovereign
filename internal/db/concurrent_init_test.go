@@ -23,7 +23,7 @@ func TestConcurrentInitDBIsSafe(t *testing.T) {
 	// os.MkdirTemp rather than t.TempDir: closing every pool is best effort on
 	// Windows (a lingering handle makes RemoveAll fail), and losing the assertion
 	// because cleanup could not unlink a file would be the wrong failure.
-	dir, err := os.MkdirTemp("", "forgec2-race-")
+	dir, err := os.MkdirTemp("", "sovereign-race-")
 	if err != nil {
 		t.Fatal(err)
 	}

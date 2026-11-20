@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +22,7 @@ import (
 // One guard makes this safe to expose: the tool only touches a package **the assistant authored**
 // (`Author == aiPluginAuthor`). A hand-written or imported plugin is never overwritten by a model,
 // because a model cannot see the intent behind code it did not write - the operator edits those.
-const aiPluginAuthor = "forgec2-ai"
+const aiPluginAuthor = "sovereign-ai"
 
 // aiUpdatePluginArgs is the model-facing argument set.
 type aiUpdatePluginArgs struct {

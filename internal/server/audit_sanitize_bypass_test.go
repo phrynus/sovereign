@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestFlushAuditEntriesSanitizesDirectRows pins the bypass fix: callers that build

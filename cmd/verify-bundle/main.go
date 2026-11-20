@@ -1,6 +1,6 @@
 // Command verify-bundle checks an engagement handover archive without a running server.
 //
-// The receiving side of a handover is usually not a ForgeC2 operator, and asking them to install a console to answer
+// The receiving side of a handover is usually not a Sovereign operator, and asking them to install a console to answer
 // "did these files survive the trip" would mean they never answer it. This reads the zip, re-computes every published
 // digest and checks the signature:
 //
@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/bundle"
+	"github.com/r0si/sovereign/internal/bundle"
 )
 
 func main() {

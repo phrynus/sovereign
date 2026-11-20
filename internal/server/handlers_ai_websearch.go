@@ -83,7 +83,7 @@ func (s *Server) executeAIWebSearchTool(reqCtx *aiReqCtx, argsJSON string) strin
 	defer cancel()
 	client := ssrfSafeClient(&http.Client{Timeout: AIWebSearchTimeout, Transport: http.DefaultTransport})
 	httpReq, _ := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
-	httpReq.Header.Set("User-Agent", "ForgeC2-AI/2.5")
+	httpReq.Header.Set("User-Agent", "Sovereign-AI/2.5")
 	httpReq.Header.Set("Accept", "text/html")
 	resp, err := client.Do(httpReq)
 	if err != nil {

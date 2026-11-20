@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Task queue depth per beacon: which agent is backed up, and which one has stopped draining.
@@ -137,7 +137,7 @@ func (s *Server) handleTaskQueueStats(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the queue")
 			return
 		}
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="forgec2_task-queue_%s.csv"`,
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="sovereign_task-queue_%s.csv"`,
 			time.Now().Format("2006-01-02_150405")))
 		if scope := taskExportScope(c); scope != "" {
 			c.Header(taskExportScopeHeader, scope)

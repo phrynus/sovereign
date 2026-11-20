@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/peimage"
+	"github.com/r0si/sovereign/pkg/peimage"
 )
 
 const testSelfCheckOffset = testPETextRawOff

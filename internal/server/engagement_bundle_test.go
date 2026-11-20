@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestEngagementBundle covers the handover download: one zip with the summary, the tasks of the engagement's hosts,

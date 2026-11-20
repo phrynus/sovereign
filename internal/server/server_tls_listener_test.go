@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	fc2crypto "github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/config"
+	fc2crypto "github.com/r0si/sovereign/internal/crypto"
 )
 
 // TestServeNegotiatesHTTP2OnTheTLSListener pins the reason the listener uses

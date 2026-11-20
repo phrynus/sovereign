@@ -62,21 +62,21 @@ func GenerateNginxConfig(rc RedirectorConfig) string {
 	var b strings.Builder
 	scheme := backendProxyScheme(rc)
 
-	fmt.Fprintf(&b, "# ForgeC2 Nginx Redirector Configuration\n")
+	fmt.Fprintf(&b, "# Sovereign Nginx Redirector Configuration\n")
 	fmt.Fprintf(&b, "# Generated for domain: %s\n", rc.Domain)
 	fmt.Fprintf(&b, "# Backend: %s\n\n", rc.BackendURL)
 
 	// Upstream
-	upstreamName := "forgec2_backend"
+	upstreamName := "sovereign_backend"
 	fmt.Fprintf(&b, "upstream %s {\n", upstreamName)
-	b.WriteString("    zone upstream_forgec2 64k;\n")
+	b.WriteString("    zone upstream_sovereign 64k;\n")
 	fmt.Fprintf(&b, "    server %s;\n", stripScheme(rc.BackendURL))
 	b.WriteString("    keepalive 32;\n")
 	b.WriteString("}\n\n")
 
 	// Rate limit zone
-	b.WriteString("limit_req_zone $binary_remote_addr zone=forgec2_login:10m rate=5r/m;\n")
-	b.WriteString("limit_req_zone $binary_remote_addr zone=forgec2_beacon:10m rate=100r/m;\n\n")
+	b.WriteString("limit_req_zone $binary_remote_addr zone=sovereign_login:10m rate=5r/m;\n")
+	b.WriteString("limit_req_zone $binary_remote_addr zone=sovereign_beacon:10m rate=100r/m;\n\n")
 
 	// Redirect HTTP → HTTPS
 	b.WriteString("server {\n")
@@ -117,7 +117,7 @@ func GenerateNginxConfig(rc RedirectorConfig) string {
 	// Logging (minimal to avoid OPSEC)
 	b.WriteString("    # Minimal access logging (OPSEC)\n")
 	fmt.Fprintf(&b, "    access_log /var/log/nginx/%s-access.log combined buffer=32k flush=5m;\n", rc.Domain)
-	b.WriteString("    error_log /var/log/nginx/forgec2-error.log warn;\n\n")
+	b.WriteString("    error_log /var/log/nginx/sovereign-error.log warn;\n\n")
 
 	// Beacon proxy
 	b.WriteString("    # C2 Beacon endpoints\n")
@@ -134,7 +134,7 @@ func GenerateNginxConfig(rc RedirectorConfig) string {
 		// Plain-HTTP backends have no TLS layer to skip verification of.
 		b.WriteString("        proxy_ssl_verify off;\n")
 	}
-	b.WriteString("        limit_req zone=forgec2_beacon burst=20 nodelay;\n")
+	b.WriteString("        limit_req zone=sovereign_beacon burst=20 nodelay;\n")
 	b.WriteString("    }\n\n")
 
 	// External C2 paths
@@ -204,7 +204,7 @@ func GenerateNginxConfig(rc RedirectorConfig) string {
 	fmt.Fprintf(&b, "        proxy_pass %s://%s;\n", scheme, upstreamName)
 	b.WriteString("        proxy_http_version 1.1;\n")
 	b.WriteString("        proxy_set_header Host $host;\n")
-	b.WriteString("        limit_req zone=forgec2_login burst=3 nodelay;\n")
+	b.WriteString("        limit_req zone=sovereign_login burst=3 nodelay;\n")
 	b.WriteString("    }\n\n")
 
 	// Static assets (serve from redirector to reduce backend load)
@@ -231,7 +231,7 @@ func GenerateApacheConfig(rc RedirectorConfig) string {
 	rc.fillDefaults()
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "# ForgeC2 Apache Redirector Configuration\n")
+	fmt.Fprintf(&b, "# Sovereign Apache Redirector Configuration\n")
 	fmt.Fprintf(&b, "# Generated for domain: %s\n", rc.Domain)
 	fmt.Fprintf(&b, "# Backend: %s\n\n", rc.BackendURL)
 
@@ -299,7 +299,7 @@ func GenerateApacheConfig(rc RedirectorConfig) string {
 
 	b.WriteString("\n    # Logging\n")
 	fmt.Fprintf(&b, "    CustomLog ${APACHE_LOG_DIR}/%s-access.log combined\n", rc.Domain)
-	b.WriteString("    ErrorLog ${APACHE_LOG_DIR}/forgec2-error.log\n\n")
+	b.WriteString("    ErrorLog ${APACHE_LOG_DIR}/sovereign-error.log\n\n")
 
 	b.WriteString("</VirtualHost>\n")
 	b.WriteString("</IfModule>\n")
@@ -312,7 +312,7 @@ func GenerateHAProxyConfig(rc RedirectorConfig) string {
 	rc.fillDefaults()
 	var b strings.Builder
 
-	b.WriteString("# ForgeC2 HAProxy Redirector Configuration\n")
+	b.WriteString("# Sovereign HAProxy Redirector Configuration\n")
 	fmt.Fprintf(&b, "# Generated for domain: %s\n", rc.Domain)
 	fmt.Fprintf(&b, "# Backend: %s\n\n", rc.BackendURL)
 
@@ -342,7 +342,7 @@ func GenerateHAProxyConfig(rc RedirectorConfig) string {
 	// Frontend HTTPS
 	b.WriteString("frontend https-in\n")
 	fmt.Fprintf(&b, "    bind *:%d ssl crt /etc/ssl/%s.pem\n", rc.ListenPort, rc.Domain)
-	b.WriteString("    default_backend forgec2_backend\n\n")
+	b.WriteString("    default_backend sovereign_backend\n\n")
 
 	// ACLs for specific paths
 	b.WriteString("    # C2 Beacon API\n")
@@ -387,19 +387,19 @@ func GenerateHAProxyConfig(rc RedirectorConfig) string {
 	// HAProxy ANDs multiple criteria in one "if" clause, so each ACL must get
 	// its own use_backend line — a request can only match one path_beg ACL.
 	for _, acl := range []string{"is_beacon", "is_stage", "is_payload", "is_health", "is_ready", "is_login", "is_static"} {
-		fmt.Fprintf(&b, "    use_backend forgec2_backend if %s\n", acl)
+		fmt.Fprintf(&b, "    use_backend sovereign_backend if %s\n", acl)
 	}
 	if rc.WSEnabled {
-		b.WriteString("    use_backend forgec2_backend if is_ws\n")
+		b.WriteString("    use_backend sovereign_backend if is_ws\n")
 	}
 	for i := range rc.ExtC2Paths {
-		fmt.Fprintf(&b, "    use_backend forgec2_backend if is_extc2_%d\n", i)
+		fmt.Fprintf(&b, "    use_backend sovereign_backend if is_extc2_%d\n", i)
 	}
-	b.WriteString("    default_backend forgec2_deny\n\n")
+	b.WriteString("    default_backend sovereign_deny\n\n")
 
 	// Backend
 	upstream := stripScheme(rc.BackendURL)
-	b.WriteString("backend forgec2_backend\n")
+	b.WriteString("backend sovereign_backend\n")
 	// No "resolvers" directive: the upstream is a static host:port and
 	// referencing an undefined resolvers section makes HAProxy refuse to start.
 	fmt.Fprintf(&b, "    server forgec1 %s check\n", upstream)
@@ -409,7 +409,7 @@ func GenerateHAProxyConfig(rc RedirectorConfig) string {
 	}
 
 	// Deny backend
-	b.WriteString("\nbackend forgec2_deny\n")
+	b.WriteString("\nbackend sovereign_deny\n")
 	b.WriteString("    http-request deny deny_status 404\n")
 
 	return b.String()

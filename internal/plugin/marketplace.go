@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -244,7 +244,7 @@ func (m *Marketplace) fetchGitHubLatestVersion(homepage string) (string, string,
 		return "", "", err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "ForgeC2-Plugin-Marketplace")
+	req.Header.Set("User-Agent", "Sovereign-Plugin-Marketplace")
 
 	resp, err := client.Do(req)
 	if err != nil {

@@ -10,8 +10,8 @@ export const defaultSidebarSections: Record<string, boolean> = {
 };
 
 /** Bump when default open/closed sections change so operators pick up new defaults. */
-export const SIDEBAR_SECTIONS_KEY = "forgec2_sidebar_sections_v5";
-export const SIDEBAR_SECTIONS_LEGACY_KEY = "forgec2_sidebar_sections";
+export const SIDEBAR_SECTIONS_KEY = "sovereign_sidebar_sections_v5";
+export const SIDEBAR_SECTIONS_LEGACY_KEY = "sovereign_sidebar_sections";
 
 /** Merge saved prefs with current defaults so new section keys inherit defaults. */
 export function mergeSidebarSections(

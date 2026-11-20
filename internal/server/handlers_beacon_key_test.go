@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 const v2TestMasterKey = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"

@@ -1,10 +1,10 @@
 ---
 name: add-manifest-plugin
-description: Create ForgeC2 manifest-based plugins (YAML + Python/Go script, plugin runtime). Use for plugins/example style plugins or /add-manifest-plugin.
+description: Create Sovereign manifest-based plugins (YAML + Python/Go script, plugin runtime). Use for plugins/example style plugins or /add-manifest-plugin.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 
@@ -23,7 +23,7 @@ name: your_plugin
 version: 1.0.0
 type: command
 description: What it does
-author: ForgeC2
+author: Sovereign
 category: recon
 entry: run.py
 interpreter: python   # python | go

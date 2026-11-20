@@ -16,7 +16,7 @@ import (
 // rather than as a broken transport.
 func TestMCPProtocolAndTools(t *testing.T) {
 	console := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Cookie") != "forgec2_session=abc" {
+		if r.Header.Get("Cookie") != "sovereign_session=abc" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -30,8 +30,8 @@ func TestMCPProtocolAndTools(t *testing.T) {
 	defer console.Close()
 
 	var out bytes.Buffer
-	server := NewServer("forgec2", "1", &out)
-	if err := RegisterReadOnlyTools(server, NewClient(console.URL, "forgec2_session=abc")); err != nil {
+	server := NewServer("sovereign", "1", &out)
+	if err := RegisterReadOnlyTools(server, NewClient(console.URL, "sovereign_session=abc")); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 
@@ -49,7 +49,7 @@ func TestMCPProtocolAndTools(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &init); err != nil {
 		t.Fatalf("initialize: %v (%s)", err, out.String())
 	}
-	if init.Result.ProtocolVersion != ProtocolVersion || init.Result.ServerInfo.Name != "forgec2" {
+	if init.Result.ProtocolVersion != ProtocolVersion || init.Result.ServerInfo.Name != "sovereign" {
 		t.Fatalf("initialize = %+v", init.Result)
 	}
 
@@ -102,8 +102,8 @@ func TestMCPProtocolAndTools(t *testing.T) {
 
 	// 4. A refused cookie is a TOOL error, not a protocol error: the model must see the reason.
 	var rejected bytes.Buffer
-	unauthenticated := NewServer("forgec2", "1", &rejected)
-	if err := RegisterReadOnlyTools(unauthenticated, NewClient(console.URL, "forgec2_session=wrong")); err != nil {
+	unauthenticated := NewServer("sovereign", "1", &rejected)
+	if err := RegisterReadOnlyTools(unauthenticated, NewClient(console.URL, "sovereign_session=wrong")); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	unauthenticated.handleLine([]byte(`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_sessions","arguments":{}}}` + "\n"))

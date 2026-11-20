@@ -46,7 +46,7 @@ describe("I18nProvider", () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.lang = "en";
-    document.cookie = "forgec2_lang=; path=/; max-age=0";
+    document.cookie = "sovereign_lang=; path=/; max-age=0";
   });
 
   it("defaults to en and falls back to the key for a missing entry", () => {
@@ -64,7 +64,7 @@ describe("I18nProvider", () => {
   });
 
   it("boots zh from localStorage, loads the dictionary and swaps the document language", async () => {
-    localStorage.setItem("forgec2_lang", "zh");
+    localStorage.setItem("sovereign_lang", "zh");
 
     render(
       <I18nProvider>
@@ -99,8 +99,8 @@ describe("I18nProvider", () => {
     await waitFor(() => {
       expect(screen.getByTestId("probe").textContent).toContain("保存");
     });
-    expect(localStorage.getItem("forgec2_lang")).toBe("zh");
-    expect(document.cookie).toContain("forgec2_lang=zh");
+    expect(localStorage.getItem("sovereign_lang")).toBe("zh");
+    expect(document.cookie).toContain("sovereign_lang=zh");
     expect(captured.t).not.toBe(t0);
     expect(getLocale()).toBe("zh");
 
@@ -112,7 +112,7 @@ describe("I18nProvider", () => {
     expect(screen.getByTestId("probe").textContent).toContain("Save");
     const t1 = captured.t;
     expect(t1).not.toBe(t0);
-    expect(document.cookie).toContain("forgec2_lang=en");
+    expect(document.cookie).toContain("sovereign_lang=en");
 
     // Same-locale calls are a no-op: no re-render, stable t identity.
     act(() => {
@@ -159,12 +159,12 @@ describe("I18nProvider", () => {
       captured.setLocale!("en");
     });
     expect(screen.getByTestId("probe").textContent).toContain("en|Save");
-    expect(localStorage.getItem("forgec2_lang")).toBe("en");
+    expect(localStorage.getItem("sovereign_lang")).toBe("en");
     expect(document.documentElement.lang).toBe("en");
   });
 
   it("ignores invalid saved languages instead of treating them as Chinese", async () => {
-    localStorage.setItem("forgec2_lang", "invalid-locale");
+    localStorage.setItem("sovereign_lang", "invalid-locale");
     render(<I18nProvider><Probe /></I18nProvider>);
     await act(async () => {});
     expect(screen.getByTestId("probe").textContent).toContain("Save");
@@ -182,7 +182,7 @@ describe("I18nProvider", () => {
     await act(async () => { captured.setLocale!("zh"); });
     expect(screen.getByTestId("probe").textContent).toContain("保存");
     expect(document.documentElement.lang).toBe("zh");
-    expect(document.cookie).toContain("forgec2_lang=zh");
+    expect(document.cookie).toContain("sovereign_lang=zh");
     act(() => { captured.setLocale!("en"); });
     expect(screen.getByTestId("probe").textContent).toContain("Save");
   });
@@ -194,7 +194,7 @@ describe("I18nProvider", () => {
     render(<I18nProvider><Probe /></I18nProvider>);
     await act(async () => { captured.setLocale!("zh"); });
     expect(screen.getByTestId("probe").textContent).toContain("保存");
-    expect(localStorage.getItem("forgec2_lang")).toBe("zh");
+    expect(localStorage.getItem("sovereign_lang")).toBe("zh");
     act(() => { captured.setLocale!("en"); });
   });
 });

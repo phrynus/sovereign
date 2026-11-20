@@ -50,8 +50,8 @@ the CI `backup-restore` job running `scripts/ci-pg-restore-drill.sh` against a t
 `tenants`, `agent_groups`, `agent_tags`) and seeds one row per table so an empty dump cannot pass.
 
 ## Project overview
-ForgeC2 is a mature Go (net/http + PostgreSQL) C2 server plus a Vite + React TypeScript frontend.
-- Server binary: `forgec2-server.exe` (built with `go build ./cmd/server`).
+Sovereign is a mature Go (net/http + PostgreSQL) C2 server plus a Vite + React TypeScript frontend.
+- Server binary: `sovereign-server.exe` (built with `go build ./cmd/server`).
 - Default: port **8000**, config `config.yaml`, PostgreSQL via `database.driver`/`database.dsn` (see `config.example.yaml`); SQLite survives only in in-memory tests.
 - Version: 2.7.1 (see CHANGELOG.md; single source `VERSION`).
 
@@ -163,7 +163,7 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   deliberate relative path carries a reason in the script's ALLOWLIST.
 - `check:docker-context` (`scripts/check-docker-context.mjs`) — the image must build from
   exactly the files the Dockerfile copies. Stage 2 COPYs `cmd/ internal/ pkg/` and (now)
-  `api/`, but `internal/server/handlers_api_docs.go` imports `github.com/forgec2/forgec2/api`
+  `api/`, but `internal/server/handlers_api_docs.go` imports `github.com/r0si/sovereign/api`
   (which `//go:embed`s openapi.yaml — the same embed that fixed the runtime-paths 500
   above). The image was missing `api/` and `docker build` failed with "no required module
   provides package …/api", while `go build ./...` stayed green on every checkout because
@@ -495,8 +495,8 @@ go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal
   by `check:config-drivers`.
 
 ## CSRF Protection (IMPORTANT)
-- Login (`POST /api/login`) now sets `forgec2_csrf` cookie to the session-derived token (`DeriveCSRFToken(session, csrf_key)`), not a random value.
-- `CSRFProtect` middleware validates **both** `X-CSRF-Token` header **and** `forgec2_csrf` cookie against the derived token (true double-submit).
+- Login (`POST /api/login`) now sets `sovereign_csrf` cookie to the session-derived token (`DeriveCSRFToken(session, csrf_key)`), not a random value.
+- `CSRFProtect` middleware validates **both** `X-CSRF-Token` header **and** `sovereign_csrf` cookie against the derived token (true double-submit).
 - On GET/HEAD, the middleware rotates the cookie to the derived token.
 - Frontend `src/lib/api.ts` reads the cookie via `readCsrfCookie()` and echoes it as `X-CSRF-Token` on mutations.
 - E2E automation must: login → GET `/api/v1/tasks` (or any authenticated GET) → POST with `X-CSRF-Token` = cookie value.
@@ -555,7 +555,7 @@ Rules that make this safe, and the reasons they exist:
 - **Writing is not running.** `create_plugin` and `update_plugin` never execute the package; running
   needs `plugins.execute` and (in the console) a human clicking Run. Generated code is code, and code
   is reviewed before it runs.
-- **A model may only modify or delete its own output** (`author == "forgec2-ai"`). The installed set is
+- **A model may only modify or delete its own output** (`author == "sovereign-ai"`). The installed set is
   the operator's inventory and a model cannot see what depends on an entry it did not write.
 - **`Manager.Unregister` deletes the package directory and the DB record**, so an in-place update reads
   the old files into memory first, then unregisters, recreates, registers, and recreates the record
@@ -570,7 +570,7 @@ Rules that make this safe, and the reasons they exist:
 the feature — tools the model does not know about are tools it will not use.
 
 ## Reset Password
-CLI tool: `go run ./cmd/reset-password -db data/db/forgec2.db -user <user> -pass <newpass>`
+CLI tool: `go run ./cmd/reset-password -db data/db/sovereign.db -user <user> -pass <newpass>`
 Or build: `go build -o reset-password.exe ./cmd/reset-password`
 
 ## Mint a Registration Secret (no UI)
@@ -583,8 +583,8 @@ One command (build + webdist sync + gates + restart + health + rollback):
 - Linux/macOS: `bash scripts/deploy.sh`
 
 It preflights the toolchain and the config, builds through `scripts/build-embedded.ps1` (the canonical
-frontend → `internal/webdist/dist` sync), keeps the previous binary as `forgec2-server.exe.prev`
-(`forgec2-server.prev` on Linux), stops the old instance and waits for the port, starts the new one
+frontend → `internal/webdist/dist` sync), keeps the previous binary as `sovereign-server.exe.prev`
+(`sovereign-server.prev` on Linux), stops the old instance and waits for the port, starts the new one
 detached with `logs/stdout.log` + `logs/stderr.log`, probes `/health` (HTTP and the self-signed HTTPS
 profile), `/ready` and `/login`, and rolls back to `.prev` — then starts it — when the new build does
 not come up healthy. The log tail is printed on failure. Flags: `-SkipChecks`, `-SkipFrontend`
@@ -593,12 +593,12 @@ not come up healthy. The log tail is printed on failure. Flags: `-SkipChecks`, `
 Manual equivalent when a step has to be isolated:
 1. `npm run build` (from `frontend/`)
 2. Sync dist via `scripts/build-embedded.ps1` (add `-NoRestart` to build without touching a running server)
-3. `go build -o forgec2-server.exe ./cmd/server`
-4. Kill running instance: `taskkill /f /im forgec2-server.exe`
+3. `go build -o sovereign-server.exe ./cmd/server`
+4. Kill running instance: `taskkill /f /im sovereign-server.exe`
 5. Start detached and redirect the child's stdout/stderr: without the redirect the server inherits the
    caller's console handles and a script that started it blocks until the server exits.
-   `Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru -RedirectStandardOutput logs\stdout.log -RedirectStandardError logs\stderr.log`
-6. Logs go to `logs/forgec2.log`. Verify with `GET /health` (expects `ok`).
+   `Start-Process -WindowStyle Hidden -FilePath ".\sovereign-server.exe" -ArgumentList "-config config.yaml" -PassThru -RedirectStandardOutput logs\stdout.log -RedirectStandardError logs\stderr.log`
+6. Logs go to `logs/sovereign.log`. Verify with `GET /health` (expects `ok`).
 7. The server binds `0.0.0.0` by default (reachable from other hosts). A browser opening this server's
    own address works without configuration — the origin policy allows strict same-origin requests (CORS
    and the WebSocket share `middleware.OriginAllowed`). `server.allowed_origins` is only for a console
@@ -607,7 +607,7 @@ Manual equivalent when a step has to be isolated:
 
 ## Releasing
 Push a `v*` tag. `.github/workflows/release.yml` cross-compiles linux/windows × amd64/arm64, then
-publishes both the raw binaries and the one-click archives `forgec2-v<version>-<os>-<arch>.zip|tar.gz`
+publishes both the raw binaries and the one-click archives `sovereign-v<version>-<os>-<arch>.zip|tar.gz`
 (embedded-console binary, `start.cmd`/`start.sh`, `config.example.yaml`, `QUICKSTART.txt`), each with a
 `.sha256` and — when `RELEASE_SIGNING_KEY` is set — an Ed25519 `.sig`. Tag builds fail closed without
 that secret (`go run ./cmd/sign-release -gen` prints the seed + the public key for

@@ -38,7 +38,7 @@ const (
 //
 //	{"kind":"chain","rpc":"https://ethereum-rpc.publicnode.com",
 //	 "contract":"0x9999...","data":"0xc2fb26a6","cap":4}
-//	{"kind":"dga","seed":"forgec2","tld":"biz","count":128,"period_minutes":30}
+//	{"kind":"dga","seed":"sovereign","tld":"biz","count":128,"period_minutes":30}
 //	{"kind":"solana","rpc":"https://api.mainnet-beta.solana.com",
 //	 "address":"<memo-program-signer>","token":"<agent-token>","cap":4}
 //

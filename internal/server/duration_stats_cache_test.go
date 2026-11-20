@@ -10,9 +10,9 @@ import (
 
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestTaskDurationStatsCache covers the short-TTL cache added for the endpoint's polling path.

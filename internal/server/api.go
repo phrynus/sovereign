@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
+	"github.com/r0si/sovereign/pkg/protocol"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Deploy the published ForgeC2 image as the public read-only demo.
+# Deploy the published Sovereign image as the public read-only demo.
 #
 #   sudo bash deploy/demo/deploy.sh
 #
 # Idempotent: re-running keeps the existing .env/config/secrets and re-applies
 # the role/user state. Override with environment variables:
 #
-#   BASE=/opt/forgec2-demo        install root (logs, nginx.conf, data)
+#   BASE=/opt/sovereign-demo        install root (logs, nginx.conf, data)
 #   PUBLIC_URL=http://host:8000   origin allowed by CORS (config.yaml)
 #   PUBLIC_LISTEN=8000            port the checks probe (the real listener is
 #                                 `listen` in nginx.conf)
@@ -23,7 +23,7 @@
 # it when the unit exists) and keep it for rollback.
 set -euo pipefail
 
-BASE="${BASE:-/opt/forgec2-demo}"
+BASE="${BASE:-/opt/sovereign-demo}"
 COMPOSE_DIR="$BASE/compose"
 DATA_DIR="$BASE/container-data"
 PUBLIC_URL="${PUBLIC_URL:-http://43.143.162.139:8000}"
@@ -55,7 +55,7 @@ log() { printf '[deploy] %s\n' "$*"; }
 die() { printf '[deploy] ERROR: %s\n' "$*" >&2; exit 1; }
 
 # Install a file unless source and destination are the same inode: when this
-# script runs from its deployed location (/opt/forgec2-demo/compose), the
+# script runs from its deployed location (/opt/sovereign-demo/compose), the
 # source and target are the same file and `install` refuses.
 copy_in_place() { # src dst mode
   if [ "$1" -ef "$2" ]; then
@@ -76,11 +76,11 @@ chmod 700 "$DATA_DIR"
 if [ ! -f "$COMPOSE_DIR/.env" ]; then
   log "generating .env (fresh random keys)"
   ADMIN_PASSWORD="${ADMIN_PASSWORD:-Adm1n$(openssl rand -hex 8)!}"
-  DEMO_PASSWORD="${DEMO_PASS_CLI:-ForgeC2Demo2026!}"
+  DEMO_PASSWORD="${DEMO_PASS_CLI:-SovereignDemo2026!}"
   cat > "$COMPOSE_DIR/.env" <<EOF
 # Image to run. Defaults to the published build; set a mirror or a digest when
 # the host cannot reach GHCR directly.
-FORGEC2_IMAGE=${FORGEC2_IMAGE:-ghcr.io/r0si/forgec2:edge}
+FORGEC2_IMAGE=${FORGEC2_IMAGE:-ghcr.io/r0si/sovereign:edge}
 DB_PASSWORD=$(openssl rand -hex 24)
 FORGEC2_JWT_SECRET=$(openssl rand -hex 32)
 FORGEC2_LOOT_KEY=$(openssl rand -hex 32)
@@ -96,7 +96,7 @@ fi
 # shellcheck disable=SC1091
 . "$COMPOSE_DIR/.env"
 : "${DB_PASSWORD:?}" "${ADMIN_PASSWORD:?}" "${FORGEC2_JWT_SECRET:?}"
-DEMO_PASS="${DEMO_PASS_CLI:-${DEMO_PASSWORD:-ForgeC2Demo2026!}}"
+DEMO_PASS="${DEMO_PASS_CLI:-${DEMO_PASSWORD:-SovereignDemo2026!}}"
 
 # ----------------------------------------------------------------- config ---
 # The generated file must stay equivalent to config.yaml.example in this
@@ -158,32 +158,32 @@ fi
 # with the compose `postgres` profile is a drop-in change: point
 # FORGEC2_DB_DSN at that service and drop this section.
 systemctl enable --now postgresql >/dev/null 2>&1 || true
-if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='forgec2'" | grep -q 1; then
-  log "creating PostgreSQL role forgec2"
-  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE forgec2 LOGIN" >/dev/null
+if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='sovereign'" | grep -q 1; then
+  log "creating PostgreSQL role sovereign"
+  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sovereign LOGIN" >/dev/null
 fi
-runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER ROLE forgec2 WITH PASSWORD '$DB_PASSWORD'" >/dev/null
-if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='forgec2'" | grep -q 1; then
-  log "creating PostgreSQL database forgec2"
-  runuser -u postgres -- createdb -O forgec2 forgec2
+runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "ALTER ROLE sovereign WITH PASSWORD '$DB_PASSWORD'" >/dev/null
+if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='sovereign'" | grep -q 1; then
+  log "creating PostgreSQL database sovereign"
+  runuser -u postgres -- createdb -O sovereign sovereign
 fi
-PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U forgec2 -d forgec2 -tAc 'SELECT 1' >/dev/null
+PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U sovereign -d sovereign -tAc 'SELECT 1' >/dev/null
 log "PostgreSQL ready on 127.0.0.1:5432"
 
 # -------------------------------------------------------------- nginx edge ---
 copy_in_place "$(dirname "$0")/nginx.conf" "$BASE/nginx.conf" 0644
 log "installing read-only nginx gateway"
 nginx -t -c "$BASE/nginx.conf"
-if [ -f /run/forgec2-demo-nginx.pid ]; then
+if [ -f /run/sovereign-demo-nginx.pid ]; then
   nginx -c "$BASE/nginx.conf" -s reload
 else
   nginx -c "$BASE/nginx.conf"
 fi
 
 # ------------------------------------------------------------ container app ---
-if systemctl list-unit-files forgec2-demo.service >/dev/null 2>&1; then
-  log "stopping legacy forgec2-demo.service (kept for rollback)"
-  systemctl disable --now forgec2-demo.service >/dev/null 2>&1 || true
+if systemctl list-unit-files sovereign-demo.service >/dev/null 2>&1; then
+  log "stopping legacy sovereign-demo.service (kept for rollback)"
+  systemctl disable --now sovereign-demo.service >/dev/null 2>&1 || true
 fi
 # Give a previous listener a moment to release 18000.
 for _ in $(seq 1 20); do
@@ -191,7 +191,7 @@ for _ in $(seq 1 20); do
   sleep 0.5
 done
 
-log "starting forgec2 container"
+log "starting sovereign container"
 copy_in_place "$(dirname "$0")/docker-compose.yml" "$COMPOSE_DIR/docker-compose.yml" 0644
 (
   cd "$COMPOSE_DIR"
@@ -208,7 +208,7 @@ for _ in $(seq 1 90); do
 done
 if [ "$healthy" != true ]; then
   log "container failed to become healthy"
-  (cd "$COMPOSE_DIR" && docker compose logs --tail=80 forgec2) || true
+  (cd "$COMPOSE_DIR" && docker compose logs --tail=80 sovereign) || true
   die "health check failed; inspect the log above (rollback: docker compose down + re-enable the old unit)"
 fi
 log "container healthy on $API"
@@ -219,7 +219,7 @@ login() { # user pass jar
     --data-urlencode "username=$1" --data-urlencode "password=$2" \
     "$API/api/login"
 }
-psql_demo() { runuser -u postgres -- psql -d forgec2 -v ON_ERROR_STOP=1 "$@"; }
+psql_demo() { runuser -u postgres -- psql -d sovereign -v ON_ERROR_STOP=1 "$@"; }
 
 CJ=$(mktemp)
 DJ=$(mktemp)
@@ -233,7 +233,7 @@ if [ "$code" != "302" ] && [ "$code" != "200" ]; then
 fi
 [ "$code" = "302" ] || [ "$code" = "200" ] || die "admin login failed ($code); check ADMIN_PASSWORD in $COMPOSE_DIR/.env"
 
-CSRF=$(awk '$6=="forgec2_csrf" {print $7}' "$CJ" | tail -1)
+CSRF=$(awk '$6=="sovereign_csrf" {print $7}' "$CJ" | tail -1)
 [ -n "$CSRF" ] || die "no CSRF cookie after login"
 AUTH=(-b "$CJ" -H "X-CSRF-Token: $CSRF" -H 'Accept: application/json')
 

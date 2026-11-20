@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // TestServerAccountLockoutHelpers covers the thin wrappers the login path uses:

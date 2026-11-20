@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // requireExportScope enforces the API-key scope gate for bulk secret exports

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 type webhookParams = struct {
@@ -63,14 +63,14 @@ func TestExecuteWebhookSignatureAndMethod(t *testing.T) {
 		if c.headers.Get("X-Custom") != "yes" {
 			t.Fatal("custom header missing")
 		}
-		if c.headers.Get("User-Agent") != "ForgeC2-Automation/1.0" {
+		if c.headers.Get("User-Agent") != "Sovereign-Automation/1.0" {
 			t.Fatalf("user agent = %q", c.headers.Get("User-Agent"))
 		}
 		// The signature is an HMAC over the body the receiver actually got.
 		mac := hmac.New(sha256.New, []byte(params.Secret))
 		mac.Write(c.body)
 		want := hex.EncodeToString(mac.Sum(nil))
-		if got := c.headers.Get("X-ForgeC2-Signature"); got != want {
+		if got := c.headers.Get("X-Sovereign-Signature"); got != want {
 			t.Fatalf("signature = %q, want %q", got, want)
 		}
 		var decoded Event
@@ -89,7 +89,7 @@ func TestExecuteWebhookSignatureAndMethod(t *testing.T) {
 	s.executeWebhook(params, evt)
 	select {
 	case c := <-got:
-		if c.headers.Get("X-ForgeC2-Signature") != "" {
+		if c.headers.Get("X-Sovereign-Signature") != "" {
 			t.Fatal("a signature was sent without a secret")
 		}
 	case <-time.After(5 * time.Second):

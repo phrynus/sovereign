@@ -1,6 +1,6 @@
 # C Implant (prototype)
 
-Wire-compatible C implementation of the ForgeC2 implant for Windows,
+Wire-compatible C implementation of the Sovereign implant for Windows,
 built with mingw-w64. No Go toolchain, no runtime, ~660KB release binary
 (SQLite amalgamation vendored for `wechat_history`).
 

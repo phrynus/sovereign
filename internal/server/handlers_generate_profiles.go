@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/malleable"
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/malleable"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 func (s *Server) handleImportProfile(c *gin.Context) {
@@ -178,7 +178,7 @@ func looksLikeCS(s string) bool {
 	}
 	low := strings.ToLower(trimmed)
 	return strings.Contains(low, "http-get") || strings.Contains(low, "http-post") ||
-		strings.Contains(low, "http-config") || strings.Contains(low, "forgec2") ||
+		strings.Contains(low, "http-config") || strings.Contains(low, "sovereign") ||
 		strings.Contains(low, "set sleeptime") || strings.Contains(low, "set useragent") ||
 		strings.Contains(low, "set jitter")
 }
@@ -393,7 +393,7 @@ func (s *Server) handleGeneratePage(c *gin.Context) {
 	defInt, defJitter, defUA, defSkipTLS := s.cfg.Implant.DefaultInterval, s.cfg.Implant.DefaultJitter, s.cfg.Implant.DefaultUA, s.cfg.Implant.DefaultSkipTLS
 	s.configMu.RUnlock()
 	data := gin.H{
-		"Title":          "ForgeC2 - Generate Agent",
+		"Title":          "Sovereign - Generate Agent",
 		"ActiveNav":      "generate",
 		"DefaultInt":     defInt,
 		"DefaultJitter":  defJitter,

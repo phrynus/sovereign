@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 // validateProfileWarnings posts a v2 JSON profile to handleValidateProfile

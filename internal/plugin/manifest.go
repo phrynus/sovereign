@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Manifest describes a ForgeC2 plugin package.
+// Manifest describes a Sovereign plugin package.
 type Manifest struct {
 	Name        string                 `yaml:"name" json:"name"`
 	Version     string                 `yaml:"version" json:"version"`
@@ -53,7 +53,7 @@ type ManifestParam struct {
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
-// ValidPluginTypes lists the plugin types supported by ForgeC2.
+// ValidPluginTypes lists the plugin types supported by Sovereign.
 var ValidPluginTypes = []string{"command", "hook", "report"}
 
 // ValidInterpreters lists the interpreters the executor can invoke.

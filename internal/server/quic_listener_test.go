@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/quic-go/quic-go"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func testQUICTLS(t *testing.T) *tls.Config {

@@ -1,13 +1,13 @@
-# ⚒️ ForgeC2
+# ⚒️ Sovereign
 
 **一个二进制装下的自托管命令与控制平台。** <!--fact:tasks-->227<!--/fact--> 个植入体任务、9 种传输、浏览器内的载荷工厂与 AI 副驾——发布产物签名可验证，热更新失败自动回滚。
 
-[![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/forgec2/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/r0si/forgec2)](https://github.com/r0si/forgec2/releases)
-[![Downloads](https://img.shields.io/github/downloads/r0si/forgec2/total)](https://github.com/r0si/forgec2/releases)
-[![Stars](https://img.shields.io/github/stars/r0si/forgec2)](https://github.com/r0si/forgec2/stargazers)
-[![Contributors](https://img.shields.io/github/contributors/r0si/forgec2)](https://github.com/r0si/forgec2/graphs/contributors)
-[![Last commit](https://img.shields.io/github/last-commit/r0si/forgec2)](https://github.com/r0si/forgec2/commits/main)
+[![CI](https://github.com/r0si/sovereign/actions/workflows/ci.yml/badge.svg)](https://github.com/r0si/sovereign/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/r0si/sovereign)](https://github.com/r0si/sovereign/releases)
+[![Downloads](https://img.shields.io/github/downloads/r0si/sovereign/total)](https://github.com/r0si/sovereign/releases)
+[![Stars](https://img.shields.io/github/stars/r0si/sovereign)](https://github.com/r0si/sovereign/stargazers)
+[![Contributors](https://img.shields.io/github/contributors/r0si/sovereign)](https://github.com/r0si/sovereign/graphs/contributors)
+[![Last commit](https://img.shields.io/github/last-commit/r0si/sovereign)](https://github.com/r0si/sovereign/commits/main)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 
@@ -15,11 +15,11 @@
 
 > ⚠️ **仅限授权安全测试。** 对任何系统使用前，必须持有目标所有者的明确书面许可。见[法律声明](#法律声明)。
 
-![ForgeC2 作战仪表盘](docs/assets/screens/dashboard.png)
+![Sovereign 作战仪表盘](docs/assets/screens/dashboard.png)
 
 ## 在线演示
 
-[打开 ForgeC2 只读演示](http://43.143.162.139:8000/)，用户名为 `demo`，密码为 `ForgeC2Demo2026!`。
+[打开 Sovereign 只读演示](http://43.143.162.139:8000/)，用户名为 `demo`，密码为 `SovereignDemo2026!`。
 
 公开账号使用隔离的观察者角色，仅有 Agent、监听器和任务的只读权限。网关会拒绝业务数据写入、Beacon 端点和 WebSocket 升级，实例不包含任何生产数据。该临时演示使用明文 HTTP，请勿输入其他凭据或敏感信息。
 
@@ -35,10 +35,10 @@
 
 ```bash
 # 推荐使用发行版标签：v2.7.2 与 2.7.2 都存在，另有 :latest
-docker pull ghcr.io/r0si/forgec2:2.7.2
+docker pull ghcr.io/r0si/sovereign:2.7.2
 
 # 滚动开发构建
-docker pull ghcr.io/r0si/forgec2:edge
+docker pull ghcr.io/r0si/sovereign:edge
 ```
 
 ### 从源码构建
@@ -47,10 +47,10 @@ Go 版本固定为 **Go 1.26.11**（`go.mod` 的 `go 1.26.0` 是语言版本下�
 
 `edge` 是滚动开发标签，并非稳定发行版。每个**发行标签**会以三种形式发布同一镜像：
 `vX.Y.Z`、`X.Y.Z` 与 `:latest`，均为多架构 manifest。需要可复现部署时，请固定镜像
-**摘要**（`docker pull ghcr.io/r0si/forgec2@sha256:…`）或 `sha-<commit>` 标签。
+**摘要**（`docker pull ghcr.io/r0si/sovereign@sha256:…`）或 `sha-<commit>` 标签。
 如果包为私有，请使用有包访问权限的账号执行 `docker login ghcr.io`；
 不要将 Token 直接写在命令或配置文件中。
-可用 `docker buildx imagetools inspect ghcr.io/r0si/forgec2:<tag>` 查看标签实际指向的平台。
+可用 `docker buildx imagetools inspect ghcr.io/r0si/sovereign:<tag>` 查看标签实际指向的平台。
 
 启动镜像前，请参考 [config.example.yaml](config.example.yaml) 准备可写的
 `/data/config.yaml`，持久化 `/data` 以保存数据库和密钥，并设置
@@ -85,7 +85,7 @@ Go 版本固定为 **Go 1.26.11**（`go.mod` 的 `go 1.26.0` 是语言版本下�
 
 ## 截图
 
-![ForgeC2 登录页](docs/assets/screens/login.png)
+![Sovereign 登录页](docs/assets/screens/login.png)
 
 控制台共 <!--fact:routes-->44<!--/fact--> 个路由页面：实时作战仪表盘、载荷生成器、
 主机详情（文件、终端、持久化、屏幕、令牌）、令牌实验室、可塑画像、战役、钓鱼、
@@ -121,7 +121,7 @@ C2 基础设施本身就是高价值目标，所以发布链路的目标是“�
 
 ## 与其他框架的对比
 
-| | **ForgeC2** | Sliver | Mythic | Havoc | Cobalt Strike |
+| | **Sovereign** | Sliver | Mythic | Havoc | Cobalt Strike |
 |---|---|---|---|---|---|
 | **部署形态** | 单二进制，内嵌 Web UI | 服务端 + CLI 客户端 | Docker Compose 多容器 | Teamserver + Qt 客户端 | Java teamserver + 桌面客户端 |
 | **Web 控制台** | ✅ 内置 | ❌ | ✅ | ❌（Qt 桌面） | ❌（桌面） |
@@ -137,7 +137,7 @@ C2 基础设施本身就是高价值目标，所以发布链路的目标是“�
 
 ```
                     ┌───────────────────────────────────────────────────────────────┐
-   Operators ──────▶│ ForgeC2 — one binary, one port :8000                          │
+   Operators ──────▶│ Sovereign — one binary, one port :8000                          │
                     │                                                               │
                     │    ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │
                     │    │    Web UI    │  │   REST API   │  │      Beacon       │  │
@@ -187,7 +187,7 @@ C2 基础设施本身就是高价值目标，所以发布链路的目标是“�
 
 ## 法律声明
 
-ForgeC2 仅用于**授权安全测试**。对任何系统使用前，必须持有所有者的明确书面许可。见 [LICENSE](LICENSE)。
+Sovereign 仅用于**授权安全测试**。对任何系统使用前，必须持有所有者的明确书面许可。见 [LICENSE](LICENSE)。
 
 ---
 

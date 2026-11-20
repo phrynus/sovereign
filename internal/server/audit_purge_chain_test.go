@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TestPurgeAuditLogsRecordsItself pins the forensic rule the code comments already

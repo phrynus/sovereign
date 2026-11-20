@@ -3,7 +3,7 @@ package server
 import (
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // Local copies of protocol types (agent package is not importable as it is package main + build constrained)
@@ -151,7 +151,7 @@ type beaconResponse struct {
 
 	// NetworkConfigOverWire delivers the agent's live network configuration at
 	// registration, encrypted under the per-implant registration secret
-	// (AES-256-GCM, key = HKDF(secret, "forgec2-network-config-v1")). The agent
+	// (AES-256-GCM, key = HKDF(secret, "sovereign-network-config-v1")). The agent
 	// decrypts it and overrides its compile-time defaults, so the operator can
 	// rotate C2 endpoints / malleable profile without rebuilding the implant.
 	// Empty for v2 (master-key) implants, which carry their config embedded.

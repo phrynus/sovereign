@@ -6,14 +6,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
 )
 
 const csrfTestKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 
 func sessionCookie(sessionToken string) *http.Cookie {
-	return &http.Cookie{Name: "forgec2_session", Value: sessionToken}
+	return &http.Cookie{Name: "sovereign_session", Value: sessionToken}
 }
 
 func validCSRFToken(sessionToken, keyHex string) string {

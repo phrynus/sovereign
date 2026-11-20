@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func (s *Server) handleFileBrowserPage(c *gin.Context) {
@@ -28,7 +28,7 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - File Browser",
+		"Title":     "Sovereign - File Browser",
 		"Agent":     agent,
 		"Path":      c.Query("path"),
 		"ActiveNav": "agents",

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── Shutdown + Run (background loops, transports, HTTP serve) ─────────────
@@ -570,7 +570,7 @@ func (s *Server) Run() error {
 		return fmt.Errorf("port %s is already in use — check for another server instance or change server.port in config.yaml", addr)
 	}
 
-	slog.Info("Starting ForgeC2 server", "addr", addr, "tls", s.cfg.Server.TLSEnabled)
+	slog.Info("Starting Sovereign server", "addr", addr, "tls", s.cfg.Server.TLSEnabled)
 
 	// A same-authority browser needs no allowlist entry, so with a wildcard
 	// bind anything that can route to this port can load the login page and

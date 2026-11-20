@@ -6,15 +6,15 @@
 #
 #   bash scripts/ci-pg-restore-drill.sh [dump.sql.gz]
 #
-# Requires a running PostgreSQL container named forgec2-pg with the forgec2
+# Requires a running PostgreSQL container named sovereign-pg with the sovereign
 # role/database (the same shape the CI smoke and E2E jobs start).
 set -euo pipefail
 
-PG_CONTAINER="${PG_CONTAINER:-forgec2-pg}"
-PG_ROLE="${PG_ROLE:-forgec2}"
-PG_DB="${PG_DB:-forgec2}"
-SCRATCH="${PG_DRILL_DB:-forgec2_drill_restore}"
-DUMP="${1:-${RUNNER_TEMP:-/tmp}/forgec2-drill.sql.gz}"
+PG_CONTAINER="${PG_CONTAINER:-sovereign-pg}"
+PG_ROLE="${PG_ROLE:-sovereign}"
+PG_DB="${PG_DB:-sovereign}"
+SCRATCH="${PG_DRILL_DB:-sovereign_drill_restore}"
+DUMP="${1:-${RUNNER_TEMP:-/tmp}/sovereign-drill.sql.gz}"
 TABLES="users implants tasks tenants agent_groups agent_tags"
 
 pg() { docker exec "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_ROLE" "$@"; }

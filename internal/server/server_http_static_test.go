@@ -293,7 +293,7 @@ func TestStaticSpaFallbackUsesShellValidators(t *testing.T) {
 func TestStaticDirectoryShellServesSiblingHTML(t *testing.T) {
 	router := newStaticTestRouter(t)
 
-	w := serveStatic(t, router, http.MethodGet, "/dashboard", map[string]string{"Cookie": "forgec2_session=test"})
+	w := serveStatic(t, router, http.MethodGet, "/dashboard", map[string]string{"Cookie": "sovereign_session=test"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}

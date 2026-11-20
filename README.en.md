@@ -1,4 +1,4 @@
-# ForgeC2 — English README
+# Sovereign — English README
 
 The English documentation is now the repository landing page: **[README.md](README.md)**.
 

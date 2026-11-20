@@ -1,10 +1,10 @@
 ---
 name: add-shell-feature
-description: Extend ForgeC2 interactive shell (real-time mode, heartbeat, UTF-8, task polling). Use for shell bugs, shell features, or /add-shell-feature.
+description: Extend Sovereign interactive shell (real-time mode, heartbeat, UTF-8, task polling). Use for shell bugs, shell features, or /add-shell-feature.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

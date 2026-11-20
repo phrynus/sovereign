@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // Build failures grouped by WHY they failed.
@@ -145,7 +145,7 @@ func (s *Server) handleBuildFailureStats(c *gin.Context) {
 			handleQueryError(c, err, "Failed to encode the build failures")
 			return
 		}
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="forgec2_build-failures_%s.csv"`,
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="sovereign_build-failures_%s.csv"`,
 			time.Now().Format("2006-01-02_150405")))
 		c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(buf.String()))
 		return

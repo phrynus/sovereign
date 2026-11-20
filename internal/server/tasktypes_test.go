@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TestFSTaskTypesRegisteredAndDocumented pins the mkdir/rename/chmod

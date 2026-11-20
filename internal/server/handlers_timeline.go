@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // TimelineEvent represents a unified timeline event
@@ -35,7 +35,7 @@ func (s *Server) handleTimelinePage(c *gin.Context) {
 	filterAgent := c.Query("agent")
 
 	data := gin.H{
-		"Title":       "ForgeC2 - Action Timeline",
+		"Title":       "Sovereign - Action Timeline",
 		"ActiveNav":   "timeline",
 		"Stats":       stats,
 		"FilterType":  filterType,

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // ntlmRelaySession tracks a single active NTLM relay session.

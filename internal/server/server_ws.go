@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── Operator WebSocket hub + broadcast fan-out ────────────────────────────

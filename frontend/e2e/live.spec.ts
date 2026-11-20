@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Optional live e2e against a running ForgeC2 server (not static export).
+ * Optional live e2e against a running Sovereign server (not static export).
  *
  * Enable with:
  *   FORGEC2_E2E_BASE=http://127.0.0.1:8000

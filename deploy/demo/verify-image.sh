@@ -14,12 +14,12 @@
 #
 # The expected values live in image.lock next to this script; they were taken
 # from the canonical manifest with
-#   crane manifest/config ghcr.io/r0si/forgec2@<digest>
+#   crane manifest/config ghcr.io/r0si/sovereign@<digest>
 set -eu
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LOCK="$HERE/image.lock"
-CONTAINER="${CONTAINER:-forgec2-demo}"
+CONTAINER="${CONTAINER:-sovereign-demo}"
 IMAGE="${1:-}"
 
 [ -r "$LOCK" ] || { echo "missing $LOCK" >&2; exit 1; }

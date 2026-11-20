@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -97,7 +97,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":          "ForgeC2 - Task History",
+		"Title":          "Sovereign - Task History",
 		"ActiveNav":      "tasks",
 		"Tasks":          tasks,
 		"Page":           p.Page,
@@ -276,7 +276,7 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 	}
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	// The timestamp keeps two exports from the same day from overwriting each other in the browser.
-	c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02_150405")+`.csv"`)
+	c.Header("Content-Disposition", `attachment; filename="sovereign_tasks_`+time.Now().Format("2006-01-02_150405")+`.csv"`)
 	if format == "json" {
 		// The same rows, the same redaction and the same truncation as the CSV, so a script does not have to
 		// parse a spreadsheet to read them and two consumers cannot disagree about what a cell contained.
@@ -299,7 +299,7 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 			rows = append(rows, row)
 		}
 		c.Header("Content-Type", "application/json; charset=utf-8")
-		c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02_150405")+`.json"`)
+		c.Header("Content-Disposition", `attachment; filename="sovereign_tasks_`+time.Now().Format("2006-01-02_150405")+`.json"`)
 		c.JSON(http.StatusOK, gin.H{
 			"count":     len(rows),
 			"truncated": len(tasks) >= limit,

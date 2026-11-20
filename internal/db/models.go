@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/google/uuid"
+	"github.com/r0si/sovereign/internal/crypto"
 	"gorm.io/gorm"
 )
 
@@ -163,7 +163,7 @@ type Implant struct {
 	Version         string `json:"version"`               // agent build version
 	ProtocolVersion uint   `json:"protocol_version"`      // wire protocol version
 	PID             int    `gorm:"column:pid" json:"pid"` // agent process ID
-	ProcessName     string `json:"process_name"`          // e.g. forgec2.exe
+	ProcessName     string `json:"process_name"`          // e.g. sovereign.exe
 	Integrity       string `json:"integrity"`             // Low / Medium / High / System
 	Elevated        bool   `json:"elevated"`              // running as admin/root
 	Domain          string `json:"domain"`                // AD domain or workgroup
@@ -773,7 +773,7 @@ type SocksSession struct {
 }
 
 // User represents an authenticated operator
-// ForgeC2 multi-user support with role-based access control
+// Sovereign multi-user support with role-based access control
 // Roles: "admin" (full control), "user" (standard operator)
 type User struct {
 	ID                  uint      `gorm:"primaryKey" json:"id"`
@@ -794,7 +794,7 @@ type User struct {
 
 // Tenant is a self-contained operator organization. Every operator (User) and
 // the implants/tasks they own are scoped to a Tenant so that multiple
-// independent teams can share one ForgeC2 deployment without seeing each
+// independent teams can share one Sovereign deployment without seeing each
 // other's assets (P2: multi-tenant isolation).
 type Tenant struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`

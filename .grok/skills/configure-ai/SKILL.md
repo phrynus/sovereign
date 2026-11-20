@@ -1,10 +1,10 @@
 ---
 name: configure-ai
-description: Configure ForgeC2 AI assistant (provider, model, tool limits, system prompt). Use for AI config, tool call limits, or /configure-ai.
+description: Configure Sovereign AI assistant (provider, model, tool limits, system prompt). Use for AI config, tool call limits, or /configure-ai.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: config
 ---
 

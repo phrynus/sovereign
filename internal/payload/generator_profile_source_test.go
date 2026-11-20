@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/malleable"
+	"github.com/r0si/sovereign/internal/malleable"
 )
 
 const testCSProfile = `

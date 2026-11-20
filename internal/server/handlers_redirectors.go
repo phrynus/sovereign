@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 type redirectorRequest struct {
@@ -382,7 +382,7 @@ func (s *Server) handleRedirectorGenerate(c *gin.Context) {
     ProxyPassReverse / %s://127.0.0.1:%d/
 </VirtualHost>`, req.Domain, req.Protocol, req.TargetPort, req.Protocol, req.TargetPort)
 	case "haproxy":
-		config = fmt.Sprintf(`frontend forgec2
+		config = fmt.Sprintf(`frontend sovereign
     bind *:80
     default_backend c2_nodes
 

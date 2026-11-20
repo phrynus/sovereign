@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func TestDispatchDueOneShotTaskClaimsAndCountsOnce(t *testing.T) {

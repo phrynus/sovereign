@@ -11,7 +11,7 @@ import { bannerSurface } from "@/components/ui/banner";
 import { cn } from "@/lib/utils";
 import { openUpdateDialog } from "@/components/UpdateDialog";
 
-const DISMISS_KEY = "forgec2_update_dismissed";
+const DISMISS_KEY = "sovereign_update_dismissed";
 
 export default function UpdateBanner({ currentVersion }: { currentVersion?: string }) {
   const { subscribe } = useWS();
@@ -70,7 +70,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
     }
   };
 
-  const downloadHref = info.downloadUrl ?? "https://github.com/forgec2/forgec2/releases";
+  const downloadHref = info.downloadUrl ?? "https://github.com/r0si/sovereign/releases";
 
   return (
     <div className={cn(bannerSurface("info"), "flex w-full items-center justify-between gap-3 px-4 py-2.5 animate-fade-in sm:px-5")} aria-live="polite">

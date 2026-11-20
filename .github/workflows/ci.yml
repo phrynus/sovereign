@@ -91,20 +91,20 @@ jobs:
           stale=$(./checkopenapi -list-stale | tail -n +2 | wc -l)
           test "$stale" -eq 0
       - name: Build server for smoke
-        run: go build -o forgec2-server ./cmd/server
+        run: go build -o sovereign-server ./cmd/server
       - name: Version stamp check (ldflags must reach -version)
         run: |
-          go build -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=ci-test" -o forgec2-version-check ./cmd/server
-          test "$(./forgec2-version-check -version)" = "ci-test"
-          rm -f forgec2-version-check
+          go build -ldflags "-X github.com/r0si/sovereign/internal/server.ServerVersion=ci-test" -o sovereign-version-check ./cmd/server
+          test "$(./sovereign-version-check -version)" = "ci-test"
+          rm -f sovereign-version-check
       - name: Release repo stamp check (ldflags must reach the binary)
         run: |
           # The update checker polls the repository stamped here. A build that
           # loses the stamp silently checks a wrong (or no) repository and
           # reports "up to date" forever.
-          go build -ldflags "-X github.com/forgec2/forgec2/internal/buildinfo.Repo=ci/stamp-check" -o forgec2-repo-check ./cmd/server
-          grep -qa "ci/stamp-check" forgec2-repo-check
-          rm -f forgec2-repo-check
+          go build -ldflags "-X github.com/r0si/sovereign/internal/buildinfo.Repo=ci/stamp-check" -o sovereign-repo-check ./cmd/server
+          grep -qa "ci/stamp-check" sovereign-repo-check
+          rm -f sovereign-repo-check
       - name: API smoke (unauth + default admin)
         # v2.8 made PostgreSQL the only supported backend, so the smoke server
         # needs a real database. Start one here (AFTER the unit tests, which
@@ -115,8 +115,8 @@ jobs:
           # Cold pulls of postgres:16-alpine plus first-boot init routinely
           # exceed 30s on CI runners. Wait long enough and dump the container
           # log on timeout so the failure says WHY instead of just "not ready".
-          docker run -d --name forgec2-pg \
-            -e POSTGRES_USER=forgec2 -e POSTGRES_PASSWORD=forgec2 -e POSTGRES_DB=forgec2 \
+          docker run -d --name sovereign-pg \
+            -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
             -p 5432:5432 postgres:16-alpine
           # The docker-entrypoint starts a temporary server during initdb that
           # accepts connections for a moment, creates the database, then shuts
@@ -124,7 +124,7 @@ jobs:
           # land in that window, so require two consecutive successes.
           pg_ready=0
           for i in $(seq 1 90); do
-            if docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 >/dev/null 2>&1; then
+            if docker exec sovereign-pg pg_isready -U sovereign -d sovereign >/dev/null 2>&1; then
               pg_ready=$((pg_ready + 1))
               if [ "$pg_ready" -ge 2 ]; then break; fi
             else
@@ -132,14 +132,14 @@ jobs:
             fi
             sleep 1
           done
-          docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 || { echo "PostgreSQL did not become ready"; docker logs forgec2-pg | tail -n 50; exit 1; }
+          docker exec sovereign-pg pg_isready -U sovereign -d sovereign || { echo "PostgreSQL did not become ready"; docker logs sovereign-pg | tail -n 50; exit 1; }
           SMOKE_ADMIN_PASSWORD="S1mokeC2-$(openssl rand -hex 8)-9z!Z"
           sed "s/^  default_password:.*/  default_password: $SMOKE_ADMIN_PASSWORD/" config.example.yaml > config.ci.yaml
           rm -rf data/db
           mkdir -p data/db
           export SMOKE_ADMIN_PASSWORD
-          ./forgec2-server -config config.ci.yaml > /tmp/forgec2-smoke.log 2>&1 &
-          echo $! > /tmp/forgec2-smoke.pid
+          ./sovereign-server -config config.ci.yaml > /tmp/sovereign-smoke.log 2>&1 &
+          echo $! > /tmp/sovereign-smoke.pid
           for i in $(seq 1 30); do
             if curl -skf https://127.0.0.1:8000/health | grep -q ok; then break; fi
             sleep 1
@@ -147,11 +147,11 @@ jobs:
           chmod +x scripts/ci-api-smoke.sh
           scripts/ci-api-smoke.sh || {
             echo "=== server log (last 200 lines) ==="
-            tail -n 200 /tmp/forgec2-smoke.log
-            kill $(cat /tmp/forgec2-smoke.pid) || true
+            tail -n 200 /tmp/sovereign-smoke.log
+            kill $(cat /tmp/sovereign-smoke.pid) || true
             exit 1
           }
-          kill $(cat /tmp/forgec2-smoke.pid) || true
+          kill $(cat /tmp/sovereign-smoke.pid) || true
       - name: Boot log error patterns (PostgreSQL)
         # Acceptance criterion 6 checks the demo host's boot log for stale
         # driver errors. The smoke server boots the same code against
@@ -160,7 +160,7 @@ jobs:
         # ERROR logger are the three patterns the current image must not log.
         run: |
           patterns='ai_knowledge_fts|hash_type|PostgreSQL statement error.*record not found'
-          if head -n 2000 /tmp/forgec2-smoke.log | grep -Ei "$patterns"; then
+          if head -n 2000 /tmp/sovereign-smoke.log | grep -Ei "$patterns"; then
             echo "boot log contains a stale-driver error pattern"
             exit 1
           fi
@@ -173,14 +173,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Start PostgreSQL
         run: |
-          docker run -d --name forgec2-pg \
-            -e POSTGRES_USER=forgec2 -e POSTGRES_PASSWORD=forgec2 -e POSTGRES_DB=forgec2 \
+          docker run -d --name sovereign-pg \
+            -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
             -p 5432:5432 postgres:16-alpine
           # Two consecutive successes: the entrypoint's temporary init server
           # accepts briefly, then shuts down before the real server starts.
           pg_ready=0
           for i in $(seq 1 90); do
-            if docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 >/dev/null 2>&1; then
+            if docker exec sovereign-pg pg_isready -U sovereign -d sovereign >/dev/null 2>&1; then
               pg_ready=$((pg_ready + 1))
               if [ "$pg_ready" -ge 2 ]; then break; fi
             else
@@ -188,12 +188,12 @@ jobs:
             fi
             sleep 1
           done
-          docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 || { docker logs forgec2-pg | tail -n 50; exit 1; }
+          docker exec sovereign-pg pg_isready -U sovereign -d sovereign || { docker logs sovereign-pg | tail -n 50; exit 1; }
       - name: Dump, restore into scratch DB, compare row counts
         run: bash scripts/ci-pg-restore-drill.sh
       - name: PostgreSQL log (failure only)
         if: failure()
-        run: docker logs forgec2-pg | tail -n 100
+        run: docker logs sovereign-pg | tail -n 100
 
   race:
     name: Race detector (${{ matrix.suite }})
@@ -416,7 +416,7 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
           docker compose --profile postgres -f docker-compose.yml config > /dev/null
       - name: Build image
-        run: docker build -t forgec2:ci .
+        run: docker build -t sovereign:ci .
 
   smoke:
     runs-on: ubuntu-latest
@@ -494,15 +494,15 @@ jobs:
       # init (see the API smoke step for why 30s is not enough).
       - name: Start PostgreSQL for the agent E2E
         run: |
-          docker run -d --name forgec2-pg \
-            -e POSTGRES_USER=forgec2 -e POSTGRES_PASSWORD=forgec2 -e POSTGRES_DB=forgec2 \
+          docker run -d --name sovereign-pg \
+            -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
             -p 5432:5432 postgres:16-alpine
           # Require two consecutive successes: the docker-entrypoint's
           # temporary init server accepts briefly then shuts down, and one
           # success can land in that window (see the API smoke step).
           pg_ready=0
           for i in $(seq 1 90); do
-            if docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 >/dev/null 2>&1; then
+            if docker exec sovereign-pg pg_isready -U sovereign -d sovereign >/dev/null 2>&1; then
               pg_ready=$((pg_ready + 1))
               if [ "$pg_ready" -ge 2 ]; then break; fi
             else
@@ -510,14 +510,14 @@ jobs:
             fi
             sleep 1
           done
-          docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 || { docker logs forgec2-pg | tail -n 50; exit 1; }
+          docker exec sovereign-pg pg_isready -U sovereign -d sovereign || { docker logs sovereign-pg | tail -n 50; exit 1; }
       - name: Generated-agent E2E (login -> listener -> generate -> beacon -> tasks)
         shell: pwsh
         run: ./scripts/e2e-agent-local.ps1 -WorkDir "$env:RUNNER_TEMP/e2e-agent" -KeepWork
       - name: Server log (failure only)
         if: failure()
         run: |
-          log="$RUNNER_TEMP/e2e-agent/logs/forgec2.log"
+          log="$RUNNER_TEMP/e2e-agent/logs/sovereign.log"
           [ -f "$log" ] && tail -n 200 "$log" || echo "no server log"
 
   lint:
@@ -695,15 +695,15 @@ jobs:
       # the health poll only ever sees "connection refused".
       - name: Start PostgreSQL for the live E2E
         run: |
-          docker run -d --name forgec2-pg \
-            -e POSTGRES_USER=forgec2 -e POSTGRES_PASSWORD=forgec2 -e POSTGRES_DB=forgec2 \
+          docker run -d --name sovereign-pg \
+            -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
             -p 5432:5432 postgres:16-alpine
           # Require two consecutive successes: the docker-entrypoint's
           # temporary init server accepts briefly then shuts down, and one
           # success can land in that window (see the API smoke step).
           pg_ready=0
           for i in $(seq 1 90); do
-            if docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 >/dev/null 2>&1; then
+            if docker exec sovereign-pg pg_isready -U sovereign -d sovereign >/dev/null 2>&1; then
               pg_ready=$((pg_ready + 1))
               if [ "$pg_ready" -ge 2 ]; then break; fi
             else
@@ -711,9 +711,9 @@ jobs:
             fi
             sleep 1
           done
-          docker exec forgec2-pg pg_isready -U forgec2 -d forgec2 || { docker logs forgec2-pg | tail -n 50; exit 1; }
+          docker exec sovereign-pg pg_isready -U sovereign -d sovereign || { docker logs sovereign-pg | tail -n 50; exit 1; }
       - name: Build server
-        run: go build -o "$RUNNER_TEMP/forgec2-server" ./cmd/server
+        run: go build -o "$RUNNER_TEMP/sovereign-server" ./cmd/server
       - name: Prepare e2e config (plain HTTP + seeded admin)
         run: |
           E2E_PASS="S1mokeC2-$(openssl rand -hex 8)-9z!Z"
@@ -724,7 +724,7 @@ jobs:
               config.example.yaml > config.e2e.yaml
       - name: Start server
         run: |
-          "$RUNNER_TEMP/forgec2-server" -config config.e2e.yaml > "$RUNNER_TEMP/server.log" 2>&1 &
+          "$RUNNER_TEMP/sovereign-server" -config config.e2e.yaml > "$RUNNER_TEMP/server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/server.pid"
           for i in $(seq 1 60); do
             if curl -sf http://127.0.0.1:8000/health | grep -q ok; then break; fi

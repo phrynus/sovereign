@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/util"
 )
 
 // handleCollabAgents returns the list of agents along with their current

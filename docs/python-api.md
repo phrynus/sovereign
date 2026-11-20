@@ -1,4 +1,4 @@
-# ForgeC2 Python API
+# Sovereign Python API
 
 ## Authentication
 
@@ -93,9 +93,9 @@ session.post("http://localhost:8000/login", data={
 ## Python Client Example
 
 ```python
-from forgec2 import ForgeC2Client
+from sovereign import SovereignClient
 
-client = ForgeC2Client("http://localhost:8000", "admin", "admin")
+client = SovereignClient("http://localhost:8000", "admin", "admin")
 
 # List agents
 agents = client.agents.list()

@@ -16,9 +16,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func (s *Server) handleSettingsPage(c *gin.Context) {
@@ -158,7 +158,7 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":                   "ForgeC2 - Settings",
+		"Title":                   "Sovereign - Settings",
 		"ActiveNav":               "settings",
 		"CurrentUsername":         currentUser,
 		"CurrentUserRole":         currentRole,
@@ -809,7 +809,7 @@ func (s *Server) handleAuditLogPage(c *gin.Context) {
 	}
 
 	data := gin.H{
-		"Title":     "ForgeC2 - Security Audit",
+		"Title":     "Sovereign - Security Audit",
 		"ActiveNav": "audit",
 		"Online":    s.authConfigured(),
 		"UserList":  users,
@@ -947,7 +947,7 @@ func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
 			From:     req.From,
 			To:       req.To,
 		}
-		msg := buildMIMEMessage(cfg.From, cfg.To, "ForgeC2 Test Notification", "<h1>ForgeC2 Test Notification</h1><p>This is a test email from ForgeC2.</p>")
+		msg := buildMIMEMessage(cfg.From, cfg.To, "Sovereign Test Notification", "<h1>Sovereign Test Notification</h1><p>This is a test email from Sovereign.</p>")
 		if err := sendEmailWithRetry(cfg, msg); err != nil {
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Email test"))
 			return
@@ -968,7 +968,7 @@ func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
 		return
 	}
 
-	payload := gin.H{"text": "ForgeC2 test notification", "content": "This is a test notification from ForgeC2."}
+	payload := gin.H{"text": "Sovereign test notification", "content": "This is a test notification from Sovereign."}
 	body, ok := marshalJSONSafe(payload)
 	if !ok {
 		respondError(c, http.StatusInternalServerError, "failed to marshal payload")

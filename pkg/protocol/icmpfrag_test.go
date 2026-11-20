@@ -7,7 +7,7 @@ import (
 )
 
 func TestICMPFragRoundTrip(t *testing.T) {
-	body := bytes.Repeat([]byte("forgec2-icmp-frag-"), 80) // ~1440 bytes
+	body := bytes.Repeat([]byte("sovereign-icmp-frag-"), 80) // ~1440 bytes
 	frags := ICMPFragSplit(body)
 	if len(frags) < 2 {
 		t.Fatalf("expected multiple fragments, got %d", len(frags))

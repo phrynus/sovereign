@@ -1,12 +1,12 @@
-# ForgeC2 MCP server
+# Sovereign MCP server
 
-`forgec2-mcp` exposes this console's **read-only** views to an MCP client (Claude Desktop, any agent runtime that speaks the
+`sovereign-mcp` exposes this console's **read-only** views to an MCP client (Claude Desktop, any agent runtime that speaks the
 protocol) over stdio. It is a separate binary: the server does not know it exists, so nothing here can widen the API's
 authorization surface.
 
 ```sh
-go build -o forgec2-mcp.exe ./cmd/forgec2-mcp
-./forgec2-mcp.exe -base-url http://127.0.0.1:8000 -cookie "forgec2_session=..."
+go build -o sovereign-mcp.exe ./cmd/sovereign-mcp
+./sovereign-mcp.exe -base-url http://127.0.0.1:8000 -cookie "sovereign_session=..."
 ```
 
 `-cookie` is the operator's own session cookie. **The tool set can never see more than the person who started it** — there is no

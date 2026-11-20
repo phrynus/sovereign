@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // v3 per-implant registration secrets: generated at build time, sealed at rest

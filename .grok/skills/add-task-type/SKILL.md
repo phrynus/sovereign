@@ -1,10 +1,10 @@
 ---
 name: add-task-type
-description: Add a new ForgeC2 implant task type end-to-end (registry, agent handlers, server routes, UI, audit). Use when adding task types, new commands, or /add-task-type.
+description: Add a new Sovereign implant task type end-to-end (registry, agent handlers, server routes, UI, audit). Use when adding task types, new commands, or /add-task-type.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

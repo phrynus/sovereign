@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -35,7 +35,7 @@ type pendingPlugin struct {
 	manifest *Manifest
 }
 
-// Manager loads, stores, and executes ForgeC2 plugins.
+// Manager loads, stores, and executes Sovereign plugins.
 type Manager struct {
 	db          *gorm.DB
 	marketplace *Marketplace

@@ -13,7 +13,7 @@ import (
 
 	"log/slog"
 
-	"github.com/forgec2/forgec2/internal/payload"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // BuildCacheEntry represents a cached build artifact.
@@ -58,7 +58,7 @@ type BuildCacheConfig struct {
 // DefaultBuildCacheConfig returns the default build cache configuration.
 func DefaultBuildCacheConfig() BuildCacheConfig {
 	return BuildCacheConfig{
-		CacheDir:   filepath.Join(os.TempDir(), "forgec2-build-cache"),
+		CacheDir:   filepath.Join(os.TempDir(), "sovereign-build-cache"),
 		MaxSize:    10 * 1024 * 1024 * 1024, // 10GB
 		MaxEntries: 1000,
 		TTL:        7 * 24 * time.Hour, // 7 days

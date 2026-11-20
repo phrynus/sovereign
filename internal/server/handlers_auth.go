@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/plugin"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/plugin"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 )
 
@@ -25,7 +25,7 @@ var (
 // returns far faster than a wrong-password branch, leaking username existence.
 func dummyHash() string {
 	dummyHashOnce.Do(func() {
-		h, err := middleware.HashPassword("forgec2-timing-equalizer-dummy")
+		h, err := middleware.HashPassword("sovereign-timing-equalizer-dummy")
 		if err == nil {
 			dummyPasswordHash = h
 		}
@@ -34,16 +34,16 @@ func dummyHash() string {
 }
 
 func (s *Server) handleLoginPage(c *gin.Context) {
-	if tokenStr, err := c.Cookie("forgec2_session"); err == nil && tokenStr != "" {
+	if tokenStr, err := c.Cookie("sovereign_session"); err == nil && tokenStr != "" {
 		if _, err := middleware.ParseToken(tokenStr); err == nil {
 			c.Redirect(http.StatusFound, "/")
 			return
 		}
-		middleware.SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
+		middleware.SetCookieWithSameSite(c, "sovereign_session", "", -1, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 	}
 
 	s.renderLoginPage(c, gin.H{
-		"Title": "ForgeC2 - Login",
+		"Title": "Sovereign - Login",
 		"Error": "",
 	})
 }
@@ -175,7 +175,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 	if rememberMe {
 		maxAge = RememberMeMaxAgeSec
 	}
-	middleware.SetCookieWithSameSite(c, "forgec2_session", token, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
+	middleware.SetCookieWithSameSite(c, "sovereign_session", token, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
 	// Fail closed when the CSRF binding key is unavailable: issuing a session
 	// without its CSRF cookie only produces confusing 403s on every later
@@ -196,7 +196,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 
 	csrfToken := middleware.DeriveCSRFToken(token, csrfSecret)
-	middleware.SetCookieWithSameSite(c, "forgec2_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
+	middleware.SetCookieWithSameSite(c, "sovereign_csrf", csrfToken, 0, "/", middleware.CookieSecure, false, http.SameSiteLaxMode)
 
 	s.clearLoginLockout(clientIP)
 	s.loginLockout.resetAccount(username)
@@ -303,10 +303,10 @@ func (s *Server) handleLogout(c *gin.Context) {
 
 	s.LogAuditRecord(c, "logout", "auth", username, "User logged out", true, nil)
 	slog.Info("User logged out", "username", username, "ip", c.ClientIP())
-	if tokenStr, err := c.Cookie("forgec2_session"); err == nil && tokenStr != "" {
+	if tokenStr, err := c.Cookie("sovereign_session"); err == nil && tokenStr != "" {
 		s.revokeSession(tokenStr)
 	}
-	middleware.SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
+	middleware.SetCookieWithSameSite(c, "sovereign_session", "", -1, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 	c.Redirect(http.StatusFound, "/login")
 }
 
@@ -391,7 +391,7 @@ func (s *Server) handleExtendSession(c *gin.Context) {
 		return
 	}
 
-	tokenStr, err := c.Cookie("forgec2_session")
+	tokenStr, err := c.Cookie("sovereign_session")
 	if err != nil || tokenStr == "" {
 		respondError(c, http.StatusUnauthorized, "no session token")
 		return
@@ -423,7 +423,7 @@ func (s *Server) handleExtendSession(c *gin.Context) {
 	if rememberMe {
 		maxAge = RememberMeMaxAgeSec
 	}
-	middleware.SetCookieWithSameSite(c, "forgec2_session", newToken, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
+	middleware.SetCookieWithSameSite(c, "sovereign_session", newToken, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
 	// Rotate the session: revoke the old token's row so a copied (pre-rotation)
 	// cookie is invalidated immediately, then track the new token in a fresh

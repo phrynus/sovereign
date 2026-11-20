@@ -70,7 +70,7 @@ describe("useListenersData TLS posture payloads", () => {
         protocol: "https",
         host: "0.0.0.0",
         port: "8443",
-        client_ca_file: "  /etc/forgec2/client-ca.pem  ",
+        client_ca_file: "  /etc/sovereign/client-ca.pem  ",
         require_client_cert: true,
         min_tls_version: "1.3",
       });
@@ -82,7 +82,7 @@ describe("useListenersData TLS posture payloads", () => {
         name: "prod-mtls",
         scheme: "https",
         port: 8443,
-        client_ca_file: "/etc/forgec2/client-ca.pem",
+        client_ca_file: "/etc/sovereign/client-ca.pem",
         require_client_cert: true,
         min_tls_version: "1.3",
       }),
@@ -128,7 +128,7 @@ describe("useListenersData TLS posture payloads", () => {
         protocol: "https",
         host: "0.0.0.0",
         port: "8443",
-        client_ca_file: "/etc/forgec2/client-ca.pem",
+        client_ca_file: "/etc/sovereign/client-ca.pem",
         require_client_cert: true,
         min_tls_version: "1.2",
       });
@@ -137,7 +137,7 @@ describe("useListenersData TLS posture payloads", () => {
     expect(putJsonMock).toHaveBeenCalledWith(
       "/api/listeners/7",
       expect.objectContaining({
-        client_ca_file: "/etc/forgec2/client-ca.pem",
+        client_ca_file: "/etc/sovereign/client-ca.pem",
         require_client_cert: true,
         min_tls_version: "1.2",
       }),
@@ -158,7 +158,7 @@ describe("useListenersData TLS posture payloads", () => {
         port: "9001",
         // Left over from the https days: the server refuses TLS knobs on a
         // non-TLS scheme, so the update has to clear them, not forward them.
-        client_ca_file: "/etc/forgec2/client-ca.pem",
+        client_ca_file: "/etc/sovereign/client-ca.pem",
         require_client_cert: true,
         min_tls_version: "1.3",
       });

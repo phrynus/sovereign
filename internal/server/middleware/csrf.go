@@ -10,11 +10,11 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/config"
 )
 
-const csrfCookieName = "forgec2_csrf"
+const csrfCookieName = "sovereign_csrf"
 const csrfHeaderName = "X-CSRF-Token"
 
 // csrfSecret holds the dedicated CSRF binding key (crypto.csrf_key). It is
@@ -79,7 +79,7 @@ func CSRFProtect() gin.HandlerFunc {
 			}
 			headerToken := c.GetHeader(csrfHeaderName)
 			cookieToken, _ := c.Cookie(csrfCookieName)
-			sessionToken, err := c.Cookie("forgec2_session")
+			sessionToken, err := c.Cookie("sovereign_session")
 			if sessionToken == "" || err != nil {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 					"success": false,
@@ -109,7 +109,7 @@ func CSRFProtect() gin.HandlerFunc {
 
 		// On every GET/HEAD, rotate the CSRF token to prevent stale cookie injection
 		if method == "GET" || method == "HEAD" {
-			sessionToken, err := c.Cookie("forgec2_session")
+			sessionToken, err := c.Cookie("sovereign_session")
 			if err == nil && sessionToken != "" {
 				if secret, ok := csrfSecret.Load().([]byte); ok && len(secret) == 32 {
 					token := DeriveCSRFToken(sessionToken, secret)

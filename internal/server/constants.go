@@ -3,7 +3,7 @@ package server
 import "time"
 
 // ServerVersion is overridden at release time via
-// -ldflags "-X github.com/forgec2/forgec2/internal/server.ServerVersion=<tag>".
+// -ldflags "-X github.com/r0si/sovereign/internal/server.ServerVersion=<tag>".
 // A const cannot be overridden that way, hence var. Local builds report "dev".
 var ServerVersion = "dev"
 

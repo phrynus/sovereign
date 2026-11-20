@@ -33,8 +33,8 @@ test("the runtime and the standard library are not charged to a module", () => {
 
 test("a type symbol is attributed like a function symbol", () => {
   assert.equal(
-    attributeSymbol("type:.eq.github.com/forgec2/forgec2/internal/server.Task"),
-    "github.com/forgec2/forgec2",
+    attributeSymbol("type:.eq.github.com/r0si/sovereign/internal/server.Task"),
+    "github.com/r0si/sovereign",
   );
 });
 

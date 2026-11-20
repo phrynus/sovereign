@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 func TestHandleAPISendChatMessage_SizeLimit(t *testing.T) {

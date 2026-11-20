@@ -3,16 +3,16 @@
 *.dll
 *.so
 *.dylib
-forgec2-server
-forgec2-server-linux-amd64
-forgec2-server-linux-arm64
-forgec2-server-darwin-amd64
-forgec2-server-darwin-arm64
+sovereign-server
+sovereign-server-linux-amd64
+sovereign-server-linux-arm64
+sovereign-server-darwin-amd64
+sovereign-server-darwin-arm64
 reset-password.exe
 # Rollback copies kept by scripts/deploy.ps1 and scripts/deploy.sh
 *.prev
 
-# ForgeC2 specific
+# Sovereign specific
 data/
 config.yaml
 # Per-run config variants (config.audit.yaml, config.e2e.yaml, config.local.yaml,

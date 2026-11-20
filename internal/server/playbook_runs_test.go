@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/playbook"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/playbook"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // TestPlaybookRunPersistence covers save, list and read for playbook runs.

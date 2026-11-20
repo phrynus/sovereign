@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 func (s *Server) handleGetCertInfo(c *gin.Context) {

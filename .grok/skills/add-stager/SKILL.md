@@ -1,10 +1,10 @@
 ---
 name: add-stager
-description: Add ForgeC2 staged payload delivery (stager, stage loader, dropper). Use for stager, stage payload, or /add-stager.
+description: Add Sovereign staged payload delivery (stager, stage loader, dropper). Use for stager, stage payload, or /add-stager.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

@@ -2,7 +2,7 @@
 # DEPRECATED - superseded by deploy.sh + docker-compose.yml in this directory.
 #
 # This script provisions the older NATIVE (binary + SQLite) demo described in
-# forgec2-demo.service. The deployed demo now runs the published container
+# sovereign-demo.service. The deployed demo now runs the published container
 # image against PostgreSQL and is provisioned end to end by deploy.sh, which
 # also disables the first-boot admin. Kept for reference and rollback only; do
 # not run it against the current demo database (it edits SQLite directly).
@@ -14,7 +14,7 @@
 # Defines (idempotently) the demo-observer custom role and points the public
 # `demo` account at it. Set the account password with the shipped tool:
 #
-#   /opt/forgec2-demo/reset-password -db "$DB" -user demo -pass '<password>'
+#   /opt/sovereign-demo/reset-password -db "$DB" -user demo -pass '<password>'
 #
 # Read-only by construction: only `*.read` permissions plus ai.use. Every
 # write permission is absent, so RequirePermission refuses mutations at the
@@ -29,7 +29,7 @@
 # log, so visitor sign-in IPs are visible there by design.
 set -eu
 
-DB="${1:-/opt/forgec2-demo/data/db/forgec2.db}"
+DB="${1:-/opt/sovereign-demo/data/db/sovereign.db}"
 ROLE="${2:-demo-observer}"
 USER_NAME="${3:-demo}"
 

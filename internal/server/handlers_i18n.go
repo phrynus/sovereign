@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func (s *Server) handleSetLanguage(c *gin.Context) {
@@ -24,7 +24,7 @@ func (s *Server) handleSetLanguage(c *gin.Context) {
 		return
 	}
 
-	middleware.SetCookieWithSameSite(c, "forgec2_lang", lang, LangCookieMaxAgeSec, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
+	middleware.SetCookieWithSameSite(c, "sovereign_lang", lang, LangCookieMaxAgeSec, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
 	referer := c.GetHeader("Referer")
 	if isSafeLocalRedirect(referer) {

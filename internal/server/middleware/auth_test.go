@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
 	"gorm.io/gorm"
 )
 
@@ -150,7 +150,7 @@ func TestAuthRequired(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: "invalid-token"})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: "invalid-token"})
 
 		AuthRequired(testDB)(c)
 
@@ -198,7 +198,7 @@ func TestAuthRequired(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 
 		AuthRequired(testDB)(c)
 
@@ -216,7 +216,7 @@ func TestAuthRequired(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 
 		AuthRequired(testDB)(c)
 
@@ -233,7 +233,7 @@ func TestAuthRequired(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 
 		AuthRequired(testDB)(c)
 
@@ -251,7 +251,7 @@ func TestAuthRequired(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 
 		AuthRequired(testDB)(c)
 
@@ -270,7 +270,7 @@ func TestAuthRequired(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/dashboard", nil)
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 
 		AuthRequired(testDB)(c)
 

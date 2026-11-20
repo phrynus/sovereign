@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TestRunShellStreamingFastCommandSilent pins the quiet path: a command that

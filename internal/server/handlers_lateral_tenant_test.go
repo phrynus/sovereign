@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // POST /lateral/execute used to call s.createTask directly. That skipped

@@ -29,7 +29,7 @@ type Report struct {
 	Content []byte `json:"content"`
 }
 
-// Plugin is the base interface implemented by every ForgeC2 plugin.
+// Plugin is the base interface implemented by every Sovereign plugin.
 type Plugin interface {
 	Name() string
 	Version() string

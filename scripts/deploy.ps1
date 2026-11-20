@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Build, deploy and verify a ForgeC2 server instance.
+    Build, deploy and verify a Sovereign server instance.
 
 .DESCRIPTION
     One command that takes the working tree to a running, verified server:
@@ -8,7 +8,7 @@
         preflight -> build (frontend bundle + Go binary) -> stop the old
         instance -> start the new one -> health/ready/login smoke -> rollback
 
-    The previous binary is kept as forgec2-server.exe.prev. A new instance
+    The previous binary is kept as sovereign-server.exe.prev. A new instance
     that does not come up healthy is rolled back to that binary and started
     again, so a bad build never leaves the box down.
 
@@ -143,9 +143,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "build failed (see the output above)" }
     Ok "build finished"
 
-    $binary = Join-Path $root "forgec2-server.exe"
-    $candidate = Join-Path $root "forgec2-server.new.exe"
-    $previous = Join-Path $root "forgec2-server.exe.prev"
+    $binary = Join-Path $root "sovereign-server.exe"
+    $candidate = Join-Path $root "sovereign-server.new.exe"
+    $previous = Join-Path $root "sovereign-server.exe.prev"
     if (-not (Test-Path -LiteralPath $candidate)) {
         throw "build reported success but candidate '$candidate' is missing"
     }
@@ -158,12 +158,12 @@ try {
     # ------------------------------------------------- 2. keep the last good build
     if (Test-Path -LiteralPath $binary) {
         Copy-Item -LiteralPath $binary -Destination $previous -Force
-        Ok "previous binary kept as forgec2-server.exe.prev"
+        Ok "previous binary kept as sovereign-server.exe.prev"
     }
 
     # ------------------------------------------------------------ 3. stop the old one
     Step "Stop the running instance"
-    $running = Get-Process -Name "forgec2-server" -ErrorAction SilentlyContinue
+    $running = Get-Process -Name "sovereign-server" -ErrorAction SilentlyContinue
     if ($running) {
         foreach ($proc in $running) {
             Write-Host "  stopping PID $($proc.Id)"
@@ -173,10 +173,10 @@ try {
         # the old one still holds it.
         for ($i = 0; $i -lt 20; $i++) {
             Start-Sleep -Milliseconds 500
-            $stillUp = Get-Process -Name "forgec2-server" -ErrorAction SilentlyContinue
+            $stillUp = Get-Process -Name "sovereign-server" -ErrorAction SilentlyContinue
             if (-not $stillUp) { break }
         }
-        if (Get-Process -Name "forgec2-server" -ErrorAction SilentlyContinue) {
+        if (Get-Process -Name "sovereign-server" -ErrorAction SilentlyContinue) {
             Fail "the old instance is still running - aborting before the port fight"
             exit 1
         }
@@ -192,7 +192,7 @@ try {
         Remove-Item -LiteralPath $binary -Force
     }
     Move-Item -LiteralPath $candidate -Destination $binary
-    Ok "candidate promoted to forgec2-server.exe"
+    Ok "candidate promoted to sovereign-server.exe"
 
     # --------------------------------------------------------------- 4. start it up
     Step "Start the new instance"
@@ -210,9 +210,9 @@ try {
     $healthy = Wait-ForHealth -Process $proc -Port $Port -TimeoutSeconds $HealthTimeoutSeconds
     if (-not $healthy) {
         Fail "the new instance did not become healthy within ${HealthTimeoutSeconds}s"
-        if (Test-Path "logs/forgec2.log") {
-            Write-Host "--- logs/forgec2.log (tail) ---" -ForegroundColor Yellow
-            Get-Content "logs/forgec2.log" -Tail 30
+        if (Test-Path "logs/sovereign.log") {
+            Write-Host "--- logs/sovereign.log (tail) ---" -ForegroundColor Yellow
+            Get-Content "logs/sovereign.log" -Tail 30
         }
         if ($NoRollback) { exit 1 }
         if (-not (Test-Path $previous)) {
@@ -229,7 +229,7 @@ try {
         if (Wait-ForHealth -Process $rollback -Port $Port -TimeoutSeconds $HealthTimeoutSeconds) {
             Ok "rolled back to the previous build (PID $($rollback.Id)) - the console is up again"
         } else {
-            Fail "the rollback did not come up either - check logs/forgec2.log"
+            Fail "the rollback did not come up either - check logs/sovereign.log"
         }
         exit 1
     }
@@ -255,7 +255,7 @@ try {
     Write-Host "`n==> Deployed (PID $($proc.Id))" -ForegroundColor Green
     Write-Host "    console : http://127.0.0.1:$Port/  (bound to $bindHost)"
     Write-Host "    health  : http://127.0.0.1:$Port/health"
-    Write-Host "    logs    : logs/forgec2.log, logs/stdout.log, logs/stderr.log"
+    Write-Host "    logs    : logs/sovereign.log, logs/stdout.log, logs/stderr.log"
 }
 finally {
     Pop-Location

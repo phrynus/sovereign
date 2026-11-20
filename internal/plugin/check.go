@@ -255,15 +255,15 @@ func checkWasmPackage(rep *CheckReport, entryPath string, m *Manifest) {
 
 	for _, imp := range compiled.ImportedFunctions() {
 		mod, name, _ := imp.Import()
-		if mod == "forgec2" && name == "log" {
+		if mod == "sovereign" && name == "log" {
 			if got := wasmSignature(imp); got != "(i32,i32) -> ()" {
 				rep.add(DiagError, "wasm.bad_log_abi",
-					"forgec2.log must be (i32,i32) -> (); the module imports %s", got)
+					"sovereign.log must be (i32,i32) -> (); the module imports %s", got)
 			}
 			continue
 		}
 		rep.add(DiagError, "wasm.unexpected_import",
-			"the module imports %s.%s; ABI v1 allows only forgec2.log (no WASI: no files, sockets, environment or clock)", mod, name)
+			"the module imports %s.%s; ABI v1 allows only sovereign.log (no WASI: no files, sockets, environment or clock)", mod, name)
 	}
 	if len(compiled.ImportedMemories()) > 0 {
 		rep.add(DiagError, "wasm.unexpected_import",

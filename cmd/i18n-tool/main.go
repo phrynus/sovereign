@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/forgec2/forgec2/internal/server"
+	"github.com/r0si/sovereign/internal/server"
 )
 
 func main() {
@@ -59,7 +59,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Print(`ForgeC2 i18n Translation Management Tool
+	fmt.Print(`Sovereign i18n Translation Management Tool
 
 Usage:
   i18n-tool <command> [options]

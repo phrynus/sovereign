@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/util"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/util"
+	"github.com/r0si/sovereign/pkg/protocol"
 	"gorm.io/gorm"
 )
 
@@ -530,7 +530,7 @@ var phaseOrder = []string{
 	"Exfiltration", "Impact",
 }
 
-// taskPhase maps a ForgeC2 task type to a MITRE ATT&CK phase.
+// taskPhase maps a Sovereign task type to a MITRE ATT&CK phase.
 func taskPhase(taskType string) string {
 	t := strings.ToLower(taskType)
 	switch {

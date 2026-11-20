@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/payload"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // TestGenerateCacheKeyDistinguishesTLSFingerprint keeps a build that asks for

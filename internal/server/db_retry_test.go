@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/testutil"
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // stubBusySleep replaces the retry backoff with a no-op so tests don't wait

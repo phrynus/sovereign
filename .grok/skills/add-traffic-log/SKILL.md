@@ -1,10 +1,10 @@
 ---
 name: add-traffic-log
-description: Extend ForgeC2 beacon traffic monitor (request log, auto-refresh). Use for traffic monitor, beacon log, or /add-traffic-log.
+description: Extend Sovereign beacon traffic monitor (request log, auto-refresh). Use for traffic monitor, beacon log, or /add-traffic-log.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 

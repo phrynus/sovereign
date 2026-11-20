@@ -154,7 +154,7 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 		return nil, "", err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "forgec2-pack-*")
+	tmpDir, err := os.MkdirTemp("", "sovereign-pack-*")
 	if err != nil {
 		return nil, "", fmt.Errorf("temp dir: %w", err)
 	}

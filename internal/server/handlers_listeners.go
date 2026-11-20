@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // broadcastListenerUpdate notifies operators that the listener registry
@@ -92,7 +92,7 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":        fmt.Sprintf("ForgeC2 - Listener %s", listener.Name),
+		"Title":        fmt.Sprintf("Sovereign - Listener %s", listener.Name),
 		"ActiveNav":    "listeners",
 		"Listener":     listener,
 		"Agents":       agents,
@@ -697,7 +697,7 @@ func (s *Server) handleListenersPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":        "ForgeC2 - Listeners",
+		"Title":        "Sovereign - Listeners",
 		"ActiveNav":    "listeners",
 		"Listeners":    listeners,
 		"Total":        len(listeners),

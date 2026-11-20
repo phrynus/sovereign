@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 // TestBeaconDedupKeyedBySeq verifies that two beacons with identical payloads

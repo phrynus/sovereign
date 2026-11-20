@@ -166,7 +166,7 @@ func stagerImplantConfig(cfg StagerConfig, proto string, withDNS bool) ImplantCo
 		Jitter:        20,
 		UserAgent:     cfg.UserAgent,
 		SkipTLSVerify: cfg.SkipTLSVerify,
-		Filename:      uniqueBuildName("forgec2_stage2", ""),
+		Filename:      uniqueBuildName("sovereign_stage2", ""),
 		Debug:         false,
 		Profile:       cfg.Profile,
 		ListenerID:    cfg.ListenerID,

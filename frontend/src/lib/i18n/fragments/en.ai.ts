@@ -37,7 +37,7 @@ export const enAI: Record<string, string> = {
   "ai.empty_response": "The model finished without returning displayable content. Retry; if this persists, check the profile output limit and streaming compatibility.",
   "ai.export": "Export",
   "ai.greeting_desc": "I can summarize the engagement, list live beacons, flag elevated hosts and alerts, and recommend the next operator move. Try a quick action or ask in plain language.",
-  "ai.greeting_title": "Hello! I am ForgeC2 AI Assistant",
+  "ai.greeting_title": "Hello! I am Sovereign AI Assistant",
   "ai.input_hint": "Enter to send · Shift+Enter for newline",
   "ai.chat_only": "Chat",
   "ai.chat_only_hint": "Pure chat: no tool calls, answers from context only",

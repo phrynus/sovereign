@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // ── JSON structures ───────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ func (s *Server) buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "get_coverage_gaps",
-				Description: "Get MITRE ATT&CK coverage gaps: techniques mapped by ForgeC2 but NOT yet exercised in tasks, grouped by tactic. Combine with known host/cred context to recommend next techniques.",
+				Description: "Get MITRE ATT&CK coverage gaps: techniques mapped by Sovereign but NOT yet exercised in tasks, grouped by tactic. Combine with known host/cred context to recommend next techniques.",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -411,7 +411,7 @@ func (s *Server) buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "create_plugin",
-				Description: "Write a ForgeC2 plugin package (manifest + entry file) from the operator's description, validate it, and register it so it appears on the Plugins page. The package is written and registered but NOT executed - use run_plugin to check it. Plugin ABI: read the JSON input from stdin, then print ONE JSON object to stdout, either {\"success\":true,\"output\":\"text\"} or {\"success\":false,\"error\":\"reason\"}; anything else on stdout is a parse error, not a result.",
+				Description: "Write a Sovereign plugin package (manifest + entry file) from the operator's description, validate it, and register it so it appears on the Plugins page. The package is written and registered but NOT executed - use run_plugin to check it. Plugin ABI: read the JSON input from stdin, then print ONE JSON object to stdout, either {\"success\":true,\"output\":\"text\"} or {\"success\":false,\"error\":\"reason\"}; anything else on stdout is a parse error, not a result.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -536,7 +536,7 @@ func (s *Server) buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "update_plugin",
-				Description: "Rewrite the entry file of a plugin YOU wrote (author forgec2-ai), bumping its patch version. Use it to iterate after run_plugin shows a problem; a plugin the assistant did not author is refused, because the operator edits those. The plugin is re-registered but NOT executed - call run_plugin to check the new behaviour.",
+				Description: "Rewrite the entry file of a plugin YOU wrote (author sovereign-ai), bumping its patch version. Use it to iterate after run_plugin shows a problem; a plugin the assistant did not author is refused, because the operator edits those. The plugin is re-registered but NOT executed - call run_plugin to check the new behaviour.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -565,7 +565,7 @@ func (s *Server) buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "delete_plugin",
-				Description: "Delete a plugin YOU wrote (author forgec2-ai): unloads it, removes its record and its package directory. A plugin the assistant did not author is refused - the installed set is the operator's inventory. Use it to clean up experiments; to iterate on a plugin keep it and use update_plugin.",
+				Description: "Delete a plugin YOU wrote (author sovereign-ai): unloads it, removes its record and its package directory. A plugin the assistant did not author is refused - the installed set is the operator's inventory. Use it to clean up experiments; to iterate on a plugin keep it and use update_plugin.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{

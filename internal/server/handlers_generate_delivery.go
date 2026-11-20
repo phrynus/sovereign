@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // handleGenerateDelivery wraps a payload as HTML smuggling, a .url shortcut,
@@ -119,7 +119,7 @@ func (s *Server) handleGenerateDelivery(c *gin.Context) {
 func decodeOptionalB64(s string) ([]byte, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return []byte("ForgeC2"), nil
+		return []byte("Sovereign"), nil
 	}
 	return base64.StdEncoding.DecodeString(s)
 }

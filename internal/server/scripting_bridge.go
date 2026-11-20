@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/scripting"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/scripting"
 	"gorm.io/gorm"
 )
 

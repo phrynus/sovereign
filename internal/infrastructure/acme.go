@@ -39,7 +39,7 @@ func NewACMEClient(cfg ACMEConfig) *ACMEClient {
 		config: cfg,
 		client: &acme.Client{
 			DirectoryURL: dirURL,
-			UserAgent:    "forgec2-acme/1.0",
+			UserAgent:    "sovereign-acme/1.0",
 		},
 		domain: cfg.Domain,
 	}
@@ -179,8 +179,8 @@ func (a *ACMEClient) startChallengeServer(token, keyAuth string, stopCh chan str
 	})
 
 	srv := &http.Server{
-		Handler:           mux,
-		Addr:              fmt.Sprintf(":%d", a.config.Port),
+		Handler: mux,
+		Addr:    fmt.Sprintf(":%d", a.config.Port),
 		// The challenge server is internet-facing for the duration of one
 		// ACME validation; without timeouts a slow client can hold the
 		// connection (Slowloris) for the whole session.

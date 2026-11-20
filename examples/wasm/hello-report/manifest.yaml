@@ -2,7 +2,7 @@ name: wasm-hello
 version: 1.0.0
 type: report
 description: Example WASM plugin (ABI v1) — freestanding C module that echoes params.label back as a markdown report
-author: ForgeC2
+author: Sovereign
 category: example
 entry: plugin.wasm
 interpreter: wasm

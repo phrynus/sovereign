@@ -1,16 +1,16 @@
 ---
 name: add-ai-tool
-description: Add a new AI function-calling tool to ForgeC2 via ai_tools_defs.go buildTools and ai_tools_exec.go executeToolSwitchCtx
+description: Add a new AI function-calling tool to Sovereign via ai_tools_defs.go buildTools and ai_tools_exec.go executeToolSwitchCtx
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: feature
 ---
 
 ## When to use
 
-Expose a new ForgeC2 capability to the AI assistant (SSE chat at `/ai/chat`).
+Expose a new Sovereign capability to the AI assistant (SSE chat at `/ai/chat`).
 
 ## File
 

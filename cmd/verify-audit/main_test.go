@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/auditchain"
+	"github.com/r0si/sovereign/internal/auditchain"
 )
 
 // TestExitCode covers the decision a pipeline makes. The interesting case is the third one: rows that all check out,

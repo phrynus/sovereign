@@ -1,4 +1,4 @@
-// Command plugin-init writes a ForgeC2 plugin package skeleton that is valid
+// Command plugin-init writes a Sovereign plugin package skeleton that is valid
 // by construction: a manifest, an entry template that documents the runtime
 // contract in the language being edited, and (for the WASM tier) a C skeleton
 // plus its build script.
@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/r0si/sovereign/internal/plugin"
 )
 
 func main() {

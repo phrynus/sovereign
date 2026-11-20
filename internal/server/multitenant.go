@@ -4,15 +4,15 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 )
 
 // tenantIDContextKey caches the resolved tenant ID for the request so repeated
 // tenantScope calls (e.g. fan-out detail queries) cost one user lookup total.
-const tenantIDContextKey = "forgec2_tenant_id"
+const tenantIDContextKey = "sovereign_tenant_id"
 
 // tenantResolution is the cached tenant lookup: tid 0 stays legacy-unscoped,
 // while ok=false marks a failed lookup (fail closed, never fail open).

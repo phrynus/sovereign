@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func newWSAuthTestServer(t *testing.T) *Server {
@@ -53,7 +53,7 @@ func callOperatorWS(s *Server, token string) *httptest.ResponseRecorder {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/ws/operator", nil)
 	if token != "" {
-		c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+		c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	}
 	s.handleOperatorWS(c)
 	return w
@@ -161,7 +161,7 @@ func TestHandleWebSocket_ForceLogoutRejected(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/ws", nil)
-	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Request.AddCookie(&http.Cookie{Name: "sovereign_session", Value: token})
 	s.handleWebSocket(c)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("legacy force-logout WS: got %d, want 401; body=%s", w.Code, w.Body.String())

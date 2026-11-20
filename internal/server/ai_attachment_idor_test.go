@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func attachmentCtx(sessionID uint, userID uint, username string, tenantID uint) (*gin.Context, *httptest.ResponseRecorder) {

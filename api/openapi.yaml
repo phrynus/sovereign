@@ -1,15 +1,15 @@
 openapi: 3.0.3
 info:
-  title: ForgeC2 Command & Control API
+  title: Sovereign Command & Control API
   description: |
-    ForgeC2 is a professional-grade command and control framework for red team operations.
+    Sovereign is a professional-grade command and control framework for red team operations.
 
     ## Authentication
-    Most endpoints require a session cookie (`forgec2_session`) from `POST /login`.
+    Most endpoints require a session cookie (`sovereign_session`) from `POST /login`.
     Unauthenticated access to `/api/*` returns **JSON 401** (`{success:false,error:...}`), not HTML.
 
     ## CSRF
-    State-changing requests need double-submit CSRF: cookie `forgec2_csrf` + header `X-CSRF-Token`.
+    State-changing requests need double-submit CSRF: cookie `sovereign_csrf` + header `X-CSRF-Token`.
 
     ## Spec quality (honest)
     - Route inventory is kept near-complete (CI coverage 鈮?0%, stale=0).
@@ -29,8 +29,8 @@ info:
 
   version: 2.7.1
   contact:
-    name: ForgeC2 Support
-    email: support@forgec2.io
+    name: Sovereign Support
+    email: support@sovereign.io
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -139,7 +139,7 @@ paths:
             Set-Cookie:
               schema:
                 type: string
-              description: forgec2_session cookie
+              description: sovereign_session cookie
         '200':
           description: Login failed (returns login page with error)
           content:
@@ -14774,7 +14774,7 @@ components:
     SessionCookie:
       type: apiKey
       in: cookie
-      name: forgec2_session
+      name: sovereign_session
       description: Session cookie obtained from login endpoint
     AgentToken:
       type: apiKey

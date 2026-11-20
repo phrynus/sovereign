@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	forgecrypto "github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 )
 
 const extc2ResultTestKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"

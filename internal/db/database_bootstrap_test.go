@@ -18,9 +18,9 @@ func TestRedactDSN(t *testing.T) {
 		mustKeep []string
 	}{
 		{
-			in:       "host=db.internal user=forge password=s3cr3t dbname=forgec2",
+			in:       "host=db.internal user=forge password=s3cr3t dbname=sovereign",
 			mustHide: []string{"s3cr3t"},
-			mustKeep: []string{"host=db.internal", "user=forge", "dbname=forgec2"},
+			mustKeep: []string{"host=db.internal", "user=forge", "dbname=sovereign"},
 		},
 		{
 			in:       "host=localhost pwd=hunter2 dbname=x",

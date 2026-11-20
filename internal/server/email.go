@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 const emailMaxRetries = 3
@@ -52,7 +52,7 @@ func (s *Server) triggerEmailNotifications(evt Event) {
 	}
 
 	body := formatEmailBody(evt)
-	msg := buildMIMEMessage(cfg.From, cfg.To, fmt.Sprintf("ForgeC2 Alert: %s", evt.Type), body)
+	msg := buildMIMEMessage(cfg.From, cfg.To, fmt.Sprintf("Sovereign Alert: %s", evt.Type), body)
 
 	if err := sendEmailWithRetry(cfg, msg); err != nil {
 		slog.Error("Email notification failed after retries", "event", evt.Type, "agent", evt.AgentID, "error", err)
@@ -145,7 +145,7 @@ func formatEmailBody(evt Event) string {
 <html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;background:#f9f9f9;padding:20px;">
 <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
 <div style="background:#1a1a2e;color:#fff;padding:20px;border-radius:8px 8px 0 0;">
-<h2 style="margin:0;font-size:18px;">ForgeC2 Alert</h2>
+<h2 style="margin:0;font-size:18px;">Sovereign Alert</h2>
 <p style="margin:5px 0 0;font-size:14px;opacity:0.8;">%s</p>
 </div>
 <div style="padding:20px;">
@@ -154,7 +154,7 @@ func formatEmailBody(evt Event) string {
 %s
 </div>
 <div style="padding:15px 20px;background:#f5f5f5;border-radius:0 0 8px 8px;font-size:12px;color:#999;text-align:center;">
-ForgeC2 Security Platform
+Sovereign Security Platform
 </div>
 </div></body></html>`, esc(string(evt.Type)), esc(string(evt.Type)), esc(evt.Timestamp.Format(time.RFC1123)), agentInfo, dataStr)
 }

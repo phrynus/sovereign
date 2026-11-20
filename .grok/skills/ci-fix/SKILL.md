@@ -1,10 +1,10 @@
 ---
 name: ci-fix
-description: Fix ForgeC2 GitHub Actions CI failures (go test, go build, go mod tidy). Use when CI fails, GitHub Actions red, or /ci-fix.
+description: Fix Sovereign GitHub Actions CI failures (go test, go build, go mod tidy). Use when CI fails, GitHub Actions red, or /ci-fix.
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: debug
 ---
 
@@ -47,4 +47,4 @@ go build ./cmd/server/
 
 ## Badge
 
-README: `![CI](https://github.com/r0si/forgec2/actions/workflows/ci.yml/badge.svg)`
+README: `![CI](https://github.com/r0si/sovereign/actions/workflows/ci.yml/badge.svg)`

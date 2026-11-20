@@ -160,10 +160,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const hosts = knownHosts();
 
   if (build) {
-    const dir = mkdtempSync(join(tmpdir(), "forgec2-size-"));
-    const stripped = join(dir, `forgec2-${goos}-${goarch}`);
-    const symbols = join(dir, `forgec2-${goos}-${goarch}-symbols`);
-    const version = "-X github.com/forgec2/forgec2/internal/server.ServerVersion=size-profile";
+    const dir = mkdtempSync(join(tmpdir(), "sovereign-size-"));
+    const stripped = join(dir, `sovereign-${goos}-${goarch}`);
+    const symbols = join(dir, `sovereign-${goos}-${goarch}-symbols`);
+    const version = "-X github.com/r0si/sovereign/internal/server.ServerVersion=size-profile";
     console.log(`building ${goos}/${goarch} ...`);
     goBuild(stripped, goos, goarch, `-s -w ${version}`);
     goBuild(symbols, goos, goarch, version);

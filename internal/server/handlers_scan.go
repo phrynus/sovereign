@@ -9,15 +9,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // handleScannerPage renders the network scanner page
 func (s *Server) handleScannerPage(c *gin.Context) {
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":     "ForgeC2 - Network Scanner",
+		"Title":     "Sovereign - Network Scanner",
 		"ActiveNav": "scanner",
 		"Stats":     stats,
 	}

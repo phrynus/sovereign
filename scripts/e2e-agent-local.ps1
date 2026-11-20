@@ -1,4 +1,4 @@
-# ForgeC2 Go-agent local E2E: a throwaway server generates a real agent through
+# Sovereign Go-agent local E2E: a throwaway server generates a real agent through
 # the generate API, the agent registers/beacons, and real tasks round-trip.
 #
 #   powershell -NoProfile -File scripts\e2e-agent-local.ps1     # Windows EXE
@@ -29,7 +29,7 @@
 #     option -> config blob -> binary -> check-in.
 #   * in CI (GITHUB_ACTIONS=true) or with -TlsMatrix it also runs the two extra
 #     legs - "random" (rotate per connection) and "firefox" (pinned) - each on
-#     its own throwaway database (created/dropped through the forgec2-pg
+#     its own throwaway database (created/dropped through the sovereign-pg
 #     container) and its own ports, so the three profile assertions cannot see
 #     each other's agents. This keeps the matrix inside the script because
 #     extending the workflow file needs the protected `workflow` scope.
@@ -44,7 +44,7 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot,
-    [string]$WorkDir = (Join-Path ([System.IO.Path]::GetTempPath()) 'forgec2-agent-e2e'),
+    [string]$WorkDir = (Join-Path ([System.IO.Path]::GetTempPath()) 'sovereign-agent-e2e'),
     [int]$Port = 8110,
     [int]$BeaconPort = 8111,
     [string]$User = 'admin',
@@ -67,7 +67,7 @@ param(
     # -PgDsn is given. The database must already exist (the migration runs at
     # server start), so the CI container creates it and the throwaway server
     # schema-migrates it on boot.
-    [string]$PgDsn = 'host=127.0.0.1 user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable',
+    [string]$PgDsn = 'host=127.0.0.1 user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable',
     # Run the two JA3/JA4 variants (randomize per connection; pin Firefox) after
     # the default stable-Chrome leg. CI enables this automatically because the
     # workflow file is protected by the `workflow` scope; local runs opt in.
@@ -86,7 +86,7 @@ if (($TargetOs -eq 'windows') -ne $HostIsWindows) {
     throw "TargetOs=$TargetOs cannot execute on this host; pass -TargetOs $other"
 }
 $Curl = if ($HostIsWindows) { 'curl.exe' } else { 'curl' }
-$SrvExe = if ($HostIsWindows) { 'forgec2-server.exe' } else { 'forgec2-server' }
+$SrvExe = if ($HostIsWindows) { 'sovereign-server.exe' } else { 'sovereign-server' }
 
 function Step([string]$m) { Write-Host "=== $m ===" }
 
@@ -154,9 +154,9 @@ function Get-CsrfToken([string]$jarPath) {
     foreach ($line in [System.IO.File]::ReadAllLines($jarPath)) {
         # The CSRF cookie is HttpOnly, so its domain field may carry the curl
         # "#HttpOnly_" prefix; the name/value columns are unaffected.
-        if ($line -notmatch 'forgec2_csrf') { continue }
+        if ($line -notmatch 'sovereign_csrf') { continue }
         $fields = $line -split "`t"
-        if ($fields.Count -ge 7 -and $fields[5] -eq 'forgec2_csrf') { return $fields[6] }
+        if ($fields.Count -ge 7 -and $fields[5] -eq 'sovereign_csrf') { return $fields[6] }
     }
     return $null
 }
@@ -181,11 +181,11 @@ try {
     # server-build failure would leave the diagnostic path empty and the whole point
     # of the tail ("the server log carries the real reason") would be lost exactly
     # when it is needed. Join-Path, not a literal "\": SetupLogRotation keeps only
-    # filepath.Dir(-log-file) and writes forgec2.log under it, and on Linux a
-    # backslash is not a separator, so "$WorkDir/logs\forgec2.log" is ONE filename —
-    # the log landed at $WorkDir/forgec2.log while both the tail below and the CI
-    # step read logs/forgec2.log. Every E2E failure printed "no server log".
-    $script:LogFile = Join-Path (Join-Path $WorkDir 'logs') 'forgec2.log'
+    # filepath.Dir(-log-file) and writes sovereign.log under it, and on Linux a
+    # backslash is not a separator, so "$WorkDir/logs\sovereign.log" is ONE filename —
+    # the log landed at $WorkDir/sovereign.log while both the tail below and the CI
+    # step read logs/sovereign.log. Every E2E failure printed "no server log".
+    $script:LogFile = Join-Path (Join-Path $WorkDir 'logs') 'sovereign.log'
     $script:reqFile = "$WorkDir/request.json"
     $base = "http://127.0.0.1:$Port"
     Step "work dir: $WorkDir (target os: $TargetOs)"
@@ -209,7 +209,7 @@ try {
     # data_dir line, and the trailing text must survive the rewrite.
     $cfg = $cfg -replace '(?m)^([ \t]*)data_dir: data\b', "`${1}data_dir: $WorkDir/data"
     # PostgreSQL is the only supported backend since v2.8; the old
-    # `path: data/db/forgec2.db` line is a commented legacy key, so the DSN
+    # `path: data/db/sovereign.db` line is a commented legacy key, so the DSN
     # anchor is the dsn line itself. Keep the throwaway DSN in -PgDsn so the
     # database can be dropped without touching the repo.
     $cfg = $cfg -replace '(?m)^(\s*)dsn: .*', "`${1}dsn: `"$PgDsn`""
@@ -228,8 +228,8 @@ try {
 
     Step "3/9 start the throwaway server on $base"
     # The server must run with the repository as its working directory: agent
-    # generation adds a `replace github.com/forgec2/forgec2 => <module root>`
-    # directive found by walking up from the CWD (payload.forgeC2ModuleReplace),
+    # generation adds a `replace github.com/r0si/sovereign => <module root>`
+    # directive found by walking up from the CWD (payload.sovereignModuleReplace),
     # so a server started elsewhere cannot build payloads. Logs are redirected
     # into the work dir with -log-file to keep the repository's logs/ untouched
     # ($script:LogFile, resolved up top so the finally block can tail it even if a
@@ -264,7 +264,7 @@ try {
     # (see AGENTS.md); mutations below echo it back in X-CSRF-Token.
     [void](Api-Get "$base/api/v1/tasks" "$WorkDir/csrf-probe.json")
     $script:csrf = Get-CsrfToken $script:jar
-    if (-not $script:csrf) { throw 'forgec2_csrf cookie not found after login' }
+    if (-not $script:csrf) { throw 'sovereign_csrf cookie not found after login' }
     Write-Host "  logged in as $User, csrf $($script:csrf.Substring(0, [Math]::Min(8, $script:csrf.Length)))..."
 
     Step "5/9 create the HTTP beacon listener on 127.0.0.1:$BeaconPort"
@@ -288,7 +288,7 @@ try {
     if ($listenerStatus -ne 'running') { throw "listener did not start (status=$listenerStatus)" }
 
     Step '6/9 generate a real agent through the API'
-    $agentName = if ($TargetOs -eq 'windows') { 'forgec2-e2e-agent.exe' } else { 'forgec2-e2e-agent' }
+    $agentName = if ($TargetOs -eq 'windows') { 'sovereign-e2e-agent.exe' } else { 'sovereign-e2e-agent' }
     $genPath = if ($TargetOs -eq 'windows') { '/generate/exe' } else { '/generate/linux' }
     # interval=2 keeps the round-trip fast; the clamp floor is 1s.
     $genForm = "listener_id=$listenerId&interval=2&jitter=0&filename=$agentName"
@@ -397,8 +397,8 @@ try {
 
     Step '8/9 create the file fixtures and dispatch tasks'
     $markerHex = New-Hex 6
-    $shellMarker = "FORGEC2-E2E-SHELL-$markerHex"
-    $fileMarker = "FORGEC2-E2E-FILE-$markerHex"
+    $shellMarker = "SOVEREIGN-E2E-SHELL-$markerHex"
+    $fileMarker = "SOVEREIGN-E2E-FILE-$markerHex"
     $markerName = "e2e-marker-$markerHex.txt"
     $markerPath = "$WorkDir/$markerName"
     [System.IO.File]::WriteAllText($markerPath, $fileMarker, (New-Object System.Text.UTF8Encoding($false)))
@@ -528,7 +528,7 @@ finally {
         }
         Get-ChildItem $WorkDir -Filter 'task-*.json' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
         Get-ChildItem $WorkDir -Filter 'e2e-marker-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-        Get-ChildItem $WorkDir -Filter 'forgec2-e2e-agent*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        Get-ChildItem $WorkDir -Filter 'sovereign-e2e-agent*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
         Write-Host '  cleaned run artifacts'
     } else {
         Write-Host "  artifacts kept in $WorkDir"
@@ -551,15 +551,15 @@ Write-Host 'Go agent E2E ALL GREEN'
 if (($TlsMatrix -or $env:GITHUB_ACTIONS -eq 'true') -and -not $NoTlsMatrix) {
     $dockerReady = $false
     if (Get-Command docker -ErrorAction SilentlyContinue) {
-        $running = @(docker ps --filter 'name=forgec2-pg' --format '{{.Names}}' 2>$null)
-        $dockerReady = $running -contains 'forgec2-pg'
+        $running = @(docker ps --filter 'name=sovereign-pg' --format '{{.Names}}' 2>$null)
+        $dockerReady = $running -contains 'sovereign-pg'
     }
     if (-not $dockerReady) {
-        Write-Host '  TLS matrix: cannot reach the forgec2-pg container (not CI); assuming the databases already exist'
+        Write-Host '  TLS matrix: cannot reach the sovereign-pg container (not CI); assuming the databases already exist'
     }
     $variants = @(
-        @{ Name = 'random'; Profile = 'random'; Db = 'forgec2_tls_random'; Port = 8120; BeaconPort = 8121 },
-        @{ Name = 'firefox'; Profile = 'firefox'; Db = 'forgec2_tls_pinned'; Port = 8130; BeaconPort = 8131 }
+        @{ Name = 'random'; Profile = 'random'; Db = 'sovereign_tls_random'; Port = 8120; BeaconPort = 8121 },
+        @{ Name = 'firefox'; Profile = 'firefox'; Db = 'sovereign_tls_pinned'; Port = 8130; BeaconPort = 8131 }
     )
     foreach ($variant in $variants) {
         Write-Host ''
@@ -567,7 +567,7 @@ if (($TlsMatrix -or $env:GITHUB_ACTIONS -eq 'true') -and -not $NoTlsMatrix) {
         if ($dockerReady) {
             # Best effort: a leftover database from a rerun is fine, the server
             # migrates it and the assertion looks up this run's agent id.
-            docker exec forgec2-pg psql -U forgec2 -d forgec2 -c "CREATE DATABASE $($variant.Db)" 2>$null | Out-Null
+            docker exec sovereign-pg psql -U sovereign -d sovereign -c "CREATE DATABASE $($variant.Db)" 2>$null | Out-Null
         }
         $childDsn = $PgDsn -replace 'dbname=[^ ]+', "dbname=$($variant.Db)"
         & $PSCommandPath -RepoRoot $RepoRoot -WorkDir "$WorkDir-tls-$($variant.Name)" `
@@ -578,7 +578,7 @@ if (($TlsMatrix -or $env:GITHUB_ACTIONS -eq 'true') -and -not $NoTlsMatrix) {
             exit 1
         }
         if ($dockerReady) {
-            docker exec forgec2-pg psql -U forgec2 -d forgec2 -c "DROP DATABASE IF EXISTS $($variant.Db)" 2>$null | Out-Null
+            docker exec sovereign-pg psql -U sovereign -d sovereign -c "DROP DATABASE IF EXISTS $($variant.Db)" 2>$null | Out-Null
         }
     }
 }

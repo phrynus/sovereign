@@ -43,7 +43,7 @@ func newAgentTLSConfig(serverName string) *tls.Config {
 		// A pin replaces chain validation: the standard verifier would reject a
 		// self-signed teamserver certificate before VerifyPeerCertificate ran,
 		// which made pinning useless on exactly the deployments that need it
-		// (ForgeC2 auto-generates a self-signed cert). Verification moves into
+		// (Sovereign auto-generates a self-signed cert). Verification moves into
 		// the callback below, which is mandatory and additionally checks the
 		// hostname when one is configured.
 		cfg.InsecureSkipVerify = true

@@ -22,7 +22,7 @@ $Url = "https://www.wintun.net/builds/wintun-$WintunVersion.zip"
 
 $root = Split-Path -Parent $PSScriptRoot
 $assetsDir = Join-Path $root "internal\payload\agent\assets\wintun"
-$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("forgec2-wintun-" + [System.Guid]::NewGuid().ToString("N"))
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("sovereign-wintun-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
 try {

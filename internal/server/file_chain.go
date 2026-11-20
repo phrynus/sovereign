@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/r0si/sovereign/internal/crypto"
 )
 
 // File-transfer integrity chain. Every chunked file movement (agent->server

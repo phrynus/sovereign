@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/crypto"
-	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/crypto"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // Hot-reload sync table.

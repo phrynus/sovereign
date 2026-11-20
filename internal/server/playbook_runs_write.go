@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/playbook"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/playbook"
 )
 
 // The write side of playbook runs.

@@ -84,10 +84,10 @@ export function useSettingsData() {
       });
       setLoaded(true);
       try {
-        const storedTheme = localStorage.getItem("forgec2_theme");
+        const storedTheme = localStorage.getItem("sovereign_theme");
         if (storedTheme) setTheme(storedTheme);
-        const storedLang = document.cookie.match(/forgec2_lang=([^;]+)/)?.[1]
-          || localStorage.getItem("forgec2_lang");
+        const storedLang = document.cookie.match(/sovereign_lang=([^;]+)/)?.[1]
+          || localStorage.getItem("sovereign_lang");
         if (storedLang === "en" || storedLang === "zh") setLanguage(storedLang);
       } catch { /* silent */ }
     } catch (e) {

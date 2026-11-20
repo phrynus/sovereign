@@ -53,12 +53,12 @@ describe("unwrapBody", () => {
 
 describe("getCsrfToken", () => {
   it("returns empty string when no cookie", () => {
-    document.cookie = "forgec2_csrf=; Max-Age=0";
+    document.cookie = "sovereign_csrf=; Max-Age=0";
     expect(getCsrfToken()).toBe("");
   });
 
-  it("reads forgec2_csrf cookie", () => {
-    document.cookie = "forgec2_csrf=abc123";
+  it("reads sovereign_csrf cookie", () => {
+    document.cookie = "sovereign_csrf=abc123";
     expect(getCsrfToken()).toBe("abc123");
   });
 });
@@ -209,7 +209,7 @@ describe("api.get network layer", () => {
   });
 
   it("sends CSRF header on POST when cookie present", async () => {
-    document.cookie = "forgec2_csrf=tok-csrf";
+    document.cookie = "sovereign_csrf=tok-csrf";
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: {} }), {
         status: 200,

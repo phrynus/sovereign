@@ -1,8 +1,8 @@
 /** Pure helpers for the interactive shell UI (prompt, identity, error text). */
 
 export const SHELL_TERM_BG = "#0b1220";
-export const SHELL_FONT_KEY = "forgec2_shell_fontsize";
-export const SHELL_HISTORY_KEY = "forgec2_shell_history";
+export const SHELL_FONT_KEY = "sovereign_shell_fontsize";
+export const SHELL_HISTORY_KEY = "sovereign_shell_history";
 
 const WINDOWS_INTERPRETERS = ["cmd.exe", "powershell.exe"];
 const LINUX_INTERPRETERS = ["/bin/sh", "/bin/bash", "/bin/zsh", "sh", "bash", "zsh"];

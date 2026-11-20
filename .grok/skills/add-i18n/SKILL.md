@@ -1,10 +1,10 @@
 ---
 name: add-i18n
-description: Add internationalization keys to ForgeC2 following the locales.go / i18n en+zh pattern
+description: Add internationalization keys to Sovereign following the locales.go / i18n en+zh pattern
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: i18n
 ---
 

@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // TestProcessBeaconWithBudgetReplayIsEmpty pins replay protection: a beacon that

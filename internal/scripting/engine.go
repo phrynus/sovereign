@@ -34,7 +34,7 @@ func validateScriptSource(code string) error {
 
 // errHostModulesDisabled is returned by the script module loader for every
 // file-backed require().
-var errHostModulesDisabled = errors.New("require() of host modules is disabled in ForgeC2 scripts")
+var errHostModulesDisabled = errors.New("require() of host modules is disabled in Sovereign scripts")
 
 // newScriptRegistry builds the require() registry used by script VMs.
 // console/util are Go-registered core modules and still resolve; anything

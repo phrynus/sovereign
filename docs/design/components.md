@@ -1,4 +1,4 @@
-# ForgeC2 Component Library
+# Sovereign Component Library
 
 > Auto-generated from `frontend/src/components/`
 

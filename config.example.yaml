@@ -1,4 +1,4 @@
-# ForgeC2 example configuration �?copy to config.yaml and customize.
+# Sovereign example configuration �?copy to config.yaml and customize.
 # Sensitive values: leave empty to auto-generate on first run, or set via env:
 #   FORGEC2_JWT_SECRET, FORGEC2_AI_API_KEY, FORGEC2_DB_DRIVER, FORGEC2_DB_DSN
 #
@@ -43,7 +43,7 @@ server:
   # Repository the update checker polls (owner/name). Defaults to the
   # repository the binary was built from; point it at your own mirror when
   # you publish your own releases.
-  update_check_repo: r0si/forgec2
+  update_check_repo: r0si/sovereign
   tcp_enabled: false
   dns_enabled: false
   grpc_enabled: false
@@ -55,7 +55,7 @@ server:
   ssh_enabled: false
   ssh_port: 2222
   ssh_addr: ""                # bind addr for the SSH beacon listener (default ":ssh_port")
-  ssh_user: forgec2           # SSH username accepted by the beacon listener (empty = any)
+  ssh_user: sovereign           # SSH username accepted by the beacon listener (empty = any)
   ssh_password: ""            # SSH password (empty = accept any password or public key / key-only)
   ssh_key_auth: true          # allow public key authentication
   ssh_host_key: data/ssh_host_key   # SSH host key path (auto-generated if missing)
@@ -89,8 +89,8 @@ database:
   # pre-2.8 config still parses). Point dsn at your PostgreSQL instance; the
   # docker-compose profile overrides these via FORGEC2_DB_DRIVER / FORGEC2_DB_DSN.
   driver: postgres
-  dsn: "host=127.0.0.1 user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
-  # path: data/db/forgec2.db   # legacy sqlite path, ignored under postgres
+  dsn: "host=127.0.0.1 user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
+  # path: data/db/sovereign.db   # legacy sqlite path, ignored under postgres
 
 implant:
   default_interval: 15
@@ -163,7 +163,7 @@ backup:
   # Encrypted database snapshots (.fbk). Retention used to be a hard-coded 7.
   retain: 14                    # 0 = built-in default (7)
   schedule: "daily"             # hourly | daily | weekly | monthly
-  # Freshness is exported as forgec2_backup_age_seconds and reported by
+  # Freshness is exported as sovereign_backup_age_seconds and reported by
   # GET /api/v1/health (`backup.age_seconds`), so a stalled job is visible.
 
 crypto:
@@ -247,7 +247,7 @@ monitoring:
 #   enabled: true
 #   turn_addr: ":3478"          # UDP listen address; open this port in the firewall
 #   public_ip: ""               # relay address peers should use; empty = first non-loopback IPv4
-#   realm: forgec2
+#   realm: sovereign
 #   relay_min_port: 49152       # TURN relay allocation range (open UDP too)
 #   relay_max_port: 65535
 #   session_ttl_seconds: 3600

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 // handleLateralPage renders the lateral movement page
@@ -45,7 +45,7 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 	}
 
 	data := gin.H{
-		"Title":        "ForgeC2 - Lateral Movement",
+		"Title":        "Sovereign - Lateral Movement",
 		"ActiveNav":    "lateral",
 		"Stats":        stats,
 		"Agents":       agents,

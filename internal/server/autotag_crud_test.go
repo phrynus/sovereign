@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/r0si/sovereign/internal/db"
 )
 
 func autoTagCtx(method, body, id string) (*gin.Context, *httptest.ResponseRecorder) {

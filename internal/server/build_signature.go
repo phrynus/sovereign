@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/forgec2/forgec2/internal/payload"
+	"github.com/r0si/sovereign/internal/payload"
 )
 
 // buildSignatureInfo is the small, lock-safe subset of a signature report

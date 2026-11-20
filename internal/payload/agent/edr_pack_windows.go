@@ -65,7 +65,7 @@ func byovdLoadDriver(driverPath, svcName string) (string, error) {
 		return "", fmt.Errorf("byovd_load: invalid driver file")
 	}
 	if svcName == "" {
-		svcName = "forgec2drv"
+		svcName = "sovereigndrv"
 	}
 	for _, r := range svcName {
 		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-') {

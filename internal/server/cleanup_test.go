@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/r0si/sovereign/internal/config"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/testutil"
 	"gorm.io/gorm"
 )
 
 // testPostgresDSN matches the internal/db test harness: the default local
 // PostgreSQL instance used when a test must exercise the real migration path.
-const testPostgresDSN = "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+const testPostgresDSN = "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 
 // newCleanupTestDB returns a migrated database for the cleanup/monitor tests.
 // The cleanup and status-sweep logic is plain gorm ORM (portable across

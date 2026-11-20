@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/pkg/protocol"
+	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/pkg/protocol"
 )
 
 // udpFragments reassembles fragmented UDP beacons. Keys are the peer address

@@ -68,7 +68,7 @@ for dual-use PascalCase/snake_case payloads (`users`/`Users`, `logs`/`Logs`, etc
 ## Live Playwright (optional)
 
 ```bash
-# Against running forgec2-server on :8000
+# Against running sovereign-server on :8000
 FORGEC2_E2E_BASE=http://127.0.0.1:8000 FORGEC2_E2E_PASS='Admin123!' npm run test:e2e -- e2e/live.spec.ts
 ```
 

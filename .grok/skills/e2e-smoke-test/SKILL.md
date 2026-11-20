@@ -1,10 +1,10 @@
 ---
 name: e2e-smoke-test
-description: Run ForgeC2 end-to-end smoke tests on the single-binary server (:8000)
+description: Run Sovereign end-to-end smoke tests on the single-binary server (:8000)
 license: MIT
 compatibility: grok
 metadata:
-  audience: forgec2-devs
+  audience: sovereign-devs
   workflow: test
 ---
 
@@ -12,7 +12,7 @@ metadata:
 
 ```powershell
 powershell -File scripts\build-embedded.ps1
-# or manually start the binary: .\forgec2-server.exe -config config.yaml
+# or manually start the binary: .\sovereign-server.exe -config config.yaml
 ```
 
 ## Smoke checklist

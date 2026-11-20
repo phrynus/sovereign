@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/buildinfo"
+	"github.com/r0si/sovereign/internal/buildinfo"
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds all configuration for ForgeC2
+// Config holds all configuration for Sovereign
 type Config struct {
 	mu         sync.RWMutex `yaml:"-"`
 	ConfigPath string       `yaml:"-"` // absolute path to the config file, set on Load
@@ -133,7 +133,7 @@ type Config struct {
 	Database struct {
 		Path   string `yaml:"path"`   // legacy: path for sqlite (deprecated, use DSN)
 		Driver string `yaml:"driver"` // "postgres" (default)
-		DSN    string `yaml:"dsn"`    // PostgreSQL connection string (e.g. "host=localhost user=forgec2 password=... dbname=forgec2 port=5432 sslmode=disable")
+		DSN    string `yaml:"dsn"`    // PostgreSQL connection string (e.g. "host=localhost user=sovereign password=... dbname=sovereign port=5432 sslmode=disable")
 	} `yaml:"database"`
 
 	Implant struct {
@@ -379,7 +379,7 @@ func DefaultConfig() *Config {
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
 	cfg.Server.SMBEnabled = false
-	cfg.Server.SMBPipe = "forgec2"
+	cfg.Server.SMBPipe = "sovereign"
 	cfg.Server.DNSEnabled = false
 	cfg.Server.DNSDomain = ""
 	cfg.Server.DNSAddr = ":53"
@@ -392,7 +392,7 @@ func DefaultConfig() *Config {
 	cfg.Server.SSHEnabled = false
 	cfg.Server.SSHPort = 2222
 	cfg.Server.SSHAddr = ""
-	cfg.Server.SSHUser = "forgec2"
+	cfg.Server.SSHUser = "sovereign"
 	cfg.Server.SSHPassword = ""
 	cfg.Server.SSHKeyAuth = true
 	cfg.Server.DataDir = "data"
@@ -436,7 +436,7 @@ func DefaultConfig() *Config {
 	cfg.WebRTC.Enabled = false
 	cfg.WebRTC.TurnAddr = ":3478"
 	cfg.WebRTC.PublicIP = ""
-	cfg.WebRTC.Realm = "forgec2"
+	cfg.WebRTC.Realm = "sovereign"
 	cfg.WebRTC.RelayMinPort = 49152
 	cfg.WebRTC.RelayMaxPort = 65535
 	cfg.WebRTC.SessionTTLSeconds = 3600
@@ -450,7 +450,7 @@ func DefaultConfig() *Config {
 	cfg.Security.RequireApproval = true
 
 	cfg.Database.Driver = "postgres"
-	cfg.Database.DSN = "host=localhost user=forgec2 password=forgec2 dbname=forgec2 port=5432 sslmode=disable"
+	cfg.Database.DSN = "host=localhost user=sovereign password=sovereign dbname=sovereign port=5432 sslmode=disable"
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
 	cfg.Server.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
 
@@ -545,7 +545,7 @@ func isWeakSecret(s string) bool {
 		return true
 	}
 	weak := []string{
-		"forgec2_secret_key_change_this_in_production",
+		"sovereign_secret_key_change_this_in_production",
 		"change_me", "changeme", "change_this", "secret", "password", "admin",
 		"jwt_secret", "your_secret_here", "todo", "placeholder", "redacted",
 		"replace_in_production", "replace_me",
@@ -580,7 +580,7 @@ func isWeakDefaultPassword(s string) bool {
 	lower := strings.ToLower(s)
 	weak := []string{
 		"admin", "password", "changeme", "change_me", "123456", "12345678",
-		"qwerty", "letmein", "welcome", "forgec2", "default", "test",
+		"qwerty", "letmein", "welcome", "sovereign", "default", "test",
 	}
 	for _, w := range weak {
 		if strings.Contains(lower, w) {
@@ -674,12 +674,12 @@ func applyDataDirEnv(cfg *Config) {
 	oldDir := cfg.Server.DataDir
 	rebase := func(path *string, suffix string) {
 		// Compare normalized forms: YAML on Windows commonly carries
-		// "data/db/forgec2.db" while filepath.Join produces backslashes.
+		// "data/db/sovereign.db" while filepath.Join produces backslashes.
 		if *path == "" || filepath.Clean(*path) == filepath.Clean(filepath.Join(oldDir, suffix)) {
 			*path = filepath.Join(dir, suffix)
 		}
 	}
-	rebase(&cfg.Database.Path, filepath.Join("db", "forgec2.db")) // check:runtime-paths-ok a relative DEFAULT that is immediately rebased onto the config file's directory
+	rebase(&cfg.Database.Path, filepath.Join("db", "sovereign.db")) // check:runtime-paths-ok a relative DEFAULT that is immediately rebased onto the config file's directory
 	rebase(&cfg.Server.CertFile, "server.crt")
 	rebase(&cfg.Server.KeyFile, "server.key")
 	rebase(&cfg.Server.SSHHostKey, "ssh_host_key")
