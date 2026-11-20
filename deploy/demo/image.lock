@@ -6,15 +6,14 @@
 # diff_id   - the uncompressed layer digests, in order
 #
 # verify-image.sh compares the running container against this file, so the pin
-# stays checkable on a host that cannot reach the registry (the mirror that
-# normally serves the demo has been answering 502, which is why the image is
-# loaded from GHCR by hand and runs under a local tag).
+# stays checkable on a host that cannot reach the registry (the mirror serves
+# the manifest, and the host pulls it by digest through the mirror).
 #
 # The build is the one with the patched Go standard library: go1.26.11 carries
 # the fix for GO-2026-6859 (net/http, CVE-2026-97054).
-digest sha256:06494d39938734a2813308c749fc621174cd1fde299d41febb47d5a54bc454e9
-platform sha256:4a4ee19cf66b4650fd85a46ddb36a314380ad8951b2da647e7beb56cc35705bd
-config sha256:7d7cbd3fe3e2a6d82972f8528a0940013e57d3ac10b64f8a8bbd205e9fc5c02e
+digest sha256:ce4092132dcb0497e3b22fbae5df738cd595f55efbef8d8bce590d47fdd1b426
+platform sha256:94420c2944dca21ce8e476d8d03da8dba60fd614ff298f3a28e351b539dc3418
+config sha256:5944f7a0167fa6112523ff9bb1c15a9f241575732de9f359888427946c4f9ad7
 diff_id sha256:7223ea1323e8c1159ec17f07d35acc27bdd1cc2bc3ed425b44ef21dac9915db0
 diff_id sha256:8fa10c0194df9b7c054c90dbe482585f768a54428fc90a5b78a0066a123b1bba
 diff_id sha256:35b5ba6e08cdd034b8d1920f9c7203e5d66f258e1915f164a01de0af14f34710
@@ -27,7 +26,7 @@ diff_id sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b
 diff_id sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a
 diff_id sha256:6e7fbcf090d09b73a4aa85f9dce690d0ace73877c150b7c56955487b6e7a822a
 diff_id sha256:5904c32f457c96a16c8c68f5ccdf518c8138cd9e5971de9ce6d564fc481af222
-diff_id sha256:49e41794a87613029b0ba087ba51c0c00ae55e16bf355ee0e93d43e4cbb74f37
-diff_id sha256:1398d25ecc26df2a4016d368e070a745227a65451e271c45c49a90e5e9bb3f8d
-diff_id sha256:1e44bafda9f578937122c1bb7d80e1859b6ce44d2fffb16fe2b7b95e247c5344
+diff_id sha256:cd33debc8b47c79f25387dca2aa393df5ca6d8cca559d2cc1ffd4963b8b02b46
+diff_id sha256:f62907a2fe7228a76e7a830290aa0b8c2a7a74237a2d64aa40036d730cd565e2
+diff_id sha256:2364f086f111f828628c34fda232ffb9ca93a07562120fcfa9864f1931a9a717
 diff_id sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef
