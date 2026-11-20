@@ -181,6 +181,8 @@ export const zhGenerate: Record<string, string> = {
   "generate.panel.obfuscate_hint": "符号重命名与字符串加密",
   "generate.panel.ps1_obfuscation": "单行命令混淆档位",
   "generate.panel.ps1_runtime": "PowerShell 运行时（单行启动器）",
+  "generate.oneliner_obfuscation": "单行命令混淆档位",
+  "generate.oneliner_runtime": "PowerShell 运行时（启动器）",
   "generate.panel.slim": "轻量构建",
   "generate.panel.slim_aria": "轻量 http-only 构建",
   "generate.panel.slim_hint": "裁掉 grpc/quic/wss 传输，体积约小 30%",

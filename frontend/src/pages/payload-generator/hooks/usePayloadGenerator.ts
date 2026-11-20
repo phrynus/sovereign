@@ -628,7 +628,8 @@ export function usePayloadGenerator() {
     formData.set("beacon_time", forms.oneliner.beacon_time);
     formData.set("jitter", forms.oneliner.jitter);
     formData.set("skip_tls_verify", forms.oneliner.skip_tls ? "true" : "");
-    formData.set("persist", forms.oneliner.persist ? "true" : "");
+    formData.set("obfuscation", forms.oneliner.obfuscation);
+    formData.set("powershell_exe", forms.oneliner.powershell_exe);
     const s = getSharedSettings();
     formData.set("profile", s.profile); formData.set("interval", s.interval);
     formData.set("user_agent", s.user_agent); formData.set("proxy", s.proxy);

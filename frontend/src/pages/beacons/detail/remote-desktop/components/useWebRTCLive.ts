@@ -520,7 +520,7 @@ export function useWebRTCLive(agentId: string) {
     setAudioOn(enabled);
     if (enabled) setAudioMuted(false);
     sendSignal({ type: "audio", enabled, mode: audioMode, device: audioDevice, quality: audioQuality });
-  }, [sendSignal, audioMode, audioDevice]);
+  }, [sendSignal, audioMode, audioDevice, audioQuality]);
 
   // A source change while audio is running restarts only the capture process;
   // the negotiated Opus track stays as it is.
@@ -969,7 +969,7 @@ export function useWebRTCLive(agentId: string) {
         }
       };
     },
-    [agentId, audioMode, audioDevice, clearAnswerTimer, fail, noteInputError, sendSignal, stop, t],
+    [agentId, audioMode, audioDevice, audioQuality, webcamDevice, clearAnswerTimer, fail, noteInputError, sendSignal, stop, t],
   );
 
   const markPlaying = useCallback(() => {

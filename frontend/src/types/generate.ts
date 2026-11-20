@@ -172,6 +172,10 @@ export interface OneLinerForm {
   listener_id: string;
   c2_url: string;
   protocol: string;
+  /** PS1 one-liner obfuscation preset: legacy, light, standard, heavy. */
+  obfuscation: string;
+  /** PS1 one-liner launcher: auto, powershell (5.1) or pwsh (7+). */
+  powershell_exe: string;
 }
 
 export type BinaryVariant = "exe" | "dll";
@@ -265,7 +269,7 @@ export const DEFAULT_PS1_FORM: PS1Form = { filename: "", persist: false, skip_tl
 export const DEFAULT_STAGER_FORM: StagerForm = { filename: "", skip_tls: false };
 export const DEFAULT_SHELLCODE_FORM: ShellcodeForm = { command: "powershell -NoP -EP Bypass -Enc ...", filename: "shellcode.bin" };
 export const DEFAULT_DONUT_FORM: DonutForm = { arch: "amd64", class: "", method: "", args: "", filename: "donut_loader.bin", assembly: null };
-export const DEFAULT_ONELINER_FORM: OneLinerForm = { payload_type: "exe", beacon_time: "5", jitter: "10", skip_tls: false, persist: false, listener_id: "", c2_url: "", protocol: "http" };
+export const DEFAULT_ONELINER_FORM: OneLinerForm = { payload_type: "exe", beacon_time: "5", jitter: "10", skip_tls: false, persist: false, listener_id: "", c2_url: "", protocol: "http", obfuscation: "legacy", powershell_exe: "auto" };
 
 export function createDefaultForms(): PayloadForms {
   return {

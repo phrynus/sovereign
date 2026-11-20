@@ -95,6 +95,33 @@ export default function OneLinerPanel({
           <Input aria-label={t("generate.oneliner_jitter_aria")} name="input-3" type="number" value={form.jitter} onChange={(e) => setForm({ ...form, jitter: e.target.value })} />
         </div>
       </div>
+      {form.payload_type === "ps1" && (
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <FieldLabel>{t("generate.oneliner_obfuscation")}</FieldLabel>
+            <Select value={form.obfuscation || "legacy"} onValueChange={(val) => val != null && setForm({ ...form, obfuscation: val })}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="legacy">Legacy (Base64)</SelectItem>
+                <SelectItem value="light">Light (-enc)</SelectItem>
+                <SelectItem value="standard">Standard (XOR)</SelectItem>
+                <SelectItem value="heavy">Heavy (full)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <FieldLabel>{t("generate.oneliner_runtime")}</FieldLabel>
+            <Select value={form.powershell_exe || "auto"} onValueChange={(val) => val != null && setForm({ ...form, powershell_exe: val })}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="powershell">PowerShell 5.1 (powershell)</SelectItem>
+                <SelectItem value="pwsh">PowerShell 7+ (pwsh)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-x-4">
         <div className="flex items-center gap-x-2">
           <Checkbox aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(v) => setForm({ ...form, skip_tls: v === true })} id="skip-tls-oneliner" />
