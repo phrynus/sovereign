@@ -85,11 +85,11 @@ func TestWasmSandboxRejectsEveryHostImport(t *testing.T) {
 func TestWasmSandboxOnlyExposesLog(t *testing.T) {
 	dir, m := writeWasmPlugin(t, buildImportedFuncModule(t, "forgec2", "log"))
 	if _, err := (&executor{}).run(context.Background(), dir, m, map[string]interface{}{}, 0); err != nil {
-		t.Fatalf("a module importing sovereign.log was refused: %v", err)
+		t.Fatalf("a module importing forgec2.log was refused: %v", err)
 	}
 }
 
-// buildLogImportModule imports sovereign.log with the signature the runner declares,
+// buildLogImportModule imports forgec2.log with the signature the runner declares,
 // (i32,i32)->(), so the positive case exercises the sandbox allowing what it should.
 func buildLogImportModule() []byte {
 	mod := []byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00}

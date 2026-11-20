@@ -1,4 +1,4 @@
-# ⚒️ Sovereign
+# 👑 Sovereign
 
 **一个二进制装下的自托管命令与控制平台。** <!--fact:tasks-->227<!--/fact--> 个植入体任务、9 种传输、浏览器内的载荷工厂与 AI 副驾——发布产物签名可验证，热更新失败自动回滚。
 
@@ -191,4 +191,4 @@ Sovereign 仅用于**授权安全测试**。对任何系统使用前，必须持
 
 ---
 
-*Forge your access. Control your narrative.（铸访问，控叙事。）*
+*Own your access. Control your narrative.（主掌访问，掌控叙事。）*

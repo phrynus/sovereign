@@ -3865,7 +3865,7 @@ int main(void) {
                     return 1;
                 }
             }
-            if (cng_hkdf_sha256(shared, 32, (const BYTE *)"sovereign-session-v2", 18,
+            if (cng_hkdf_sha256(shared, 32, (const BYTE *)"sovereign-session-v2", 20,
                                 (const BYTE *)g_uuid, (DWORD)strlen(g_uuid), sesskey) != 0) {
                 fprintf(stderr, "[cbeacon] session derive failed\n");
                 free(resp);

@@ -1,4 +1,4 @@
-# ⚒️ Sovereign
+# 👑 Sovereign
 
 **Self-hosted, open-source command and control (C2) that ships as a single binary.** <!--fact:tasks-->227<!--/fact--> implant tasks, 9 transports, an in-browser payload factory and an AI copilot — with signed releases and hot updates that roll back on failure. Built for authorized red team operations and adversary simulation.
 
@@ -207,4 +207,4 @@ written permission from the owner before using it against any system. See
 
 ---
 
-*Forge your access. Control your narrative.*
+*Own your access. Control your narrative.*

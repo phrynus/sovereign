@@ -133,7 +133,7 @@ exports:
                     "no result". The reply is the same JSON object a native
                     plugin would print on stdout.
 imports (optional):
-  sovereign.log(ptr, len)   one diagnostic line, capped by the host
+  forgec2.log(ptr, len)   one diagnostic line, capped by the host
 ```
 
 `run` **must** have exactly that signature: returning a two-field struct makes
@@ -178,7 +178,7 @@ message carries the detail.
 | `wasm.invalid_module`, `wasm.too_large` | the module does not compile, or exceeds the 16 MiB cap |
 | `wasm.missing_run`, `wasm.bad_abi` | `run` is missing or has the wrong signature (must be `(i32,i32) -> (i64)`) |
 | `wasm.missing_memory`, `wasm.memory_too_large` | `memory` is missing, or its minimum exceeds the 256-page cap |
-| `wasm.unexpected_import`, `wasm.bad_log_abi` | the module imports something other than `sovereign.log(ptr,len)`, e.g. WASI |
+| `wasm.unexpected_import`, `wasm.bad_log_abi` | the module imports something other than `forgec2.log(ptr,len)`, e.g. WASI |
 | `run.skipped`, `run.completed`, `run.failed` | the execution phase: not requested, exited 0, or failed (timeout, quota, non-zero exit) |
 | `run.bad_input` | `-input` is not a JSON object |
 | `result.ok`, `result.unsuccessful` | stdout parsed; `unsuccessful` means the plugin itself reported `success: false` |

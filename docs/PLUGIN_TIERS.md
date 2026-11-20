@@ -36,10 +36,10 @@ The pair is packed rather than returned as two values on purpose: a
 clang lowers a two-field struct return to an indirect (sret) parameter — so the
 multi-value form would have excluded exactly the languages this tier targets.
 
-Optional import (module `sovereign`):
+Optional import (module `forgec2`):
 
 ```wat
-(func $log (import "sovereign" "log") (param i32 i32))
+(func $log (import "forgec2" "log") (param i32 i32))
 ```
 
 Diagnostics are capped at 256 KiB per run and surface as plugin stderr.
