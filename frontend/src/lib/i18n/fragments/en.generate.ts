@@ -179,6 +179,8 @@ export const enGenerate: Record<string, string> = {
   "generate.panel.mode": "Mode",
   "generate.panel.obfuscate": "Obfuscate",
   "generate.panel.obfuscate_aria": "Obfuscate output",
+  "generate.panel.ps1_obfuscation": "One-liner obfuscation",
+  "generate.panel.ps1_runtime": "PowerShell runtime (one-liner launcher)",
   "generate.panel.obfuscate_hint": "Rename symbols, encrypt strings",
   "generate.panel.slim": "Light build",
   "generate.panel.slim_aria": "Light http-only build",

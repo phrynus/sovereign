@@ -309,6 +309,17 @@ standard、heavy(XOR) 档位下也不出现在命令行里。
 `-enc` 形态、pwsh 变体前缀、`LauncherExe` 与 `powershell_exe` 白名单；探针脚本与本地服务
 均为一次性验证，未留在仓库里。
 
+控制台补齐了这两个后端选项：PS1 面板新增"单行命令混淆档位"（legacy/light/standard/heavy）与
+"PowerShell 运行时"（auto / powershell 5.1 / pwsh 7+）两个下拉框，选择随 `/generate/ps1`
+提交；此前这两个能力只能通过 API 使用，操作员在生成页看不到也选不了。
+
+|验证|结果|
+|---|---|
+|`npx tsc --noEmit` / `eslint`|0 error（2 条既有 warning）|
+|`BuildPanels.test.tsx`（含新增 PS1 面板用例）|6/6|
+|前端语句覆盖率|40.29%（10454/25949），高于 39.5% 下限|
+|bundle|公开 662 kB / 登录态 711 kB，均低于 675/720 kB 上限|
+|webdist|LF 归一化后字节一致（438 文件）|
 
 ## 方法说明
 

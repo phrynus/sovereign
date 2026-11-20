@@ -539,7 +539,7 @@ export function usePayloadGenerator() {
 
   const handleGeneratePS1 = useCallback(async () => {
     setStates((s) => ({ ...s, ps1: { busy: true, result: "" } }));
-    const extra: Record<string, string> = { persist: forms.ps1.persist ? "true" : "", skip_tls_verify: forms.ps1.skip_tls ? "true" : "", filename: forms.ps1.filename };
+    const extra: Record<string, string> = { persist: forms.ps1.persist ? "true" : "", skip_tls_verify: forms.ps1.skip_tls ? "true" : "", filename: forms.ps1.filename, obfuscation: forms.ps1.obfuscation, powershell_exe: forms.ps1.powershell_exe };
     const result = await handleGenerate("/ps1", "", { isJson: true, extra });
     if (result?.error) {
       setStates((s) => ({ ...s, ps1: { busy: false, result: result.error! } }));

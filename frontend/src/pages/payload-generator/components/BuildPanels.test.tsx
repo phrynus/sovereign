@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { DEFAULT_BINARY_FORM } from "@/types/generate";
-import { BinaryPanel } from "./BuildPanels";
+import { DEFAULT_BINARY_FORM, DEFAULT_PS1_FORM } from "@/types/generate";
+import { BinaryPanel, PS1Panel } from "./BuildPanels";
 
 // jsdom has no PointerEvent; the checkbox primitive constructs one while
 // handling clicks. Aliasing it to MouseEvent keeps fireEvent.click working
@@ -116,5 +116,25 @@ describe("BinaryPanel agent modules", () => {
     expect(transports.getAttribute("aria-disabled")).toBe("true");
     expect(transports.getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("generate.modules.slim_locked")).toBeTruthy();
+  });
+});
+
+describe("PS1Panel delivery controls", () => {
+  it("exposes obfuscation preset and PowerShell runtime selectors", () => {
+    render(
+      <TooltipProvider delay={0}>
+        <PS1Panel
+          form={DEFAULT_PS1_FORM}
+          setForm={() => {}}
+          busy={false}
+          result={null}
+          onGenerate={() => {}}
+        />
+      </TooltipProvider>,
+    );
+    expect(screen.getByText("generate.panel.ps1_obfuscation")).toBeTruthy();
+    expect(screen.getByText("generate.panel.ps1_runtime")).toBeTruthy();
+    expect(DEFAULT_PS1_FORM.obfuscation).toBe("legacy");
+    expect(DEFAULT_PS1_FORM.powershell_exe).toBe("auto");
   });
 });

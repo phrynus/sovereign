@@ -129,6 +129,10 @@ export interface PS1Form {
   filename: string;
   persist: boolean;
   skip_tls: boolean;
+  /** Server obfuscation preset: "", light, standard, heavy. */
+  obfuscation: string;
+  /** Launcher executable: auto, powershell (5.1) or pwsh (7+). */
+  powershell_exe: string;
 }
 
 export interface StagerForm {
@@ -257,7 +261,7 @@ export const DEFAULT_UNIX_FORM: UnixForm = {
   modules: [],
 };
 
-export const DEFAULT_PS1_FORM: PS1Form = { filename: "", persist: false, skip_tls: false };
+export const DEFAULT_PS1_FORM: PS1Form = { filename: "", persist: false, skip_tls: false, obfuscation: "legacy", powershell_exe: "auto" };
 export const DEFAULT_STAGER_FORM: StagerForm = { filename: "", skip_tls: false };
 export const DEFAULT_SHELLCODE_FORM: ShellcodeForm = { command: "powershell -NoP -EP Bypass -Enc ...", filename: "shellcode.bin" };
 export const DEFAULT_DONUT_FORM: DonutForm = { arch: "amd64", class: "", method: "", args: "", filename: "donut_loader.bin", assembly: null };
