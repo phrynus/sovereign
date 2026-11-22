@@ -17,6 +17,12 @@ import (
 // per-agent file chain keys can be derived.
 func testServerForChain(t *testing.T) *Server {
 	t.Helper()
+	// The relayed-chunk path stores output through the vault. Initialise it
+	// here instead of relying on an earlier test in the package: running
+	// `-run TestRelayedFileChunkChain` alone failed with "loot encryption not
+	// initialized", and a race shard that places this test first would hit the
+	// same state.
+	crypto.InitLootEncryption(testStorageKeyHex)
 	cfg := config.DefaultConfig()
 	cfg.Server.BeaconKey = strings.Repeat("ab", 32) // 64 hex chars = 32 bytes
 	return &Server{
