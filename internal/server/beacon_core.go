@@ -168,6 +168,59 @@ func beaconFingerprint(req beaconRequest) string {
 	return req.UUID + ":" + hex.EncodeToString(h.Sum(nil))
 }
 
+// dedupStamp is one insertion in a dedup cache's FIFO. The timestamp lets
+// eviction skip a queue entry whose key was re-inserted after it was queued.
+type dedupStamp struct {
+	key string
+	at  time.Time
+}
+
+// evictDedupOldest trims cache to limit by dropping the oldest inserted keys.
+// The insertion FIFO makes a steady-state fleet at the cap pay O(1) amortized
+// per beacon; the previous implementation scanned the whole map on every
+// beacon once the fleet exceeded MaxBeaconDedupEntries (measured at ~170 µs per
+// beacon at the 10k cap — see docs/CAPACITY.md).
+//
+// The queue may reference keys already gone (bulk-deleted below, or re-inserted
+// after queuing); a timestamp mismatch is skipped, not treated as an error. If
+// the queue is exhausted while the map is still over the limit — entries were
+// inserted outside this helper — the map is trimmed directly so memory stays
+// bounded.
+func evictDedupOldest(cache map[string]time.Time, order *[]dedupStamp, head *int, limit int) {
+	for len(cache) > limit && *head < len(*order) {
+		e := (*order)[*head]
+		*head++
+		if t, ok := cache[e.key]; ok && t.Equal(e.at) {
+			delete(cache, e.key)
+		}
+	}
+	if len(cache) > limit {
+		// The queue is exhausted while the map is still over the limit: the
+		// entries did not come through isDuplicateBeacon (a fixture, a restored
+		// snapshot). Keep the oldest-first guarantee with the one-time scan
+		// this path used to take; production inserts always have a queue entry,
+		// so the steady state never reaches this branch.
+		for len(cache) > limit {
+			oldestK := ""
+			var oldestT time.Time
+			first := true
+			for k, t := range cache {
+				if first || t.Before(oldestT) {
+					oldestK, oldestT, first = k, t, false
+				}
+			}
+			if first {
+				break
+			}
+			delete(cache, oldestK)
+		}
+	}
+	if *head > 0 && (*head >= len(*order) || *head*2 >= len(*order)) {
+		*order = append((*order)[:0], (*order)[*head:]...)
+		*head = 0
+	}
+}
+
 // isDuplicateBeacon checks if this beacon was recently processed.
 func (s *Server) isDuplicateBeacon(req beaconRequest) bool {
 	if s.beaconDedupCache == nil {
@@ -179,42 +232,17 @@ func (s *Server) isDuplicateBeacon(req beaconRequest) bool {
 	}
 	s.beaconDedupMu.Lock()
 	defer s.beaconDedupMu.Unlock()
-	// Bounded cache: sweep expired entries at most once per window so a
-	// flood of fresh keys cannot trigger an O(n) scan on every beacon.
-	// If still over cap after the sweep (all-fresh flood), evict
-	// oldest-first to hard-bound memory. Per-beacon overshoot is tiny (one
-	// beacon inserts one key), so the scan stays O(cap).
-	if len(s.beaconDedupCache) > MaxBeaconDedupEntries {
-		now := time.Now()
-		if now.Sub(s.beaconDedupSweep) >= BeaconDedupWindow {
-			s.beaconDedupSweep = now
-			for k, t := range s.beaconDedupCache {
-				if now.Sub(t) > BeaconDedupWindow {
-					delete(s.beaconDedupCache, k)
-				}
-			}
-		}
-		for len(s.beaconDedupCache) > MaxBeaconDedupEntries {
-			oldestK := ""
-			var oldestT time.Time
-			first := true
-			for k, t := range s.beaconDedupCache {
-				if first || t.Before(oldestT) {
-					oldestK, oldestT, first = k, t, false
-				}
-			}
-			if first {
-				break
-			}
-			delete(s.beaconDedupCache, oldestK)
-		}
-	}
 	if t, ok := s.beaconDedupCache[fp]; ok {
 		if time.Since(t) < BeaconDedupWindow {
 			return true
 		}
 	}
-	s.beaconDedupCache[fp] = time.Now()
+	now := time.Now()
+	if len(s.beaconDedupCache) >= MaxBeaconDedupEntries {
+		evictDedupOldest(s.beaconDedupCache, &s.beaconDedupOrder, &s.beaconDedupHead, MaxBeaconDedupEntries-1) // one slot for the key below
+	}
+	s.beaconDedupCache[fp] = now
+	s.beaconDedupOrder = append(s.beaconDedupOrder, dedupStamp{key: fp, at: now})
 	return false
 }
 
@@ -234,32 +262,12 @@ func (s *Server) isDuplicateResult(agentID string, r taskResult) bool {
 	if t, ok := s.resultDedupeCache[key]; ok && time.Since(t) < BeaconDedupWindow {
 		return true
 	}
-	if len(s.resultDedupeCache) > MaxBeaconDedupEntries {
-		now := time.Now()
-		if now.Sub(s.resultDedupeSweep) >= BeaconDedupWindow {
-			s.resultDedupeSweep = now
-			for k, t := range s.resultDedupeCache {
-				if now.Sub(t) > BeaconDedupWindow {
-					delete(s.resultDedupeCache, k)
-				}
-			}
-		}
-		for len(s.resultDedupeCache) > MaxBeaconDedupEntries {
-			oldestK := ""
-			var oldestT time.Time
-			first := true
-			for k, t := range s.resultDedupeCache {
-				if first || t.Before(oldestT) {
-					oldestK, oldestT, first = k, t, false
-				}
-			}
-			if first {
-				break
-			}
-			delete(s.resultDedupeCache, oldestK)
-		}
+	now := time.Now()
+	if len(s.resultDedupeCache) >= MaxBeaconDedupEntries {
+		evictDedupOldest(s.resultDedupeCache, &s.resultDedupeOrder, &s.resultDedupeHead, MaxBeaconDedupEntries-1) // one slot for the key below
 	}
-	s.resultDedupeCache[key] = time.Now()
+	s.resultDedupeCache[key] = now
+	s.resultDedupeOrder = append(s.resultDedupeOrder, dedupStamp{key: key, at: now})
 	return false
 }
 

@@ -436,6 +436,11 @@ make Windows Security Center pop up. CI runs those jobs on Linux runners; treat 
 gate. Non-binary checks (`npm run check`, `npm test`, targeted server tests via
 `go test ./internal/server/ -run …`) are safe locally.
 
+The **full** `go test ./internal/server/` is not in that safe set: it re-executes the test
+binary through the update/restart helpers and has produced the same Security Center popup.
+Run a targeted `-run` locally (the dedup and dispatch tests below are DB-only) and let CI's
+Linux runner execute the whole package.
+
 ### A targeted `-run` is not a suite
 
 `go test -run 'TestTheThingIChanged'` answers one question: *"did I break what I was thinking about"*. It does **not** answer

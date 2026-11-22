@@ -136,7 +136,6 @@ func TestIsDuplicateBeaconCacheIsBounded(t *testing.T) {
 	for i := 0; i < MaxBeaconDedupEntries+5; i++ {
 		s.beaconDedupCache["k"+itoa(i)] = old
 	}
-	s.beaconDedupSweep = time.Now() // no sweep due
 	s.beaconDedupMu.Unlock()
 
 	s.isDuplicateBeacon(beaconRequest{UUID: "fresh", Seq: 1})

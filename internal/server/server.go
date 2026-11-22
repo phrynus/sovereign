@@ -290,10 +290,14 @@ type Server struct {
 	loginGeoOnce sync.Once
 	loginGeoCh   chan string
 
-	// Beacon deduplication: track recently processed beacon fingerprints
+	// Beacon deduplication: track recently processed beacon fingerprints.
+	// beaconDedupOrder is the insertion FIFO that bounds the map without an
+	// O(cache) scan per beacon once the fleet exceeds the cap (see
+	// evictDedupOldest).
 	beaconDedupMu    sync.Mutex
 	beaconDedupCache map[string]time.Time
-	beaconDedupSweep time.Time
+	beaconDedupOrder []dedupStamp
+	beaconDedupHead  int
 
 	// Protocol negotiation notices: agentID → when the agent was last told
 	// about its protocol version. Keeps a beaconing agent from writing the
@@ -312,10 +316,12 @@ type Server struct {
 
 	// Task result idempotency: agentID + result id → processed timestamp.
 	// Results re-sent after a dropped frame carry a new envelope seq, so
-	// dedupe on the agent-supplied result id instead.
+	// dedupe on the agent-supplied result id instead. The insertion FIFO
+	// bounds the map the same way the beacon cache does.
 	resultDedupeMu    sync.Mutex
 	resultDedupeCache map[string]time.Time
-	resultDedupeSweep time.Time
+	resultDedupeOrder []dedupStamp
+	resultDedupeHead  int
 
 	// Phishing landing page rate limiting keyed by token+IP
 	landingLimiterMu    sync.Mutex

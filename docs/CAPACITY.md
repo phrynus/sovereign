@@ -72,6 +72,52 @@ rotated beacon key can never serve a key unsealed under the previous master.
 Re-measure before trusting these ratios on different storage; the DB read is an
 in-memory SQLite lookup here.
 
+### Dedup eviction is FIFO, not a full-map scan (2026-11-22)
+
+The beacon and result dedup caches are capped at `MaxBeaconDedupEntries`
+(10 000) for a `BeaconDedupWindow` of 5 s. A fleet above 2 000 beacons/s
+produces more distinct frames than the cap in every window, so **every**
+check-in has to evict. The old implementation found the oldest entry by
+scanning the whole map; the new one keeps an insertion FIFO and pops from the
+head, with the queue's stale entries skipped when a key was re-inserted.
+
+```bash
+go test ./internal/server/ -run '^$' -bench 'Benchmark(Beacon|Result)DedupAtCapacity' -benchtime=2s -benchmem
+```
+
+| Benchmark (cache at cap, filled through the public path) | before | after |
+|---|---|---|
+| `isDuplicateBeacon` | 170 363 ns/op | 266–369 ns/op (2 allocs) |
+| `isDuplicateResult` | 214 278 ns/op | 288–329 ns/op (2 allocs) |
+
+The queue is bounded by the same cap (compacted as the head advances), and an
+insert trims to `cap-1` first so the frame being processed is never the
+eviction victim. When the queue is exhausted but the map is still over the
+limit — entries inserted outside the API, e.g. a fixture or a restored
+snapshot — eviction falls back to the old oldest-first scan for that one call,
+which is what keeps `TestDedupEvictsOldestFirst`'s contract intact.
+`TestBeaconDedupEvictsOldestFirst`, `TestEvictDedupOldestSkipsReinsertedKey`,
+`TestEvictDedupOldestFallsBackWhenQueueEmpty` and
+`TestResultDedupEvictsOldestFirst` pin those properties.
+
+### Relay-parent dispatch reads ids, not rows (2026-11-22)
+
+`fetchRelayedChildTasks` ran on every beacon of every agent and loaded full
+`db.Implant` rows (100+ columns) only to collect child ids. It now `Pluck`s the
+ids, and its two child-task queries select the same dispatch columns as
+`fetchPendingTasks` (result/error blobs never reach the wire and their
+`AfterFind` decrypt is wasted). `BenchmarkBeaconCheckin` (idle check-in, which
+still pays for the child lookup):
+
+| | before | after |
+|---|---|---|
+| B/op | 165.9 KB | 145.6 KB |
+| allocs/op | 1 267 | 1 219 |
+
+Two runs each: 648/773 µs → 570/745 µs. The latency difference is inside this
+machine's run-to-run spread, so the deterministic claim is the allocation
+reduction (~12%), not the wall-clock number.
+
 ## 3. Deriving fleet capacity
 
 A fleet of *N* implants on a *T*-second base interval produces `N/T` check-ins

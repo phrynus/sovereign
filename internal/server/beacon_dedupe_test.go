@@ -59,7 +59,6 @@ func TestIsDuplicateResultCacheIsBounded(t *testing.T) {
 	for i := 0; i < MaxBeaconDedupEntries+10; i++ {
 		s.resultDedupeCache["agent-x/rid-"+jsonNumber(uint(i))] = old
 	}
-	s.resultDedupeSweep = time.Now() // a sweep is not due
 	s.resultDedupeMu.Unlock()
 
 	s.isDuplicateResult("agent-x", taskResult{ResultID: "fresh"})

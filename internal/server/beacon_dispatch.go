@@ -189,17 +189,15 @@ func encryptTaskPayload(s *Server, agentID string, wire *task) {
 }
 
 func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
-	var children []db.Implant
-	if err := s.db.Where("parent_id = ?", parentUUID).Limit(500).Find(&children).Error; err != nil {
+	// Only the child ids are needed here. Pluck keeps GORM from materialising
+	// full implant rows (100+ columns each) on every beacon of a relay parent;
+	// with zero children this is one narrow query instead of a wide scan.
+	var childIDs []string
+	if err := s.db.Model(&db.Implant{}).Where("parent_id = ?", parentUUID).Limit(500).Pluck("id", &childIDs).Error; err != nil {
 		slog.Error("Failed to fetch child agents", "parent", parentUUID, "error", err)
 	}
-	if len(children) == 0 {
+	if len(childIDs) == 0 {
 		return nil
-	}
-
-	childIDs := make([]string, 0, len(children))
-	for _, c := range children {
-		childIDs = append(childIDs, c.ID)
 	}
 
 	var claimedTasks []db.Task
@@ -207,6 +205,10 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 		return s.db.Transaction(func(tx *gorm.DB) error {
 			var pending []db.Task
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				// Dispatch columns only, same as fetchPendingTasks: result/error
+				// blobs never reach the wire and their AfterFind decrypt is pure
+				// waste per claimed child task. agent_id is needed for grouping.
+				Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").
 				Where("agent_id IN ? AND status = ?", childIDs, "pending").
 				Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
 				Order("priority DESC, created_at ASC").
@@ -245,7 +247,8 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 					q = q.Where("id NOT IN ?", claimedIDs)
 				}
 				var unacked []db.Task
-				if err := q.Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
+				if err := q.Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").
+					Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
 					return err
 				}
 				claimedTasks = append(claimedTasks, unacked...)
@@ -265,12 +268,12 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 	}
 
 	var relayed []relayedTask
-	for _, child := range children {
-		tasks := tasksByAgent[strings.ToLower(child.ID)]
+	for _, childID := range childIDs {
+		tasks := tasksByAgent[strings.ToLower(childID)]
 		if len(tasks) == 0 {
 			continue
 		}
-		rt := relayedTask{AgentID: child.ID}
+		rt := relayedTask{AgentID: childID}
 		for _, t := range tasks {
 			wire := task{
 				ID:      t.ID,
@@ -287,8 +290,8 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 			}
 			// Child tasks travel inside the parent's response, so their
 			// sensitive fields are encrypted with the CHILD's session key.
-			if s.sessionManager != nil && s.sessionManager.HasSession(child.ID) {
-				encryptTaskPayload(s, child.ID, &wire)
+			if s.sessionManager != nil && s.sessionManager.HasSession(childID) {
+				encryptTaskPayload(s, childID, &wire)
 			}
 			rt.Tasks = append(rt.Tasks, wire)
 		}
