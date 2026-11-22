@@ -181,11 +181,12 @@ type dedupStamp struct {
 // beacon once the fleet exceeded MaxBeaconDedupEntries (measured at ~170 µs per
 // beacon at the 10k cap — see docs/CAPACITY.md).
 //
-// The queue may reference keys already gone (bulk-deleted below, or re-inserted
-// after queuing); a timestamp mismatch is skipped, not treated as an error. If
-// the queue is exhausted while the map is still over the limit — entries were
-// inserted outside this helper — the map is trimmed directly so memory stays
-// bounded.
+// The queue may reference keys already gone (removed by the fallback scan
+// below, or re-inserted after queuing); a timestamp mismatch is skipped, not
+// treated as an error. If the queue is exhausted while the map is still over
+// the limit — entries were inserted outside this helper — the oldest entry is
+// found by scanning so memory stays bounded and the oldest-first guarantee
+// holds.
 func evictDedupOldest(cache map[string]time.Time, order *[]dedupStamp, head *int, limit int) {
 	for len(cache) > limit && *head < len(*order) {
 		e := (*order)[*head]
