@@ -13,6 +13,15 @@ import (
 
 // ── Task fetch / wire encryption / SOCKS ──────────────────────────────────
 
+// beaconDispatchPrealloc is the initial capacity for the slices the beacon
+// claim queries scan into. GORM allocates a 20-element slice when the
+// destination has zero capacity, and db.Task is wide enough that this showed
+// up as ~28 KB per query on the idle hot path; giving the slice a small
+// capacity makes GORM reuse it ("if the slice cap is externally initialized,
+// the externally initialized slice is directly used") and grow only when rows
+// actually exist. Four covers the common 0–2 pending tasks per beacon.
+const beaconDispatchPrealloc = 4
+
 func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 	var claimedTasks []db.Task
 	limit := BeaconTaskFetchLimit
@@ -29,7 +38,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 	// a bare failure stalls delivery until the next check-in.
 	if err := s.withBusyRetry("claim", func() error {
 		return s.db.Transaction(func(tx *gorm.DB) error {
-			var pending []db.Task
+			pending := make([]db.Task, 0, beaconDispatchPrealloc)
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 				// Dispatch columns only. Result/Error blobs (up to MaxResultSize
 				// each) are never sent on the wire, so loading them here wastes
@@ -84,7 +93,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 				if len(claimedIDs) > 0 {
 					q = q.Where("id NOT IN ?", claimedIDs)
 				}
-				var unacked []db.Task
+				unacked := make([]db.Task, 0, beaconDispatchPrealloc)
 				if err := q.Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
 					return err
 				}
@@ -203,7 +212,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 	var claimedTasks []db.Task
 	if err := s.withBusyRetry("claim", func() error {
 		return s.db.Transaction(func(tx *gorm.DB) error {
-			var pending []db.Task
+			pending := make([]db.Task, 0, beaconDispatchPrealloc)
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 				// Dispatch columns only, same as fetchPendingTasks: result/error
 				// blobs never reach the wire and their AfterFind decrypt is pure
@@ -246,7 +255,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 				if len(claimedIDs) > 0 {
 					q = q.Where("id NOT IN ?", claimedIDs)
 				}
-				var unacked []db.Task
+				unacked := make([]db.Task, 0, beaconDispatchPrealloc)
 				if err := q.Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").
 					Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
 					return err

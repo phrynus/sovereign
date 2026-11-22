@@ -106,17 +106,26 @@ which is what keeps `TestDedupEvictsOldestFirst`'s contract intact.
 `db.Implant` rows (100+ columns) only to collect child ids. It now `Pluck`s the
 ids, and its two child-task queries select the same dispatch columns as
 `fetchPendingTasks` (result/error blobs never reach the wire and their
-`AfterFind` decrypt is wasted). `BenchmarkBeaconCheckin` (idle check-in, which
-still pays for the child lookup):
+`AfterFind` decrypt is wasted).
+
+The same round pre-sizes the slices the four hot claim queries scan into
+(`make([]db.Task, 0, 4)`). GORM allocates a 20-element slice whenever the
+destination has zero capacity, and `db.Task` is wide enough that the empty
+claim query alone cost ~28 KB — measured, not assumed.
+
+`BenchmarkBeaconCheckin` (idle check-in, which still pays for the child lookup
+and both claim queries):
 
 | | before | after |
 |---|---|---|
-| B/op | 165.9 KB | 145.6 KB |
-| allocs/op | 1 267 | 1 219 |
+| B/op | 165.9 KB | 101.5 KB |
+| allocs/op | 1 267 | 1 216 |
 
-Two runs each: 648/773 µs → 570/745 µs. The latency difference is inside this
+Two runs each: 648/773 µs → 559/663 µs. The latency difference is inside this
 machine's run-to-run spread, so the deterministic claim is the allocation
-reduction (~12%), not the wall-clock number.
+reduction (~39%), not the wall-clock number. `TestFetchPendingTasksRespectsCapacity`
+covers the case where more rows arrive than the pre-sized capacity, and the
+never-cross-claims/dedupe/recarry tests keep the claim semantics pinned.
 
 ## 3. Deriving fleet capacity
 
