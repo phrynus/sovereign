@@ -48,13 +48,13 @@ func TestListenerDetailActiveCount(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("detail = %d %s", w.Code, w.Body.String())
 	}
-	// The endpoint serves the page payload shape (PascalCase keys, documented
-	// as a renderPageOrJSON exception in envelope_baseline.txt).
+	// The endpoint serves the page payload shape (snake_case keys after
+	// renderPageOrJSON normalises the handler's PascalCase map).
 	var out struct {
-		ActiveAgents int `json:"ActiveAgents"`
+		ActiveAgents int `json:"active_agents"`
 		Agents       []struct {
 			ID string `json:"id"`
-		} `json:"Agents"`
+		} `json:"agents"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode detail: %v", err)

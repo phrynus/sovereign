@@ -71,6 +71,7 @@ func BenchmarkTaskList(b *testing.B) {
 	seedListFixtures(b, s, 40, 100) // 4000 tasks over 100 agents, two tenants
 
 	b.Run("tenant-scoped", func(b *testing.B) {
+		var bodyLen int
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			c, w := listCtx(1)
@@ -78,12 +79,15 @@ func BenchmarkTaskList(b *testing.B) {
 			if w.Code != http.StatusOK {
 				b.Fatalf("status = %d (%s)", w.Code, w.Body.String())
 			}
+			bodyLen = w.Body.Len()
 		}
+		b.ReportMetric(float64(bodyLen), "response_bytes")
 	})
 
 	b.Run("unscoped", func(b *testing.B) {
 		c, _ := listCtx(0)
 		c.Set("user", "root")
+		var bodyLen int
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			c2, w := listCtx(0)
@@ -92,6 +96,8 @@ func BenchmarkTaskList(b *testing.B) {
 			if w.Code != http.StatusOK {
 				b.Fatalf("status = %d", w.Code)
 			}
+			bodyLen = w.Body.Len()
 		}
+		b.ReportMetric(float64(bodyLen), "response_bytes")
 	})
 }

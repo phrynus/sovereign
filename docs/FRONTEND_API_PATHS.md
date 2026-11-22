@@ -63,7 +63,11 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | Generate profiles | `paths.generate.profiles` |
 
 Envelope helpers (`lib/envelope.ts`): use `normalizeListEnvelope` / `firstField` / `firstNumber`
-for dual-use PascalCase/snake_case payloads (`users`/`Users`, `logs`/`Logs`, etc.).
+for dual-use PascalCase/snake_case payloads (`users`/`Users`, `logs`/`Logs`, etc.). Page
+payloads from `renderPageOrJSON` are normalised to snake_case only (one key per field — the
+old response shipped every key twice, which doubled every collection), so their snake_case
+name is the contract; the PascalCase fallbacks in those helpers only serve older/raw
+endpoints.
 
 ## Live Playwright (optional)
 

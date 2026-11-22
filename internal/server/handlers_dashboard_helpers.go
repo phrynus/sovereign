@@ -211,7 +211,10 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 	data["current_lang_info"] = langInfo
 	data["is_rtl"] = langInfo.RTL
 
-	data["locales_json"] = GetTranslationsJSON(currentLang)
+	// locales_json used to carry the whole server-side dictionary (~190 KB) on
+	// every page response for the old server-rendered templates. The console is
+	// a React SPA with its own i18n fragments and never read this key, so it is
+	// gone: see the response_bytes metric in BenchmarkTaskList.
 	data["online_users"] = []map[string]string{}
 	if _, ok := data["search_query"]; !ok {
 		data["search_query"] = ""

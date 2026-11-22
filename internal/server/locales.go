@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -762,25 +761,6 @@ func GetLanguageInfo(code string) (LanguageInfo, bool) {
 
 func GetSupportedLanguages() map[string]LanguageInfo {
 	return SupportedLanguages
-}
-
-// GetTranslationsJSON returns all translations for a language as JSON for client-side __().
-func GetTranslationsJSON(lang string) string {
-	i18nMutex.RLock()
-	defer i18nMutex.RUnlock()
-
-	if !IsLanguageSupported(lang) {
-		lang = DefaultLanguage
-	}
-	transMap, ok := translations[lang]
-	if !ok {
-		transMap = translations[DefaultLanguage]
-	}
-	b, err := json.Marshal(transMap)
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
 }
 
 func GetTranslation(lang, key string) string {

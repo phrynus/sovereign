@@ -292,8 +292,8 @@ func TestHandleAgentDetail(t *testing.T) {
 		}
 		var resp map[string]any
 		unmarshalData(t, w.Body.Bytes(), &resp)
-		if _, ok := resp["Agent"]; !ok {
-			t.Fatalf("expected 'Agent' key in response; keys=%v", keys(resp))
+		if _, ok := resp["agent"]; !ok {
+			t.Fatalf("expected 'agent' key in response; keys=%v", keys(resp))
 		}
 	})
 
@@ -319,8 +319,8 @@ func TestHandleAgentDetail(t *testing.T) {
 		}
 		var resp map[string]any
 		unmarshalData(t, w.Body.Bytes(), &resp)
-		if _, exists := resp["UnlinkedAgents"]; exists {
-			t.Fatalf("expected UnlinkedAgents to be omitted with include_unlinked=false; keys=%v", keys(resp))
+		if _, exists := resp["unlinked_agents"]; exists {
+			t.Fatalf("expected unlinked_agents to be omitted with include_unlinked=false; keys=%v", keys(resp))
 		}
 	})
 
@@ -346,9 +346,9 @@ func TestHandleAgentDetail(t *testing.T) {
 		}
 		var resp map[string]any
 		unmarshalData(t, w.Body.Bytes(), &resp)
-		unlinked, ok := resp["UnlinkedAgents"].([]any)
+		unlinked, ok := resp["unlinked_agents"].([]any)
 		if !ok || len(unlinked) != 1 {
-			t.Fatalf("expected 1 unlinked agent with default include; got %v", resp["UnlinkedAgents"])
+			t.Fatalf("expected 1 unlinked agent with default include; got %v", resp["unlinked_agents"])
 		}
 	})
 
@@ -374,10 +374,10 @@ func TestHandleAgentDetail(t *testing.T) {
 		s.handleAgentDetail(c)
 
 		var resp struct {
-			TotalTasks     int `json:"TotalTasks"`
-			CompletedTasks int `json:"CompletedTasks"`
-			FailedTasks    int `json:"FailedTasks"`
-			SuccessRate    int `json:"SuccessRate"`
+			TotalTasks     int `json:"total_tasks"`
+			CompletedTasks int `json:"completed_tasks"`
+			FailedTasks    int `json:"failed_tasks"`
+			SuccessRate    int `json:"success_rate"`
 		}
 		unmarshalData(t, w.Body.Bytes(), &resp)
 		if resp.TotalTasks != AgentDetailTaskLimit+2 || resp.CompletedTasks != AgentDetailTaskLimit+1 || resp.FailedTasks != 1 || resp.SuccessRate != 98 {

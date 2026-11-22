@@ -127,6 +127,30 @@ reduction (~39%), not the wall-clock number. `TestFetchPendingTasksRespectsCapac
 covers the case where more rows arrive than the pre-sized capacity, and the
 never-cross-claims/dedupe/recarry tests keep the claim semantics pinned.
 
+### Page payloads are snake_case-only (2026-11-22)
+
+`renderPageOrJSON` used to add a snake_case alias **next to** every PascalCase
+key, so any collection in a page response serialized twice. The task list (50
+tasks + the 500-agent picker) shipped **214,945 bytes** per request; half of it
+was duplicated arrays. The payload now carries one key per field (renamed in
+place, snake_case value wins on a collision), and the whole server-side i18n
+dictionary (`locales_json`, ~12.6 KB) is no longer attached to every page — the
+React console has its own i18n and never read it.
+
+`BenchmarkTaskList` reports `response_bytes` for exactly this reason:
+
+| | before | after |
+|---|---|---|
+| `response_bytes` | 214 945 | 101 344 |
+| B/op | 1.47 MB | 1.06 MB |
+| allocs/op | 8 639 | 7 392 |
+| ns/op (tenant-scoped / unscoped) | 3.12 / 4.42 ms | 2.26 / 2.25 ms |
+
+The console reads the snake_case keys (three legacy PascalCase-only reads were
+updated), and `TestListenerDetailCountKeepsTenantScope` / the agent-detail stats
+test decode the new shape. The wire change is one key per field, not a different
+document: every value keeps its type and position.
+
 ## 3. Deriving fleet capacity
 
 A fleet of *N* implants on a *T*-second base interval produces `N/T` check-ins

@@ -38,7 +38,7 @@ func TestHandleListUsers_Empty(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 	}
-	usersRaw, ok := resp["Users"]
+	usersRaw, ok := resp["users"]
 	if !ok {
 		t.Fatal("expected 'Users' key in response")
 	}
@@ -76,7 +76,7 @@ func TestHandleListUsers_WithData(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 	}
-	usersRaw, ok := resp["Users"]
+	usersRaw, ok := resp["users"]
 	if !ok {
 		t.Fatal("expected 'Users' key in response")
 	}

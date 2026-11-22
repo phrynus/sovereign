@@ -8,10 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// renderPageOrJSON returns page data as JSON for the Next.js frontend.
+// renderPageOrJSON returns page data as JSON for the console.
 func (s *Server) renderPageOrJSON(c *gin.Context, data gin.H) {
 	s.addUserToData(c, data)
-	addSnakeCaseKeys(data)
+	normalizeKeysToSnakeCase(data)
 	c.JSON(http.StatusOK, data)
 }
 
@@ -34,16 +34,27 @@ func toSnakeCase(s string) string {
 	return strings.ToLower(string(result))
 }
 
-// addSnakeCaseKeys adds snake_case aliases for every PascalCase key in the map.
-// This allows the frontend to access data using snake_case keys while preserving
-// PascalCase keys for HTML template compatibility.
-func addSnakeCaseKeys(data gin.H) {
-	for k, v := range data {
+// normalizeKeysToSnakeCase renames every PascalCase page key to its snake_case
+// form in place, keeping the snake_case value when a handler already set both.
+//
+// It used to *add* a snake_case alias next to the PascalCase key, which shipped
+// every collection twice: the task list response was ~215 KB, about half of it
+// duplicated arrays (Tasks, Agents, …). The console reads the snake_case keys,
+// so the response now carries one key per field; the page handlers' PascalCase
+// maps are an implementation detail, not a wire shape.
+func normalizeKeysToSnakeCase(data gin.H) {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
 		snake := toSnakeCase(k)
-		if snake != k {
-			if _, exists := data[snake]; !exists {
-				data[snake] = v
-			}
+		if snake == k {
+			continue
 		}
+		if _, exists := data[snake]; !exists {
+			data[snake] = data[k]
+		}
+		delete(data, k)
 	}
 }

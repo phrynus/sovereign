@@ -33,10 +33,12 @@ export function useAIConfig() {
     setConfigLoading(true);
     setConfigError(null);
     try {
-      const data = await api.get(paths.ai.root);
+      const data = await api.get<{ ai_config?: AIConfig; AIConfig?: AIConfig }>(paths.ai.root);
       if (seq !== loadSeqRef.current) return;
-      if (data.AIConfig) {
-        const cfg = data.AIConfig as AIConfig;
+      // Page payloads are normalised to snake_case by renderPageOrJSON; the
+      // PascalCase key stays as a fallback for a server that predates that.
+      const cfg = data.ai_config || data.AIConfig;
+      if (cfg) {
         setEnabled(Boolean(cfg.enabled));
         if (cfg.provider) setProvider(cfg.provider);
         if (cfg.model) setModel(cfg.model);
