@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"gorm.io/gorm"
 )
 
 type lootScreenshotDTO struct {
@@ -134,7 +135,7 @@ func (s *Server) handleLootPage(c *gin.Context) {
 
 	// Keylogger dumps
 	var keylogTasks []db.Task
-	keylogQ := s.db.Preload("Agent").
+	keylogQ := s.db.Preload("Agent", func(db *gorm.DB) *gorm.DB { return db.Select("id", "hostname") }).
 		Where("type = ?", "keylogger_dump")
 	keylogQ = s.tenantScope(keylogQ, c)
 	if err := keylogQ.
@@ -146,7 +147,7 @@ func (s *Server) handleLootPage(c *gin.Context) {
 	// Recent file pulls. Exfil is type=upload with no push payload.
 	// download_url is the implant fetching a URL onto its own disk — not a teamserver blob.
 	var downloadTasks []db.Task
-	downloadQ := s.db.Preload("Agent").
+	downloadQ := s.db.Preload("Agent", func(db *gorm.DB) *gorm.DB { return db.Select("id", "hostname") }).
 		Where("(type = ? AND (data = '' OR data IS NULL)) OR type = ?", "upload", "download")
 	downloadQ = s.tenantScope(downloadQ, c)
 	if err := downloadQ.

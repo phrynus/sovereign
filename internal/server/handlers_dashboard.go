@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"gorm.io/gorm"
 )
 
 type HeatmapData struct {
@@ -396,7 +397,8 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	if err := s.tenantScope(s.db.Preload("Agent"), c).
+	if err := s.tenantScope(s.db.Preload("Agent", func(db *gorm.DB) *gorm.DB { return db.Select("id", "hostname") }), c).
+		Select("id, agent_id, type, status, created_at, updated_at").
 		Where("created_at >= ?", startTime).
 		Order("created_at ASC").
 		Limit(20).
