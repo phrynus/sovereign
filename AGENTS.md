@@ -267,6 +267,14 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   passed `npm run check` locally and only failed in CI. Scope worth knowing: the hand-written
   per-OS tables in that file (Yes/No/Partial cells) are **not** verified — only the block
   between the `BEGIN/END GENERATED TASK INVENTORY` markers and the `as of vX.Y.Z` stamp.
+- `check:win7shim` (`scripts/sync-win7shim.mjs --check`) — the Win7 compatibility shim keeps
+  its own copy of `pkg/protocol` (`tasks.go`, `taskspec_data.go`, `types.go`, …), because a
+  Go 1.20 build target cannot import the main module. Adding `watchdog_start`/`watchdog_stop`
+  to the spec registry left the mirror stale: the Go spec test passed (it reads the real
+  registry), but CI's "Win7 shim mirror freshness" step failed and a local `npm run check`
+  stayed green because the step existed **only** in CI. The gate is now wired into both
+  `check` and `check:pre`, so the next protocol change fails locally instead of on the runner.
+  Fix is mechanical: `node scripts/sync-win7shim.mjs` and commit the mirror.
 - `check:config-drivers` (`scripts/check-config-drivers.mjs`) — every tracked config
   template/generator (`config.example.yaml`, `scripts/setup-dev.sh`, `deploy/demo/deploy.sh`)
   must declare a driver the server ships (`postgres`). v2.8 removed SQLite, but
