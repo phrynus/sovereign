@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -121,5 +122,43 @@ func TestWindowsDir(t *testing.T) {
 		if got := windowsDir(in); got != want {
 			t.Errorf("windowsDir(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestPersistenceNamesCoverBothInstallSchemes(t *testing.T) {
+	cases := []struct {
+		kind   string
+		prefix string
+		want   []string
+	}{
+		{"registry_run", "Sovereign", []string{"WindowsUpdate", "Sovereign"}},
+		{"scheduled_task", "Sovereign", []string{"AdobeUpdateTask", "SovereignUpdate"}},
+		{"startup_file", "Sovereign", []string{"svchost.exe", "Sovereign.exe"}},
+	}
+	for _, c := range cases {
+		got := persistenceNames(c.kind, c.prefix)
+		if !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: got %#v, want %#v", c.kind, got, c.want)
+		}
+	}
+	// A custom prefix that collides with a legacy name must not produce a
+	// duplicate reg query / remove step.
+	if got := persistenceNames("registry_run", "WindowsUpdate"); !reflect.DeepEqual(got, []string{"WindowsUpdate"}) {
+		t.Fatalf("dedup: %#v", got)
+	}
+	if got := persistenceNames("unknown", "Sovereign"); got != nil {
+		t.Fatalf("unknown kind: %#v", got)
+	}
+}
+
+func TestCommandFoundIgnoresErrorOutput(t *testing.T) {
+	if commandFound([]byte("ERROR: The system was unable to find the specified registry key or value."), errors.New("exit status 1")) {
+		t.Fatal("a failed reg query must not report a persistence entry as found")
+	}
+	if !commandFound([]byte("HKEY_CURRENT_USER\\Software\\...\r\n    WindowsUpdate    REG_SZ\r\n"), nil) {
+		t.Fatal("a successful query with output must report found")
+	}
+	if commandFound([]byte("  \r\n\t"), nil) {
+		t.Fatal("whitespace-only output is not evidence")
 	}
 }

