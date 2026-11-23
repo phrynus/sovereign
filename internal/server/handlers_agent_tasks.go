@@ -15,6 +15,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// taskPageAgent is the task page's filter-picker row: the only implant fields
+// that page sends. Scanning three columns into db.Implant still materialises
+// the whole ~100-column model for every row, so the picker uses a dedicated
+// struct with the same JSON names the frontend already reads.
+type taskPageAgent struct {
+	ID       string `gorm:"column:id" json:"id"`
+	Hostname string `gorm:"column:hostname" json:"hostname"`
+	IP       string `gorm:"column:ip" json:"ip"`
+}
+
 func (s *Server) handleTaskHistory(c *gin.Context) {
 	p := parsePagination(c, DefaultTaskPageSize, MaxTaskPageSize)
 	filterType := c.Query("type")
@@ -78,9 +88,13 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		taskTypes = []string{}
 	}
 
-	// Collect agents for filter dropdown (degraded gracefully on error)
-	var agents []db.Implant
-	if err := s.tenantScope(s.db.Select("id, hostname, ip"), c).Order("hostname").Limit(500).Find(&agents).Error; err != nil {
+	// Collect agents for filter dropdown (degraded gracefully on error).
+	// A three-field row struct, not db.Implant: selecting three columns into the
+	// ~100-column model still makes GORM allocate whole Implant values for every
+	// row (measured as a large share of this endpoint's allocations). The JSON
+	// shape is unchanged — the fields carry the same tags as the model.
+	var agents []taskPageAgent
+	if err := s.tenantScope(s.db.Model(&db.Implant{}).Select("id, hostname, ip"), c).Order("hostname").Limit(500).Find(&agents).Error; err != nil {
 		slog.Warn("Failed to query agent filter list", "err", err)
 	}
 

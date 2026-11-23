@@ -164,6 +164,23 @@ updated), and `TestListenerDetailCountKeepsTenantScope` / the agent-detail stats
 test decode the new shape. The wire change is one key per field, not a different
 document: every value keeps its type and position.
 
+### The task page's agent picker sends three fields (2026-11-23)
+
+`handleTaskHistory` selected only `id, hostname, ip` but scanned the rows into
+`db.Implant`, and the JSON encoder serializes **every** field of the model — so
+each of the 100 picker entries carried dozens of zero-valued columns that the
+console never reads. A three-field `taskPageAgent` struct keeps the same JSON
+keys and cuts the page again:
+
+| (`BenchmarkTaskList`) | after snake_case-only | after the picker struct |
+|---|---|---|
+| `response_bytes` | 101 340 | 28 740 |
+| B/op | 1.06 MB | 528 KB |
+| allocs/op | 7 392 | 6 982 |
+
+The frontend is untouched: the picker reads `id`/`hostname`/`ip` exactly as
+before, and `TestHandleTaskHistory_Renders` covers the payload.
+
 ## 3. Deriving fleet capacity
 
 A fleet of *N* implants on a *T*-second base interval produces `N/T` check-ins
