@@ -275,6 +275,14 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   stayed green because the step existed **only** in CI. The gate is now wired into both
   `check` and `check:pre`, so the next protocol change fails locally instead of on the runner.
   Fix is mechanical: `node scripts/sync-win7shim.mjs` and commit the mirror.
+- `check:persistence-methods` (`scripts/check-persistence-methods.mjs`) — the
+  `method` field of `persistence_add`/`persistence_remove` is still a wire string,
+  but its value set now lives in `pkg/protocol/persistence_methods.go`. The gate
+  compares that set with every `case "..."` in the three agents'
+  `applyPersistence`/`removePersistence` functions, in both directions. Without
+  it, two real defects shipped: installs using the configurable prefix were
+  invisible to `listPersistence`, and Windows-only methods fell through to a
+  default install on Linux/macOS. Wired into both `check` and `check:pre`.
 - `check:config-drivers` (`scripts/check-config-drivers.mjs`) — every tracked config
   template/generator (`config.example.yaml`, `scripts/setup-dev.sh`, `deploy/demo/deploy.sh`)
   must declare a driver the server ships (`postgres`). v2.8 removed SQLite, but
