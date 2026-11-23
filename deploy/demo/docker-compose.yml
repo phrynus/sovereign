@@ -8,7 +8,7 @@ name: sovereign-demo
 # The image defaults to the published edge build. Pin the digest when you need
 # a byte-identical deployment; this is the build the current demo runs:
 #
-#   FORGEC2_IMAGE=ghcr.io/r0si/sovereign@sha256:72024386317c80d0dcedc4a97a661f6e0e3383816e1c25f01d26f4e82a5d290b
+#   FORGEC2_IMAGE=ghcr.io/r0si/sovereign@sha256:f1dac31f6c53e123bb0c1346420a5ee9c866849fe8a024c379960cadcb5904a1
 #
 # `edge` and its sha-<commit> tag resolve to the same manifest. On hosts where
 # GHCR is unreachable, a read-only mirror serves the identical manifest; set
