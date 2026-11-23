@@ -26,6 +26,8 @@ describe("persistence dest honesty", () => {
     expect(persistenceMethodQuality("wmi")).toBe("scripted");
     expect(persistenceMethodQuality("com_hijack")).toBe("experimental");
     expect(persistenceMethodQuality("dll_search_order")).toBe("experimental");
+    expect(persistenceMethodQuality("logon_script")).toBe("hardened");
+    expect(persistenceMethodQuality("typelib")).toBe("experimental");
     expect(PERSISTENCE_METHOD_QUALITY.some((m) => m.quality === "core")).toBe(false);
     expect(persistenceLooksConfirmed("queued")).toBe(false);
     expect(persistenceLooksConfirmed("installed")).toBe(true);

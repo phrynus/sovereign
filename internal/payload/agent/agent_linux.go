@@ -1678,6 +1678,8 @@ RestartSec=10
 			return "persistence: SSH key already present in authorized_keys"
 		}
 		return "persistence: SSH authorized_keys persistence requires a public key as args"
+	case "typelib", "logon_script":
+		return "persistence: " + method + " is a Windows-only method"
 	default:
 		if err := addPersistenceLinux(); err != nil {
 			return fmt.Sprintf("persistence: unknown method '%s': %s", method, err.Error())
@@ -1797,6 +1799,8 @@ func removePersistence(method string, args string) string {
 			return "persistence: SSH key removed from authorized_keys"
 		}
 		return "persistence: specify key fragment to remove from authorized_keys"
+	case "typelib", "logon_script":
+		return "persistence: " + method + " is a Windows-only method"
 	default:
 		return removePersistenceLinux()
 	}

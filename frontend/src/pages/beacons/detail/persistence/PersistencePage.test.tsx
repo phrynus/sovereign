@@ -198,4 +198,15 @@ describe("PersistencePage mutations", () => {
     });
     expect(screen.queryByText("agents.persistence_last_detection")).toBeNull();
   });
+
+  it("queues the new Windows methods with their exact wire names", async () => {
+    await renderPage();
+    for (const method of ["typelib", "logon_script"]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`agents\\.persistence_${method}`) }));
+      fireEvent.click(await screen.findByRole("button", { name: "common.confirm" }));
+      await waitFor(() =>
+        expect(api.post).toHaveBeenCalledWith(paths.agents.persistence("a1"), { action: "add", method }),
+      );
+    }
+  });
 });

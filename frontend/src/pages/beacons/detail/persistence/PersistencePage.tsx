@@ -45,6 +45,8 @@ const PERSISTENCE_METHODS: { key: string; labelKey: string; icon: React.ReactNod
   { key: "image_file", labelKey: "agents.persistence_ifeo", icon: <Puzzle className="size-4" /> },
   { key: "com_hijack", labelKey: "agents.persistence_com_hijack", icon: <Boxes className="size-4" /> },
   { key: "dll_search_order", labelKey: "agents.persistence_dll_hijack", icon: <LinkIcon className="size-4" /> },
+  { key: "typelib", labelKey: "agents.persistence_typelib", icon: <Boxes className="size-4" /> },
+  { key: "logon_script", labelKey: "agents.persistence_logon_script", icon: <Plug className="size-4" /> },
 ];
 
 export default function AgentPersistencePage() {

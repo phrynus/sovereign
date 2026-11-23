@@ -31,6 +31,8 @@ export const PERSISTENCE_METHOD_QUALITY: PersistenceMethodDef[] = [
   { key: "image_file", quality: "scripted", windowsPrimary: true },
   { key: "com_hijack", quality: "experimental", windowsPrimary: true },
   { key: "dll_search_order", quality: "experimental", windowsPrimary: true },
+  { key: "typelib", quality: "experimental", windowsPrimary: true },
+  { key: "logon_script", quality: "hardened", windowsPrimary: true },
 ];
 
 function tokenActionDef(action: string): TokenActionDef | undefined {
