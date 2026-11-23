@@ -131,3 +131,25 @@ func TestJSONOutputNamesTheSignatureKind(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyAnchorRejectsUnsignedWhenRequired(t *testing.T) {
+	row := auditchain.Row{ID: 7, EntryHash: strings.Repeat("b", 64), User: "alice"}
+	rows := []auditchain.Row{row}
+	anchorJSON := []byte(`{"id":7,"entry_hash":"` + row.EntryHash + `"}`)
+
+	verdict := auditchain.Verify(rows)
+	if problem := applyAnchor(&verdict, rows, anchorJSON, false); problem != "" {
+		t.Fatalf("legacy anchor rejected: %q", problem)
+	}
+	if !verdict.AnchorVerified || verdict.AnchorSigned {
+		t.Fatalf("legacy anchor flags: verified=%v signed=%v", verdict.AnchorVerified, verdict.AnchorSigned)
+	}
+
+	strict := auditchain.Verify(rows)
+	if problem := applyAnchor(&strict, rows, anchorJSON, true); problem == "" {
+		t.Fatal("unsigned anchor accepted under -require-anchor-signature")
+	}
+	if strict.OK {
+		t.Fatal("unsigned anchor did not fail the verdict")
+	}
+}

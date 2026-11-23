@@ -72,3 +72,39 @@ func TestAnchorSignatureDetectsRewrittenHead(t *testing.T) {
 		t.Fatal("legacy unsigned anchor line must stay accepted")
 	}
 }
+
+func TestAnchorCheckAgainstAnExport(t *testing.T) {
+	row := signedTestRow()
+	row.Signature, _ = SignRow(row, signingSeed())
+	const ts = "2026-11-23T00:00:00Z"
+	anchorSig, err := SignAnchor(row.EntryHash, row.ID, ts, signingSeed())
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := Anchor{
+		ID: row.ID, EntryHash: row.EntryHash, Signature: row.Signature,
+		AnchorID: row.ID, AnchorTimestamp: ts, AnchorSignature: anchorSig,
+	}
+	signed, problem := anchor.Check([]Row{row})
+	if !signed || problem != "" {
+		t.Fatalf("valid anchor: signed=%v problem=%q", signed, problem)
+	}
+
+	mismatch := anchor
+	mismatch.EntryHash = strings.Repeat("d", 64)
+	if _, problem := mismatch.Check([]Row{row}); problem == "" {
+		t.Fatal("anchor with a different head was accepted")
+	}
+
+	badSig := anchor
+	badSig.AnchorSignature = strings.Repeat("0", 128)
+	if _, problem := badSig.Check([]Row{row}); problem == "" {
+		t.Fatal("anchor with an invalid signature was accepted")
+	}
+
+	legacy := anchor
+	legacy.AnchorSignature = ""
+	if signed, problem := legacy.Check([]Row{row}); signed || problem != "" {
+		t.Fatalf("legacy unsigned anchor: signed=%v problem=%q", signed, problem)
+	}
+}

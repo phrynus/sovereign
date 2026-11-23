@@ -82,6 +82,11 @@ type Verdict struct {
 	// reader can take this chain - an UNKEYED hash - for a keyed signature, and then believe the log is authenticated when it
 	// is only partially tamper-evident. Carried in the verdict so the correction travels with the data.
 	SignatureKind string `json:"signature_kind"`
+	// AnchorVerified is true when a supplied out-of-band chain head matched both
+	// the export and its own signature (when present).
+	AnchorVerified bool `json:"anchor_verified,omitempty"`
+	// AnchorSigned is false for a legacy unsigned anchor line.
+	AnchorSigned bool `json:"anchor_signed,omitempty"`
 }
 
 // SignatureKind is the description every audit verdict carries.
@@ -213,4 +218,51 @@ func (v *Verdict) record(id uint, problem string) {
 		v.FirstBadID = id
 		v.Reason = problem
 	}
+}
+
+// Anchor is the JSON shape served by GET /audit/chain/anchor. Archive that
+// document out of band: a key carried inside the export proves nothing about
+// origin, and a whole-table rewrite can carry a matching row signature set.
+type Anchor struct {
+	ID              uint   `json:"id"`
+	EntryHash       string `json:"entry_hash"`
+	Signature       string `json:"signature,omitempty"`
+	AnchorID        uint   `json:"anchor_id,omitempty"`
+	AnchorTimestamp string `json:"anchor_timestamp,omitempty"`
+	AnchorSignature string `json:"anchor_signature,omitempty"`
+}
+
+// Check verifies the archived head against the export: its signature, and its
+// agreement with the newest row. A non-empty problem means the anchor cannot be
+// trusted; an unsigned legacy anchor is accepted but reported as such.
+func (a Anchor) Check(rows []Row) (signed bool, problem string) {
+	if a.EntryHash == "" {
+		return false, "anchor has no entry hash"
+	}
+	signed = a.AnchorSignature != ""
+	if signed && !VerifyAnchor(a.EntryHash, a.AnchorID, a.AnchorTimestamp, a.AnchorSignature) {
+		return false, "anchor signature is invalid"
+	}
+	if len(rows) == 0 {
+		return signed, ""
+	}
+	ordered := append([]Row(nil), rows...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
+	newest := ordered[len(ordered)-1]
+	if newest.EntryHash != a.EntryHash {
+		return signed, "anchor head does not match the newest exported row"
+	}
+	if a.ID != 0 && newest.ID != a.ID {
+		return signed, "anchor row id does not match the newest exported row"
+	}
+	if a.Signature != "" && newest.Signature != a.Signature {
+		return signed, "anchor row signature differs from the newest exported row"
+	}
+	return signed, ""
+}
+
+// Record adds a finding to a verdict from a caller outside this package (the
+// CLI uses it when an archived anchor disagrees with the export).
+func (v *Verdict) Record(id uint, problem string) {
+	v.record(id, problem)
 }

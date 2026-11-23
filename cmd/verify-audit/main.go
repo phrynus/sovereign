@@ -7,6 +7,7 @@
 //	go run ./cmd/verify-audit -gen                  # new audit signing seed + public key
 //	go run ./cmd/verify-audit audit.ndjson
 //	go run ./cmd/verify-audit audit.json -json
+//	go run ./cmd/verify-audit audit.ndjson -anchor anchor.json -require-anchor-signature
 //
 // Exit codes: 0 every digest and link checks out, 1 a row was edited or a link was broken, 2 the file could not be read.
 //
@@ -38,8 +39,10 @@ func main() {
 	requireContiguous := flag.Bool("require-contiguous", false,
 		"fail unless the file proves it is the whole chain: no filter, no truncation, no id gaps. An NDJSON export cannot prove that")
 	gen := flag.Bool("gen", false, "generate a new Ed25519 audit signing seed and public key, then exit")
+	anchorPath := flag.String("anchor", "", "archived /audit/chain/anchor JSON document to verify against the export")
+	requireAnchorSig := flag.Bool("require-anchor-signature", false, "fail when the archived anchor has no Ed25519 signature")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: verify-audit [-gen] [-json] [-quiet] [-min-rows N] <audit.ndjson|audit.json>\n")
+		fmt.Fprintf(os.Stderr, "usage: verify-audit [-gen] [-anchor file.json] [-require-anchor-signature] [-json] [-quiet] [-min-rows N] <audit.ndjson|audit.json>\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -77,6 +80,16 @@ func main() {
 	verdict.SignatureKind = auditchain.SignatureKind
 	verdict.SelectionKnown = meta.Known
 	verdict.Filtered = meta.Filtered
+	if *anchorPath != "" {
+		rawAnchor, err := os.ReadFile(*anchorPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "verify-audit: %v\n", err)
+			os.Exit(2)
+		}
+		if problem := applyAnchor(&verdict, rows, rawAnchor, *requireAnchorSig); problem != "" {
+			fmt.Fprintln(os.Stderr, "verify-audit anchor:", problem)
+		}
+	}
 	if *quiet {
 		// nothing: the exit code is the answer
 	} else if *asJSON {
@@ -91,6 +104,28 @@ func main() {
 	}
 
 	os.Exit(exitCode(verdict, len(rows), *minRows, *requireContiguous, meta))
+}
+
+// applyAnchor folds the out-of-band chain head into the verdict. A row
+// signature carried inside the export proves nothing about origin; the signed
+// anchor the operator archived separately is the trust root.
+func applyAnchor(verdict *auditchain.Verdict, rows []auditchain.Row, raw []byte, requireSig bool) string {
+	var anchor auditchain.Anchor
+	if err := json.Unmarshal(raw, &anchor); err != nil {
+		return "anchor file is not valid JSON: " + err.Error()
+	}
+	signed, problem := anchor.Check(rows)
+	if problem != "" {
+		verdict.Record(anchor.ID, problem)
+		return problem
+	}
+	verdict.AnchorVerified = true
+	verdict.AnchorSigned = signed
+	if requireSig && !signed {
+		verdict.Record(anchor.ID, "anchor has no signature (legacy unkeyed record)")
+		return "anchor has no signature"
+	}
+	return ""
 }
 
 // exitCode turns a verdict into the process result.

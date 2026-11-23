@@ -29,6 +29,17 @@ go run ./cmd/verify-audit audit.ndjson          # human-readable verdict
 go run ./cmd/verify-audit audit.json -json      # machine-readable
 ```
 
+Archive the `/audit/chain/anchor` response **separately** from the export and hand both to the verifier:
+
+```
+go run ./cmd/verify-audit audit.ndjson -anchor anchor.json -require-anchor-signature
+```
+
+The anchor check verifies its Ed25519 signature, compares the head with the newest exported row (including that row's
+signature when the anchor carries it), and records a failure if they disagree. `-require-anchor-signature` refuses a
+legacy unsigned anchor. A key found only inside the export proves nothing about origin — the trust root is the copy you
+archived out of band.
+
 Exit codes: `0` every digest and link checks out, `1` a row was edited, a link was broken, **or the file holds fewer
 rows than `-min-rows`**, `2` the file could not be read. The verifier walks the rows in **id order**, not file order,
 because file order can be reversed.
