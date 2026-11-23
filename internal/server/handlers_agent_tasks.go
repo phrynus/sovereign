@@ -34,9 +34,8 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	filterClaimed := c.Query("claimed_by")
 
 	// Build query with filters
-	silentTypes := []string{"screen_stream_start", "screen_stream_stop", "ls"}
 	query := s.db.Model(&db.Task{}).
-		Where("type NOT IN ?", silentTypes)
+		Where("type NOT IN ?", taskListSilentTypes)
 	// Multi-tenant isolation: operators only see tasks in their tenant.
 	query = s.tenantScope(query, c)
 	if filterType != "" {
@@ -79,14 +78,9 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		return
 	}
 
-	// Collect distinct task types for filter dropdown (degraded gracefully on error)
-	var taskTypes []string
-	if err := s.tenantScope(s.db.Model(&db.Task{}), c).
-		Where("type NOT IN ?", silentTypes).
-		Distinct("type").Pluck("type", &taskTypes).Error; err != nil {
-		slog.Warn("Failed to pluck task types", "err", err)
-		taskTypes = []string{}
-	}
+	// Distinct task types for the filter dropdown: cached per tenant (the
+	// DISTINCT scan is the single most expensive query on this page).
+	taskTypes := s.cachedTaskTypes(c)
 
 	// Collect agents for filter dropdown (degraded gracefully on error).
 	// A three-field row struct, not db.Implant: selecting three columns into the

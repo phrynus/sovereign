@@ -265,9 +265,9 @@ type Task struct {
 	// The composite index matters for the operator task list: with only the plain
 	// tenant_id index, "WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 50" read
 	// every row of the tenant and sorted it in a TEMP B-TREE on every page load.
-	TenantID uint   `gorm:"index;index:idx_tasks_tenant_created,priority:1" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
+	TenantID uint   `gorm:"index;index:idx_tasks_tenant_created,priority:1;index:idx_tasks_tenant_type,priority:1" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
 	AgentID  string `gorm:"index;index:idx_tasks_agent_status,priority:1;index:idx_tasks_agent_created,priority:1" json:"agent_id"`
-	Type     string `json:"type"`
+	Type     string `gorm:"index:idx_tasks_tenant_type,priority:2" json:"type"`
 	Command  string `json:"command"`
 	Shell    string `json:"shell"`
 	Path     string `json:"path,omitempty"`

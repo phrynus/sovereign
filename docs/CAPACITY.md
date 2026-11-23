@@ -181,6 +181,20 @@ keys and cuts the page again:
 The frontend is untouched: the picker reads `id`/`hostname`/`ip` exactly as
 before, and `TestHandleTaskHistory_Renders` covers the payload.
 
+### The task-type dropdown is cached per tenant (2026-11-23)
+
+`handleTaskHistory` ran `SELECT DISTINCT type FROM tasks WHERE tenant_id = ?`
+on every page load. Even with a covering `(tenant_id, type)` index the scan
+measured **~410 µs** over 4 000 tasks under the pure-Go SQLite driver (the plan
+is `SEARCH tasks USING COVERING INDEX idx_tasks_tenant_type`). The list is now
+cached per tenant for **60 s** (copy-on-read, bounded to 512 tenants); a newly
+queued type appears within that window, which is fine for a filter dropdown.
+
+`BenchmarkTaskList` (tenant-scoped / unscoped): **2.11 / 2.10 ms → 1.33 / 1.35 ms**
+with the same response bytes; allocs 6 982 → 6 920.
+`TestCachedTaskTypesPerTenant` pins tenant isolation and the TTL refresh,
+`TestCachedTaskTypesReturnsCopy` pins the copy-on-read.
+
 ## 3. Deriving fleet capacity
 
 A fleet of *N* implants on a *T*-second base interval produces `N/T` check-ins

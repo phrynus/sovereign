@@ -397,6 +397,13 @@ type Server struct {
 	navStatsCache   map[uint]navStatsEntry
 	navStatsCacheMu sync.RWMutex
 
+	// Distinct task types for the filter dropdown, keyed by tenant id. The
+	// DISTINCT scan measured ~410 µs per page load (pure-Go SQLite, 4 000
+	// tasks) even with the covering (tenant_id, type) index, and the set
+	// changes only when a new task type is queued.
+	taskTypesCache   map[uint]taskTypesCacheEntry
+	taskTypesCacheMu sync.Mutex
+
 	// Latest per-agent link-quality snapshot from beacons (RTT/loss). Bounded
 	// by fleet size and swept on the 24h cleanup; see link_quality_state.go.
 	linkQuality   map[string]linkQualitySnapshot
