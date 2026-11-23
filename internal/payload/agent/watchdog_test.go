@@ -4,6 +4,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -127,5 +128,28 @@ func TestWatchdogTokenStableForSameUUID(t *testing.T) {
 	agentUUID = "99999999-2222-4333-8444-555555555555"
 	if watchdogToken() == first {
 		t.Fatal("different agents derived the same watchdog token")
+	}
+}
+
+// TestClearWatchdogStopMarker proves a stop left while no watcher was alive
+// cannot kill the watcher the next start launches.
+func TestClearWatchdogStopMarker(t *testing.T) {
+	oldDir := watchdogStateDir
+	watchdogStateDir = t.TempDir()
+	defer func() { watchdogStateDir = oldDir }()
+
+	token := "0123456789abcdef"
+	_, stopFile := watchdogPaths(token)
+	if err := os.WriteFile(stopFile, []byte("stop"), 0o600); err != nil {
+		t.Fatalf("seed stop marker: %v", err)
+	}
+	clearWatchdogStopMarker(token)
+	if watchdogStopRequested(token) {
+		t.Fatal("stop marker survived the start path")
+	}
+	// Removing a marker that is not there must not fail or create one.
+	clearWatchdogStopMarker(token)
+	if watchdogStopRequested(token) {
+		t.Fatal("clearing an absent marker created one")
 	}
 }

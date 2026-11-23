@@ -243,9 +243,18 @@ func watchdogArgs(command string) (time.Duration, int) {
 	return clampWatchdogParams(intervalSec, maxRestarts)
 }
 
+func clearWatchdogStopMarker(token string) {
+	_, stopFile := watchdogPaths(token)
+	_ = os.Remove(stopFile)
+}
+
 func handleWatchdogStart(task Task, res *TaskResult) {
 	interval, maxRestarts := watchdogArgs(task.Command)
 	token := watchdogToken()
+	// The most recent command wins: a stop marker left by watchdog_stop (or by
+	// a stop issued while no watcher was alive) must not kill the watcher this
+	// start is about to launch — or the one already running.
+	clearWatchdogStopMarker(token)
 	// A live watcher already covers this agent: never stack a second one.
 	if pid := readWatchdogPID(token); pid > 0 && watchdogProcessAlive(pid) {
 		res.Output = base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("watchdog already running (pid %d, interval %s, max_restarts %d)", pid, interval, maxRestarts)))
