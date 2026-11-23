@@ -191,6 +191,25 @@ keys and cuts the page again:
 The frontend is untouched: the picker reads `id`/`hostname`/`ip` exactly as
 before, and `TestHandleTaskHistory_Renders` covers the payload.
 
+### Agent detail: 400 row-struct rows instead of models (2026-11-23)
+
+The detail page ships its children (up to 500) and the unlinked-agent picker
+(up to 500) as whole `db.Implant` values, and Go's JSON encoder serializes every
+field — so 400 rows carried the full ~100-column model each. Scanning into
+`agentChildRow` (6 fields) and `agentLinkRow` (4) keeps the same JSON keys.
+
+`BenchmarkAgentDetail` (1 agent, 200 children, 200 unlinked, 50 tasks):
+
+| | before | after |
+|---|---|---|
+| `response_bytes` | 359 096 | 62 096 |
+| ns/op | 5.03 ms | 1.80 ms |
+| B/op | 3.45 MB | 0.85 MB |
+| allocs/op | 34 489 | 13 175 |
+
+`TestDashboardTaskGanttUsesHostname` and the detail tests pin the shapes that
+matter; the benchmark is the permanent guard against re-widening these arrays.
+
 ### The task-type dropdown is cached per tenant (2026-11-23)
 
 `handleTaskHistory` ran `SELECT DISTINCT type FROM tasks WHERE tenant_id = ?`
