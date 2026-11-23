@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,37 @@ import (
 	"github.com/r0si/sovereign/pkg/encoding"
 	"github.com/r0si/sovereign/pkg/protocol"
 )
+
+// beaconWarnf rate-limits warnings from unauthenticated beacon paths. A prober
+// can generate thousands of invalid frames per second; without a per-reason
+// budget each one becomes a log line (and a disk-filling denial of service).
+// The first occurrence in each interval is still logged, so a real regression
+// is visible. The boolean lets tests observe emission without a log capture.
+var (
+	beaconWarnMu       sync.Mutex
+	beaconWarnLast     = make(map[string]time.Time)
+	beaconWarnInterval = 10 * time.Second
+)
+
+func beaconWarnf(msg string, args ...any) bool {
+	beaconWarnMu.Lock()
+	now := time.Now()
+	if last, ok := beaconWarnLast[msg]; ok && now.Sub(last) < beaconWarnInterval {
+		beaconWarnMu.Unlock()
+		return false
+	}
+	beaconWarnLast[msg] = now
+	if len(beaconWarnLast) > 64 {
+		for reason, at := range beaconWarnLast {
+			if now.Sub(at) > beaconWarnInterval {
+				delete(beaconWarnLast, reason)
+			}
+		}
+	}
+	beaconWarnMu.Unlock()
+	slog.Warn(msg, args...)
+	return true
+}
 
 // ── Registration key / replay window / envelope auth ──────────────────────
 
@@ -140,7 +172,7 @@ func (s *Server) acceptSeqInner(agentID string, seq uint64, useLockout bool) (ac
 			}
 			s.seqLockoutMu.Unlock()
 		}
-		slog.Warn("Beacon seq jump exceeded cap, rejecting frame", "agent_id", agentID, "seq", seq, "last_seq", lastSeq)
+		beaconWarnf("Beacon seq jump exceeded cap, rejecting frame", "agent_id", agentID, "seq", seq, "last_seq", lastSeq)
 		return false
 	}
 	res := s.db.Model(&db.Implant{}).
@@ -330,7 +362,7 @@ func (s *Server) sweepECDHSessions() {
 		}
 		if err := s.db.Model(&db.Implant{}).Where("id IN ?", ids[i:end]).
 			Select("id, current_interval").Scan(&rows).Error; err != nil {
-			slog.Warn("ECDH session sweep: interval lookup failed, skipping cycle", "err", err)
+			beaconWarnf("ECDH session sweep: interval lookup failed, skipping cycle", "err", err)
 			return
 		}
 		for _, r := range rows {
@@ -381,18 +413,18 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 	maxPayload := s.effectiveMaxPayload()
 	rawLimit := (maxPayload+2)/3*4 + 64*1024
 	if len(raw) > rawLimit {
-		slog.Warn("Beacon body exceeds raw limit", "size", len(raw), "max", rawLimit)
+		beaconWarnf("Beacon body exceeds raw limit", "size", len(raw), "max", rawLimit)
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
-		slog.Warn("Beacon: invalid envelope JSON")
+		beaconWarnf("Beacon: invalid envelope JSON")
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 	if envelope.UUID == "" {
 		envelope.UUID = util.NewString()
 	}
 	if !isValidAgentID(envelope.UUID) {
-		slog.Warn("Beacon rejected: invalid agent ID", "agent_id", envelope.UUID)
+		beaconWarnf("Beacon rejected: invalid agent ID", "agent_id", envelope.UUID)
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 	// Canonicalize before session/DB/AAD use: DNS delivers bare hex UUIDs.
@@ -401,18 +433,18 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 	// Timestamp window: reject stale or clock-skewed frames.
 	now := time.Now().Unix()
 	if envelope.TS == 0 || now-envelope.TS > beaconTSTolerance || envelope.TS-now > beaconTSTolerance {
-		slog.Warn("Beacon rejected: timestamp outside tolerance", "agent_id", envelope.UUID, "ts", envelope.TS)
+		beaconWarnf("Beacon rejected: timestamp outside tolerance", "agent_id", envelope.UUID, "ts", envelope.TS)
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 
 	if envelope.CipherB64 != "" {
 		if s.sessionManager == nil {
-			slog.Warn("Beacon rejected: session manager unavailable", "agent_id", envelope.UUID)
+			beaconWarnf("Beacon rejected: session manager unavailable", "agent_id", envelope.UUID)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
 		plaintext, err := s.sessionManager.DecryptWithAADB64(envelope.UUID, envelope.CipherB64, []byte(envelope.UUID+"\x00"+strconv.FormatUint(envelope.Seq, 10)))
 		if err != nil {
-			slog.Warn("ECDH decryption failed", "agent_id", envelope.UUID, "err", err)
+			beaconWarnf("ECDH decryption failed", "agent_id", envelope.UUID, "err", err)
 			// Return the PARSED envelope, not the zero value: the caller's
 			// resync gate keys on env.CipherB64 != "" to distinguish "could
 			// not decrypt at all" (unknown session: server restarted or the
@@ -430,7 +462,7 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		// lock out the real agent.
 		accepted := s.acceptSeq(envelope.UUID, envelope.Seq)
 		if !accepted {
-			slog.Warn("Beacon rejected: replay or out-of-order seq", "agent_id", envelope.UUID, "seq", envelope.Seq)
+			beaconWarnf("Beacon rejected: replay or out-of-order seq", "agent_id", envelope.UUID, "seq", envelope.Seq)
 			// Return the PARSED envelope, not the zero value: the caller's
 			// resync gate keys on env.CipherB64 != "" to distinguish "could
 			// not decrypt at all" from "decrypt ok but sequence behind" —
@@ -447,16 +479,16 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		// can set or clear it; decompress from one place for every transport.
 		plaintext, err = protocol.DecompressBeacon(plaintext)
 		if err != nil {
-			slog.Warn("Beacon decompression failed", "agent_id", envelope.UUID, "err", err)
+			beaconWarnf("Beacon decompression failed", "agent_id", envelope.UUID, "err", err)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
 		maxPayload := s.effectiveMaxPayload()
 		if len(plaintext) > maxPayload {
-			slog.Warn("Beacon decrypted payload too large", "agent_id", envelope.UUID, "size", len(plaintext), "max", maxPayload)
+			beaconWarnf("Beacon decrypted payload too large", "agent_id", envelope.UUID, "size", len(plaintext), "max", maxPayload)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
 		if err := encoding.Unmarshal(plaintext, &req); err != nil {
-			slog.Warn("Beacon decrypted payload parse failed", "agent_id", envelope.UUID, "err", err)
+			beaconWarnf("Beacon decrypted payload parse failed", "agent_id", envelope.UUID, "err", err)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
 		req.UUID = envelope.UUID
@@ -474,12 +506,12 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		if envelope.Mac != "" {
 			return envelope, beaconRequest{}, frameHandshake
 		}
-		slog.Warn("Beacon rejected: unauthenticated handshake frame", "agent_id", envelope.UUID)
+		beaconWarnf("Beacon rejected: unauthenticated handshake frame", "agent_id", envelope.UUID)
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 
 	// v2 has no plaintext frames.
-	slog.Warn("Beacon rejected: plaintext frame not allowed", "agent_id", envelope.UUID)
+	beaconWarnf("Beacon rejected: plaintext frame not allowed", "agent_id", envelope.UUID)
 	return beaconEnvelope{}, beaconRequest{}, frameRejected
 }
 
