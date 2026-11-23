@@ -234,3 +234,23 @@ DCRat 盗版电影 1869、IDM 破解窃密 1889、搜狗云控篡改 1845）。�
 每轮沿用既有验收节奏：目标测试 → 全量 Go → 模块裁剪门 → lint → npm check → 提交推送 →
 CI 16 绿 → 镜像 digest → demo pin → 边界检查。按用户要求**不主动运行 `gh run`**，CI/demo pin 待明确指令；
 测试一律静默重定向，避免触发 Windows 安全中心弹窗（构建二进制与全量执行测试会触发 Defender，已停止重复运行）。
+
+## 第五轮（2026-11-23）—— 会话内自愈补缺
+
+对照表里唯一仍缺的**可靠性**项：银狐用守护进程/计划任务互拉（2021、2049），本仓库此前只有
+持久化（Run/计划任务/WMI/service/IFEO/COM），进程被杀后只能等下次登录或计划任务。
+
+本轮新增 `watchdog_start` / `watchdog_stop`（`internal/payload/agent/watchdog.go`）：
+
+- `watchdog_start` 以 **detached** 方式拉起一份自身副本作为 watcher（Unix `setsid`，Windows
+  `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`），父进程被杀后由 watcher 重新拉起一份正常 agent。
+- 重启次数**有界**（`interval_seconds:max_restarts`，interval 5–300 s、restarts 1–50，默认 15:10），
+  避免 fork bomb；`runWatchdogLoop` 的全部外部依赖（存活探测、spawn、停止标记、sleep）注入，
+  单测直接覆盖"到上限即停"与"看到停止标记即停"。
+- **单实例**：状态文件用持久化 UUID 的 SHA-256 前缀命名，第二次 `watchdog_start`（或被 watcher
+  重启后的父进程）看到存活 PID 会拒绝再拉起；`watchdog_stop` 只写停止标记，watcher 下一拍自行清理。
+- watcher **不做跨重启持久化**（那是 persistence 模块的职责），拉起父进程时继承除 watchdog 标记外的
+  全部环境变量，`FORGEC2_*` 配置不丢；`watchdog_start` 进入 `dangerousTaskTypes`（审批门）。
+
+未做：HVNC 隐藏桌面、SaaS 死信箱任务通道、UIA 表单采集、cloudflared 合法隧道——这四项仍是
+对照表里剩余的能力差，按前一轮给出的优先级另行排期。

@@ -51,20 +51,24 @@ const (
 	// TaskTypeAbort cancels a running or queued task on the implant. It was implemented and
 	// registered in the agent but had no spec, so it never appeared in the generated command
 	// reference or the capability matrix: an operator could not discover it.
-	TaskTypeAbort            = "abort"
-	TaskTypeWindowList       = "window_list"
-	TaskTypeWindowClose      = "window_close"
-	TaskTypeClipboardGet     = "clipboard_get"
-	TaskTypeClipboardSet     = "clipboard_set"
-	TaskTypeWallpaper        = "wallpaper"
-	TaskTypeFind             = "find"
-	TaskTypeRegGet           = "reg_get"
-	TaskTypeRegSet           = "reg_set"
-	TaskTypeRegDelete        = "reg_delete"
-	TaskTypeReboot           = "reboot"
-	TaskTypeShutdown         = "shutdown"
-	TaskTypeDrives           = "drives"
-	TaskTypeBeaconNow        = "beacon_now"
+	TaskTypeAbort        = "abort"
+	TaskTypeWindowList   = "window_list"
+	TaskTypeWindowClose  = "window_close"
+	TaskTypeClipboardGet = "clipboard_get"
+	TaskTypeClipboardSet = "clipboard_set"
+	TaskTypeWallpaper    = "wallpaper"
+	TaskTypeFind         = "find"
+	TaskTypeRegGet       = "reg_get"
+	TaskTypeRegSet       = "reg_set"
+	TaskTypeRegDelete    = "reg_delete"
+	TaskTypeReboot       = "reboot"
+	TaskTypeShutdown     = "shutdown"
+	TaskTypeDrives       = "drives"
+	TaskTypeBeaconNow    = "beacon_now"
+	// Self-heal watchdog: watchdog_start launches a detached sibling that
+	// restarts the implant when it dies; watchdog_stop ends it.
+	TaskTypeWatchdogStart    = "watchdog_start"
+	TaskTypeWatchdogStop     = "watchdog_stop"
 	TaskTypeServices         = "services"
 	TaskTypePortscan         = "portscan"
 	TaskTypeNetstat          = "netstat"
@@ -309,6 +313,8 @@ func AllTaskTypes() []string {
 		TaskTypeShutdown,
 		TaskTypeDrives,
 		TaskTypeBeaconNow,
+		TaskTypeWatchdogStart,
+		TaskTypeWatchdogStop,
 		TaskTypeServices,
 		TaskTypePortscan,
 		TaskTypeNetstat,

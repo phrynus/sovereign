@@ -35,6 +35,8 @@ func init() {
 		"shutdown":          handleShutdown,
 		"drives":            handleDrives,
 		"beacon_now":        handleBeaconNow,
+		"watchdog_start":    handleWatchdogStart,
+		"watchdog_stop":     handleWatchdogStop,
 		"services":          handleServices,
 		"portscan":          handlePortscan,
 		"netstat":           handleNetstat,

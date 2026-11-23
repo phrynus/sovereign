@@ -3,11 +3,11 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 227
-- **Constants in tasks.go:** 228
+- **Task types:** 229
+- **Constants in tasks.go:** 230
 - **Aliases:** 3
-- **Approval-gated:** 61
-- **Parameters (total):** 81
+- **Approval-gated:** 62
+- **Parameters (total):** 82
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
@@ -19,7 +19,7 @@
 - [Defense Evasion](#defense-evasion) (30)
 - [Lateral Movement](#lateral-movement) (10)
 - [Persistence](#persistence) (4)
-- [C2 / Session](#c2-session) (27)
+- [C2 / Session](#c2-session) (29)
 - [Impact](#impact) (4)
 - [Other](#other) (28)
 
@@ -257,6 +257,8 @@
 | `tunnel_add_route` | Tunnel Add Route | no | — | — | Add tunnel route |
 | `tunnel_remove_route` | Tunnel Remove Route | no | — | — | Remove tunnel route |
 | `uninstall` | Uninstall Agent | **yes** | — | — | Self-uninstall the agent |
+| `watchdog_start` | Self-Heal Watchdog Start | **yes** | — | command:string | Launch a detached sibling process that restarts the implant when it dies (bounded restart count) |
+| `watchdog_stop` | Self-Heal Watchdog Stop | no | — | — | Stop the self-heal watcher for this agent |
 
 ## Impact
 

@@ -397,6 +397,12 @@ func verifySelfIntegrity() {
 }
 
 func main() {
+	// Self-heal watcher mode: a copy spawned by watchdog_start only supervises
+	// the parent and must never register its own agent session.
+	if params, ok := watchdogModeFromEnv(); ok {
+		runWatchdogMode(params)
+		return
+	}
 	log.SetFlags(0)
 	if !Debug {
 		log.SetOutput(io.Discard)
