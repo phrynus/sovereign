@@ -195,6 +195,16 @@ with the same response bytes; allocs 6 982 → 6 920.
 `TestCachedTaskTypesPerTenant` pins tenant isolation and the TTL refresh,
 `TestCachedTaskTypesReturnsCopy` pins the copy-on-read.
 
+### The "retry all" flag is an index probe (2026-11-23)
+
+The same page ran `SELECT COUNT(*) FROM tasks WHERE status = 'failed'` to decide
+whether to show its "retry all" button, but only a boolean is consumed. A
+`LIMIT 1` probe on the new `(tenant_id, status)` index measured **10.4 µs** vs
+**231 µs** for the count over 4 000 tasks. No page-level number is claimed —
+the seeded benchmark hits a failed row early, so the page delta sits inside the
+run-to-run noise; the isolated query is the deterministic result.
+`TestTaskHistoryHasFailedTasksFlag` pins both directions.
+
 ## 3. Deriving fleet capacity
 
 A fleet of *N* implants on a *T*-second base interval produces `N/T` check-ins
