@@ -60,7 +60,7 @@ func init() {
 			}},
 		{Type: TaskTypeWatchdogStop, Name: "Self-Heal Watchdog Stop", Description: "Stop the self-heal watcher for this agent", Category: "c2"},
 		{Type: TaskTypeKeepAwake, Name: "Keep Awake", Description: "Prevent the Windows target from sleeping for a bounded duration (Windows only)", Category: "opsec",
-			Parameters: []TaskParam{{Name: "command", Type: "string", Required: false, Description: "Seconds 1-86400 (default 300); 0 releases the request early"}}},
+			Parameters: []TaskParam{{Name: "command", Type: "string", Required: false, Description: "Seconds 1-86400 (default 300); 0 releases the request early; status reports the active window"}}},
 		{Type: TaskTypeServices, Name: "List Services", Description: "List Windows services", Category: "discovery"},
 		{Type: TaskTypePortscan, Name: "Port Scan", Description: "Scan TCP ports on a target", Category: "discovery",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Target and ports"}}},

@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseKeepAwake(t *testing.T) {
@@ -87,5 +88,35 @@ func TestKeepAwakeHandlerRejectsWithoutChangingState(t *testing.T) {
 	}
 	if called {
 		t.Fatal("invalid duration reached the platform setter")
+	}
+}
+
+func TestKeepAwakeStatus(t *testing.T) {
+	original := setKeepAwakeStateFunc
+	defer func() { setKeepAwakeStateFunc = original }()
+	setKeepAwakeStateFunc = func(bool) error { return nil }
+
+	keepAwakeMu.Lock()
+	if keepAwakeTimer != nil {
+		keepAwakeTimer.Stop()
+	}
+	keepAwakeTimer, keepAwakeActive, keepAwakeGen = nil, false, keepAwakeGen+1
+	keepAwakeUntil = time.Time{}
+	keepAwakeMu.Unlock()
+
+	var res TaskResult
+	handleKeepAwake(Task{Command: "status"}, &res)
+	if res.Output != "keep_awake: inactive" {
+		t.Fatalf("inactive status: %#v", res)
+	}
+	handleKeepAwake(Task{Command: "60"}, &res)
+	handleKeepAwake(Task{Command: "status"}, &res)
+	if !strings.Contains(res.Output, "active") || !strings.Contains(res.Output, "remaining") {
+		t.Fatalf("active status: %#v", res)
+	}
+	handleKeepAwake(Task{Command: "0"}, &res)
+	handleKeepAwake(Task{Command: "status"}, &res)
+	if res.Output != "keep_awake: inactive" {
+		t.Fatalf("status after release: %#v", res)
 	}
 }

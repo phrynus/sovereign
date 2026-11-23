@@ -26,6 +26,7 @@ var (
 	keepAwakeTimer  *time.Timer
 	keepAwakeGen    uint64
 	keepAwakeActive bool
+	keepAwakeUntil  time.Time
 
 	// Overridden by tests; production uses the platform implementation.
 	setKeepAwakeStateFunc = setKeepAwakeState
@@ -43,7 +44,29 @@ func parseKeepAwake(command string) (int, error) {
 	return seconds, nil
 }
 
+// keep_awake with "status" reports the active window without changing it.
+func keepAwakeStatus(res *TaskResult) {
+	keepAwakeMu.Lock()
+	active, remaining := keepAwakeActive, 0
+	if active {
+		remaining = int(time.Until(keepAwakeUntil).Seconds())
+		if remaining < 0 {
+			remaining = 0
+		}
+	}
+	keepAwakeMu.Unlock()
+	if active {
+		res.Output = fmt.Sprintf("keep_awake: active, %d seconds remaining", remaining)
+		return
+	}
+	res.Output = "keep_awake: inactive"
+}
+
 func handleKeepAwake(task Task, res *TaskResult) {
+	if strings.EqualFold(strings.TrimSpace(task.Command), "status") {
+		keepAwakeStatus(res)
+		return
+	}
 	seconds, err := parseKeepAwake(task.Command)
 	if err != nil {
 		res.Error = err.Error()
@@ -60,6 +83,7 @@ func handleKeepAwake(task Task, res *TaskResult) {
 		}
 		keepAwakeGen++
 		keepAwakeActive = false
+		keepAwakeUntil = time.Time{}
 		if err := setKeepAwakeStateFunc(false); err != nil {
 			res.Error = err.Error()
 			return
@@ -78,6 +102,7 @@ func handleKeepAwake(task Task, res *TaskResult) {
 	keepAwakeGen++
 	gen := keepAwakeGen
 	keepAwakeActive = true
+	keepAwakeUntil = time.Now().Add(time.Duration(seconds) * time.Second)
 	keepAwakeTimer = time.AfterFunc(time.Duration(seconds)*time.Second, func() {
 		keepAwakeMu.Lock()
 		defer keepAwakeMu.Unlock()
@@ -87,6 +112,7 @@ func handleKeepAwake(task Task, res *TaskResult) {
 		}
 		keepAwakeTimer = nil
 		keepAwakeActive = false
+		keepAwakeUntil = time.Time{}
 		_ = setKeepAwakeStateFunc(false)
 	})
 	res.Output = fmt.Sprintf("keep_awake: system awake for %d seconds; send 0 to release early", seconds)
