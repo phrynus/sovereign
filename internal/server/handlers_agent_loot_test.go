@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -36,5 +38,27 @@ func TestNewLootTaskIncludesHostname(t *testing.T) {
 	}
 	if got.Type != "upload" || got.ID != 7 {
 		t.Fatalf("dto=%+v", got)
+	}
+}
+
+// TestLootPageDoesNotShipAgentRows pins the payload fix: the page derives its
+// agent filter from the loot rows, and the old "agents" array shipped up to
+// 5 000 full implant models (every zero-valued column included) that nothing
+// read. Only the tenant gate needs the ids, and they stay server-side.
+func TestLootPageDoesNotShipAgentRows(t *testing.T) {
+	s := newIDORTestServer(t)
+	seedIDORTenants(t, s)
+
+	c, w := opCtx(http.MethodGet, "/x", "alice-op", "", nil)
+	s.handleLootPage(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("loot page: expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode loot payload: %v", err)
+	}
+	if _, ok := payload["agents"]; ok {
+		t.Fatal("loot payload still carries the unused agents array")
 	}
 }
