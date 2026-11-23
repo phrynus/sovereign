@@ -361,7 +361,7 @@ func (s *Server) handleExportCapabilities(c *gin.Context) {
 			"bundle":  bundleSignatureKind,
 			"plugin":  pluginSignatureKind,
 			"failure": failureSignatureKind,
-			"note": "only the bundle and plugin kinds are keyed; the audit chain is an unkeyed hash and the failure shape is " +
+			"note": "bundle, plugin and keyed audit rows are signed; legacy audit rows are an unkeyed hash and the failure shape is " +
 				"not cryptographic at all, so neither should be described as authenticated",
 		},
 		"limits": gin.H{

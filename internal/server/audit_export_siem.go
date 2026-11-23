@@ -53,6 +53,7 @@ func auditToECS(row auditChainExportRow) map[string]interface{} {
 			"details":    row.Details,
 			"entry_hash": row.EntryHash,
 			"prev_hash":  row.PrevHash,
+			"signature":  row.Signature,
 			"error":      row.Error,
 		},
 	}

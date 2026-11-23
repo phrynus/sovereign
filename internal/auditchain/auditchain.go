@@ -5,15 +5,21 @@
 // party means not checking it at all. The hash lives here so the server and `cmd/verify-audit` compute the SAME digest -
 // two implementations would produce a false tampering alarm on one side.
 //
-// What this can and cannot prove is the same thing the server's verifier says: the hash is unkeyed and the previous hash
-// is not an input, so it detects PARTIAL edits (one row changed, a row removed, a link rewritten) and not an adversary
-// who recomputes every row. Saying so is part of the package, not a footnote.
+// The legacy hash is unkeyed and prev_hash is not an input, so unsigned rows
+// detect PARTIAL edits only. New rows may additionally carry an Ed25519
+// signature when the operator configured a signing seed; those rows resist a
+// full rewrite that recomputes every hash. Saying which applies is part of the
+// verdict, not a footnote.
 package auditchain
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 // Row is one exported audit entry, in the shape the export writes.
@@ -31,6 +37,7 @@ type Row struct {
 	PrevHash  string `json:"prev_hash"`
 	EntryHash string `json:"entry_hash"`
 	CreatedAt string `json:"created_at"`
+	Signature string `json:"signature,omitempty"`
 }
 
 // Hash is the digest of one entry's fields.
@@ -81,7 +88,84 @@ type Verdict struct {
 //
 // It lives here, beside the verifier, because both the server and cmd/verify-audit report this verdict and neither should have
 // to import the other to say the same sentence.
-const SignatureKind = "audit hash chain entry: unkeyed, detects partial edits, does not resist a full rewrite"
+const SignatureKind = "audit hash chain: legacy rows are unkeyed (a partial-edit detector that does not resist a full rewrite); new rows may carry Ed25519 signatures when enabled"
+
+// SigningPayload is the canonical, unambiguous byte sequence a row signature
+// covers. CreatedAt and ID are absent: the database assigns both after the row
+// is built, so including them would make fresh signatures unverifiable.
+func SigningPayload(row Row) []byte {
+	var buf []byte
+	for _, field := range []string{row.User, row.Action, row.Resource, row.AgentID, row.IP, row.Error, row.Details} {
+		buf = fmt.Appendf(buf, "%d:%s", len(field), field)
+	}
+	buf = fmt.Appendf(buf, "|%t|%d|%s|%s", row.Success, row.TenantID, row.PrevHash, row.EntryHash)
+	return buf
+}
+
+// SignRow returns "<public key hex>.<signature hex>". Carrying the public key
+// lets a rotated key still verify old rows offline; trust comes from the
+// out-of-band archived chain head, not from a key inside the same export.
+func SignRow(row Row, seedHex string) (string, error) {
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil || len(seed) != ed25519.SeedSize {
+		return "", fmt.Errorf("audit signing key must be %d hex bytes", ed25519.SeedSize)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	pub := priv.Public().(ed25519.PublicKey)
+	return hex.EncodeToString(pub) + "." + hex.EncodeToString(ed25519.Sign(priv, SigningPayload(row))), nil
+}
+
+// VerifyRow reports whether a row carries a valid signature and whether it
+// carries one at all. An empty signature is a pre-keying legacy row: callers
+// fall back to the unkeyed hash check for those.
+func VerifyRow(row Row) (valid bool, present bool) {
+	if row.Signature == "" {
+		return false, false
+	}
+	parts := strings.Split(row.Signature, ".")
+	if len(parts) != 2 {
+		return false, true
+	}
+	pub, errPub := hex.DecodeString(parts[0])
+	sig, errSig := hex.DecodeString(parts[1])
+	if errPub != nil || errSig != nil || len(pub) != ed25519.PublicKeySize || len(sig) != ed25519.SignatureSize {
+		return false, true
+	}
+	return ed25519.Verify(ed25519.PublicKey(pub), SigningPayload(row), sig), true
+}
+
+// AnchorPayload and its helpers protect the external head file with the same
+// key, so an attacker who can also write that file cannot forge a head for a
+// rewritten table.
+func AnchorPayload(head string, id uint, timestamp string) []byte {
+	return []byte(head + "|" + strconv.FormatUint(uint64(id), 10) + "|" + timestamp)
+}
+
+func SignAnchor(head string, id uint, timestamp, seedHex string) (string, error) {
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil || len(seed) != ed25519.SeedSize {
+		return "", fmt.Errorf("audit signing key must be %d hex bytes", ed25519.SeedSize)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	pub := priv.Public().(ed25519.PublicKey)
+	return hex.EncodeToString(pub) + "." + hex.EncodeToString(ed25519.Sign(priv, AnchorPayload(head, id, timestamp))), nil
+}
+
+func VerifyAnchor(head string, id uint, timestamp, signature string) bool {
+	if signature == "" {
+		return true // legacy unsigned anchor line
+	}
+	parts := strings.Split(signature, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	pub, errPub := hex.DecodeString(parts[0])
+	sig, errSig := hex.DecodeString(parts[1])
+	if errPub != nil || errSig != nil || len(pub) != ed25519.PublicKeySize || len(sig) != ed25519.SignatureSize {
+		return false
+	}
+	return ed25519.Verify(ed25519.PublicKey(pub), AnchorPayload(head, id, timestamp), sig)
+}
 
 // Verify walks the rows in id order and checks every digest and every link.
 //
@@ -99,6 +183,10 @@ func Verify(rows []Row) Verdict {
 
 		if got := HashRow(*row); got != row.EntryHash {
 			verdict.record(row.ID, "row content does not match its entry_hash: "+got+" != "+row.EntryHash)
+			continue
+		}
+		if valid, present := VerifyRow(*row); present && !valid {
+			verdict.record(row.ID, "row signature is invalid")
 			continue
 		}
 		if previous != nil {

@@ -16,7 +16,7 @@ import (
 // Each response that reports one now carries its kind, so the distinction travels with the data instead of living only in
 // docs/TERMINOLOGY.md.
 const (
-	// auditSignatureKind is the unkeyed hash chain. It detects partial edits and does not resist a full rewrite.
+	// auditSignatureKind is the hash chain plus Ed25519 row signatures when enabled; legacy rows remain unkeyed hash-only.
 	auditSignatureKind = auditchain.SignatureKind
 
 	// bundleSignatureKind is the handover manifest signature.

@@ -252,6 +252,9 @@ type Server struct {
 	// auditAnchorFile records the chain head outside the audit table. Resolved at
 	// startup (initAuditAnchor) because the audit path must not take configMu.
 	auditAnchorFile string
+	// auditSigningSeed is the hex Ed25519 seed for per-row and anchor signatures.
+	// Empty means legacy hash-only mode (no key configured).
+	auditSigningSeed string
 	// auditVerdict* cache the chain verdict for the UI health endpoint.
 	auditVerdictMu sync.Mutex
 	auditVerdict   auditChainVerdict

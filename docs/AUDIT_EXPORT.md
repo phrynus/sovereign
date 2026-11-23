@@ -57,10 +57,12 @@ Read this part before relying on the file.
 | a row removed | an adversary who also re-links every `prev_hash` |
 | a `prev_hash` rewritten | insertion of a fabricated row with a consistent hash |
 
-The hash is **unkeyed**: the algorithm is public and `prev_hash` is **not** an input to `entry_hash`. So the chain
-detects the shape an operator or a compromised account produces through the app or a database client — **partial**
-edits — and not someone with write access who redoes everything. Closing that gap needs a keyed MAC or an external
-anchor; this system has neither, and pretending otherwise would be worse than the limit itself.
+The legacy hash is **unkeyed**: the algorithm is public and `prev_hash` is **not** an input to `entry_hash`. It detects the
+shape an operator or a compromised account produces through the app or a database client — **partial** edits — but not
+someone with write access who redoes everything. When `crypto.audit_signing_key` is configured, **new rows also carry an
+Ed25519 signature** (public key included) and the external anchor head is signed; a rewrite that recomputes every hash
+cannot forge those signatures without the seed. Rows written before keying remain hash-only and the verdict says so.
+Export them with the `signature` field intact: `cmd/verify-audit` checks every signature it finds.
 
 Which is why the export matters: **an out-of-band copy you verified today cannot be matched by a table rewritten
 tomorrow.** Keep the copy.

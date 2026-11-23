@@ -4,18 +4,23 @@
 // reads the file the export produced - newline-delimited JSON, or the single-document `format=json` shape - and walks
 // the chain:
 //
+//	go run ./cmd/verify-audit -gen                  # new audit signing seed + public key
 //	go run ./cmd/verify-audit audit.ndjson
 //	go run ./cmd/verify-audit audit.json -json
 //
 // Exit codes: 0 every digest and link checks out, 1 a row was edited or a link was broken, 2 the file could not be read.
 //
-// What it proves is partial-edit detection: the hash is unkeyed and prev_hash is not an input, so a rewrite that
-// recomputes every row verifies. That is a property of the design, not of this tool, and the report says it.
+// Legacy rows give partial-edit detection only: the hash is unkeyed and prev_hash is not an input. Rows with a
+// `signature` field are also checked with their embedded Ed25519 public key, so a full rewrite that recomputes every
+// hash fails. The report says which applies.
 package main
 
 import (
 	"bufio"
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -32,11 +37,22 @@ func main() {
 	minRows := flag.Int("min-rows", 1, "fail when the file holds fewer rows than this; guards against verifying a truncated export")
 	requireContiguous := flag.Bool("require-contiguous", false,
 		"fail unless the file proves it is the whole chain: no filter, no truncation, no id gaps. An NDJSON export cannot prove that")
+	gen := flag.Bool("gen", false, "generate a new Ed25519 audit signing seed and public key, then exit")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: verify-audit [-json] [-quiet] [-min-rows N] <audit.ndjson|audit.json>\n")
+		fmt.Fprintf(os.Stderr, "usage: verify-audit [-gen] [-json] [-quiet] [-min-rows N] <audit.ndjson|audit.json>\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	if *gen {
+		pub, priv, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "verify-audit:", err)
+			os.Exit(2)
+		}
+		fmt.Println("seed:", hex.EncodeToString(priv.Seed()))
+		fmt.Println("public key:", hex.EncodeToString(pub))
+		return
+	}
 	if flag.NArg() != 1 {
 		flag.Usage()
 		os.Exit(2)

@@ -491,6 +491,7 @@ type AuditLog struct {
 	Details   string    `json:"details"`                                                        // additional details
 	PrevHash  string    `gorm:"size:64" json:"prev_hash"`                                       // SHA-256 of the previous audit entry (append-only hash chain)
 	EntryHash string    `gorm:"size:64" json:"entry_hash"`                                      // SHA-256 hash of this entry (covers all fields)
+	Signature string    `gorm:"size:256" json:"signature,omitempty"`                            // Ed25519 pubkey.signature over the canonical row; empty for pre-keying legacy rows
 	CreatedAt time.Time `gorm:"index;index:idx_audit_action_time,priority:2;index:idx_audit_tenant_time,priority:2;index:idx_audit_agent_created,priority:2" json:"created_at"`
 }
 

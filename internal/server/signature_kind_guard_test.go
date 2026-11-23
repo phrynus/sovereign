@@ -10,10 +10,10 @@ import (
 
 // TestSignatureFieldsCarryTheirKind is the enumeration guard for the product's overloaded word.
 //
-// Four different objects here are called a "signature", and the expensive mistake is taking the unkeyed audit chain for a keyed
-// one. A response that reports a signature without saying which kind leaves that inference to the reader, so this guard walks
-// the Go sources and requires every FILE that declares a `json:"signature…"` field to also declare a kind - with an explicit
-// allowlist for the places where the field is the thing itself rather than a verdict.
+// Four different objects here are called a "signature", and the expensive mistake is taking a legacy unkeyed audit row
+// for a keyed signature. A response that reports a signature without saying which kind leaves that inference to the
+// reader, so this guard walks the Go sources and requires every FILE that declares a `json:"signature…"` field to
+// also declare a kind - with an explicit allowlist for the places where the field is the thing itself rather than a verdict.
 func TestSignatureFieldsCarryTheirKind(t *testing.T) {
 	// Deliberate exceptions, each with the reason it is not a verdict:
 	//   - the manifest and the implant wire struct CARRY the signature; they do not report on one;
@@ -22,6 +22,7 @@ func TestSignatureFieldsCarryTheirKind(t *testing.T) {
 	allowed := map[string]string{
 		"internal/bundle/bundle.go":                   "the manifest carries the signature object it is about",
 		"internal/plugin/manifest.go":                 "the plugin manifest carries its own signature field",
+		"internal/db/models.go":                       "the audit row carries the signature it is about, not a verdict",
 		"internal/payload/agent/agent_lifecycle.go":   "implant wire struct, not an operator response",
 		"internal/server/tasks_rerun_by_signature.go": "request body: the caller supplies the shape",
 	}

@@ -15,6 +15,7 @@ func TestApplyEnvOverridesCoversEveryVariable(t *testing.T) {
 	t.Setenv("FORGEC2_BACKUP_KEY", "backup-from-env")
 	t.Setenv("FORGEC2_TOTP_KEY", "totp-from-env")
 	t.Setenv("FORGEC2_CSRF_KEY", "csrf-from-env")
+	t.Setenv("FORGEC2_AUDIT_SIGNING_KEY", "audit-seed-from-env")
 	t.Setenv("FORGEC2_AI_API_KEY", "ai-from-env")
 	t.Setenv("FORGEC2_PLUGIN_TRUSTED_KEYS", " aa , bb ,, ")
 	t.Setenv("FORGEC2_PLUGINS_REQUIRE_SIGNED", "true")
@@ -45,6 +46,7 @@ func TestApplyEnvOverridesCoversEveryVariable(t *testing.T) {
 		{"backup_key", cfg.Crypto.BackupKey, "backup-from-env"},
 		{"totp_key", cfg.Crypto.TotpKey, "totp-from-env"},
 		{"csrf_key", cfg.Crypto.CsrfKey, "csrf-from-env"},
+		{"audit_signing_key", cfg.Crypto.AuditSigningKey, "audit-seed-from-env"},
 		{"ai_api_key", cfg.AI.APIKey, "ai-from-env"},
 		{"plugin_keys", len(cfg.Plugins.TrustedKeys), 2},
 		{"plugin_key_0", cfg.Plugins.TrustedKeys[0], "aa"},

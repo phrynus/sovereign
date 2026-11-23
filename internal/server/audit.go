@@ -231,6 +231,7 @@ type auditChainExportRow struct {
 	PrevHash  string `json:"prev_hash"`
 	EntryHash string `json:"entry_hash"`
 	CreatedAt string `json:"created_at"`
+	Signature string `json:"signature,omitempty"`
 }
 
 // handleExportAuditChain streams the chain as newline-delimited JSON so an
@@ -354,6 +355,7 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 			Action: rows[i].Action, Resource: rows[i].Resource, AgentID: rows[i].AgentID,
 			IP: rows[i].IP, Success: rows[i].Success, Error: rows[i].Error,
 			Details: rows[i].Details, PrevHash: rows[i].PrevHash, EntryHash: rows[i].EntryHash,
+			Signature: rows[i].Signature,
 			CreatedAt: rows[i].CreatedAt.UTC().Format(time.RFC3339Nano),
 		}
 		if err := enc.Encode(&row); err != nil {
@@ -402,6 +404,7 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 				Action: rows[i].Action, Resource: rows[i].Resource, AgentID: rows[i].AgentID,
 				IP: rows[i].IP, Success: rows[i].Success, Error: rows[i].Error,
 				Details: rows[i].Details, PrevHash: rows[i].PrevHash, EntryHash: rows[i].EntryHash,
+				Signature: rows[i].Signature,
 				CreatedAt: rows[i].CreatedAt.UTC().Format(time.RFC3339Nano),
 			}
 			if format == "cef" {
@@ -432,6 +435,7 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 				Action: rows[i].Action, Resource: rows[i].Resource, AgentID: rows[i].AgentID,
 				IP: rows[i].IP, Success: rows[i].Success, Error: rows[i].Error,
 				Details: rows[i].Details, PrevHash: rows[i].PrevHash, EntryHash: rows[i].EntryHash,
+				Signature: rows[i].Signature,
 				CreatedAt: rows[i].CreatedAt.UTC().Format(time.RFC3339Nano),
 			})
 		}
@@ -530,6 +534,12 @@ func (s *Server) verifyAuditChain(limit int) auditChainVerdict {
 		if want := auditEntryHash(row); row.EntryHash != want {
 			return auditChainVerdict{Checked: checked, FirstBadID: row.ID, Reason: "entry content does not match its hash"}
 		}
+		if row.Signature != "" {
+			if valid, _ := auditchain.VerifyRow(auditChainRow(row)); !valid {
+				return auditChainVerdict{Checked: checked, FirstBadID: row.ID,
+					Reason: "entry signature is invalid (content edited or key changed)"}
+			}
+		}
 		if expectPrev != "" && row.PrevHash != expectPrev {
 			// A gap in the id sequence means rows were removed, and an audit purge
 			// legitimately deletes old rows (scoped per tenant, so the removed ids
@@ -545,13 +555,22 @@ func (s *Server) verifyAuditChain(limit int) auditChainVerdict {
 		expectPrev = row.EntryHash
 		checked++
 	}
-	// The head check: the newest hash must match the last line of the anchor file.
-	// An attacker who rewrites every row (recomputing all hashes) keeps the table
-	// internally consistent, so only a copy outside it can catch that.
-	if head := s.auditAnchorHead(); head != "" && head != rows[len(rows)-1].EntryHash {
-		return auditChainVerdict{Checked: checked, Discontinuities: purgedBoundaries,
-			FirstBadID: rows[len(rows)-1].ID,
-			Reason:     "chain head does not match the anchor file (rows were rewritten or the table was replaced)"}
+	// The head check: the newest hash must match the last anchor line, and the
+	// anchor's own signature must verify. A full rewrite of the table keeps the
+	// unkeyed hashes internally consistent; only the keyed copy outside the DB
+	// catches that.
+	head, anchorID, anchorTS, anchorSig, hasAnchor := s.auditAnchorRecord()
+	if hasAnchor {
+		last := rows[len(rows)-1]
+		if head != last.EntryHash {
+			return auditChainVerdict{Checked: checked, Discontinuities: purgedBoundaries,
+				FirstBadID: last.ID,
+				Reason:     "chain head does not match the anchor file (rows were rewritten or the table was replaced)"}
+		}
+		if !auditchain.VerifyAnchor(head, anchorID, anchorTS, anchorSig) {
+			return auditChainVerdict{Checked: checked, Discontinuities: purgedBoundaries,
+				FirstBadID: last.ID, Reason: "anchor file signature is invalid"}
+		}
 	}
 	return auditChainVerdict{OK: true, Checked: checked, Discontinuities: purgedBoundaries}
 }
@@ -565,6 +584,27 @@ func (s *Server) verifyAuditChain(limit int) auditChainVerdict {
 // an RWMutex that is not reentrant.
 func (s *Server) auditAnchorPath() string {
 	return s.auditAnchorFile
+}
+
+// initAuditSigning enables keyed audit entries when crypto.audit_signing_key
+// (or FORGEC2_AUDIT_SIGNING_KEY) holds a valid 32-byte hex seed. An invalid key
+// disables signing rather than failing startup: the hash chain keeps working
+// and is not silently claimed to be keyed.
+func (s *Server) initAuditSigning() {
+	s.configMu.RLock()
+	seed := strings.TrimSpace(s.cfg.Crypto.AuditSigningKey)
+	s.configMu.RUnlock()
+	if seed == "" {
+		s.auditSigningSeed = ""
+		return
+	}
+	if _, err := auditchain.SignRow(auditchain.Row{}, seed); err != nil {
+		slog.Warn("Audit signing key is invalid; keeping hash-only audit chain", "err", err)
+		s.auditSigningSeed = ""
+		return
+	}
+	s.auditSigningSeed = seed
+	slog.Info("Audit chain signing enabled")
 }
 
 // initAuditAnchor resolves the anchor file path. Called before traffic starts.
@@ -595,30 +635,60 @@ func (s *Server) appendAuditAnchor(head string, id uint) {
 		return
 	}
 	defer f.Close()
-	if _, err := fmt.Fprintf(f, "%s %d %s\n", head, id, time.Now().UTC().Format(time.RFC3339)); err != nil {
+	ts := time.Now().UTC().Format(time.RFC3339)
+	signature := ""
+	if s.auditSigningSeed != "" {
+		sig, err := auditchain.SignAnchor(head, id, ts, s.auditSigningSeed)
+		if err != nil {
+			slog.Warn("Failed to sign the audit anchor", "err", err)
+		} else {
+			signature = sig
+		}
+	}
+	if _, err := fmt.Fprintf(f, "%s %d %s %s\n", head, id, ts, signature); err != nil {
 		slog.Warn("Failed to append to the audit anchor file", "err", err)
 	}
 }
 
-// auditAnchorHead returns the most recently recorded chain head, or "" when no
-// anchor exists yet (fresh install, or a deployment without a data directory).
-func (s *Server) auditAnchorHead() string {
+// auditAnchorRecord reads the last anchor line: head, row id, timestamp and
+// optional Ed25519 signature. Unsigned lines are pre-keying legacy records.
+func (s *Server) auditAnchorRecord() (head string, id uint, timestamp, signature string, ok bool) {
 	path := s.auditAnchorPath()
 	if path == "" {
-		return ""
+		return "", 0, "", "", false
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return "", 0, "", "", false
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		fields := strings.Fields(lines[i])
-		if len(fields) >= 1 && fields[0] != "" {
-			return fields[0]
+		if len(fields) < 1 || fields[0] == "" {
+			continue
 		}
+		head = fields[0]
+		if len(fields) > 1 {
+			n, _ := strconv.ParseUint(fields[1], 10, 64)
+			id = uint(n)
+		}
+		if len(fields) > 2 {
+			timestamp = fields[2]
+		}
+		if len(fields) > 3 {
+			signature = fields[3]
+		}
+		return head, id, timestamp, signature, true
 	}
-	return ""
+	return "", 0, "", "", false
+}
+
+func (s *Server) auditAnchorHead() string {
+	head, _, _, _, ok := s.auditAnchorRecord()
+	if !ok {
+		return ""
+	}
+	return head
 }
 
 // auditChainHead is the fingerprint an operator archives out of band: the newest
@@ -635,6 +705,13 @@ type auditChainHead struct {
 	// AnchorRecording is true when an anchor exists at all; a fresh install has
 	// none yet, which is not a failure.
 	AnchorRecorded bool `json:"anchor_recorded"`
+	// Signature is the newest row's Ed25519 signature (pubkey.signature), when
+	// signing is enabled. Anchor* is the signed out-of-band record: archive this
+	// response away from the console, it is the trust root for offline checks.
+	Signature       string `json:"signature,omitempty"`
+	AnchorID        uint   `json:"anchor_id,omitempty"`
+	AnchorTimestamp string `json:"anchor_timestamp,omitempty"`
+	AnchorSignature string `json:"anchor_signature,omitempty"`
 }
 
 // handleAuditChainAnchor returns the current chain head for out-of-band archiving.
@@ -653,11 +730,14 @@ func (s *Server) handleAuditChainAnchor(c *gin.Context) {
 	if newest.ID != 0 {
 		head.ID = newest.ID
 		head.EntryHash = newest.EntryHash
+		head.Signature = newest.Signature
 		head.CreatedAt = newest.CreatedAt.UTC().Format(time.RFC3339Nano)
 	}
-	if anchored := s.auditAnchorHead(); anchored != "" {
+	anchored, anchorID, anchorTS, anchorSig, hasAnchor := s.auditAnchorRecord()
+	if hasAnchor {
 		head.AnchorRecorded = true
 		head.AnchorMatches = head.EntryHash == "" || anchored == head.EntryHash
+		head.AnchorID, head.AnchorTimestamp, head.AnchorSignature = anchorID, anchorTS, anchorSig
 	}
 	respond(c, head)
 }
@@ -688,6 +768,19 @@ func auditEntryHash(e *db.AuditLog) string {
 	// would turn a correct export into a false tampering alarm offline, which is the worst possible failure for a
 	// tamper-evidence tool.
 	return auditchain.Hash(e.User, e.Action, e.Resource, e.AgentID, e.IP, e.Success, e.Error, e.Details)
+}
+
+// auditChainRow projects a stored row into the shared canonical shape. The
+// created_at string is informational: SignRow excludes it because gorm assigns
+// it after the signature is computed.
+func auditChainRow(e *db.AuditLog) auditchain.Row {
+	return auditchain.Row{
+		ID: e.ID, TenantID: e.TenantID, User: e.User, Action: e.Action,
+		Resource: e.Resource, AgentID: e.AgentID, IP: e.IP, Success: e.Success,
+		Error: e.Error, Details: e.Details, PrevHash: e.PrevHash,
+		EntryHash: e.EntryHash, Signature: e.Signature,
+		CreatedAt: e.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
 }
 
 // persistAuditBatch chains entries onto the current database head and inserts
@@ -722,6 +815,13 @@ func (s *Server) persistAuditBatch(entries []db.AuditLog, prevHash string) error
 		for i := range entries {
 			entries[i].PrevHash = lastHash
 			entries[i].EntryHash = auditEntryHash(&entries[i])
+			if s.auditSigningSeed != "" {
+				sig, err := auditchain.SignRow(auditChainRow(&entries[i]), s.auditSigningSeed)
+				if err != nil {
+					return err // never write an unsigned row while signing is enabled
+				}
+				entries[i].Signature = sig
+			}
 			lastHash = entries[i].EntryHash
 		}
 		return tx.CreateInBatches(entries, 50).Error

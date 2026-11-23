@@ -181,6 +181,7 @@ crypto:
   # update_signing_key: ""       # OPTIONAL: 64-char hex (32-byte) Ed25519 PUBLIC key; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning). Generate offline: go run ./cmd/sign-release -gen (keep the seed in GitHub Secrets as RELEASE_SIGNING_KEY; the release workflow signs automatically).
   # require_release_signature: false  # when true, refuse hot updates if update_signing_key is empty (fail closed). Recommended for production; tag CI already refuses to ship unsigned releases.
   # session_cipher: ""           # OPTIONAL: "" or "aes-gcm" (default) or "chacha20" �?session AEAD suite (ChaCha20-Poly1305 when chacha20). Agreed at handshake (auth field sc); wire framing identical (12-byte nonce). Changing this requires rebuilt agents that parse sc.
+  # audit_signing_key: ""         # OPTIONAL: 64-char hex Ed25519 SEED. New audit rows and the external anchor head are signed; legacy rows stay hash-only. Keep the seed out of DB backups. Generate with: go run ./cmd/verify-audit -gen
 
 malleable:
   enabled: false

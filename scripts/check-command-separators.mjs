@@ -39,6 +39,7 @@ const ALLOWLIST = new Map([
   ["phishingLandingAllowed", "in-memory token|ip rate-limit key"],
   ["handleAPINetworkTopology", "in-memory topology edge key"],
   ["networkFingerprint", "agent-side interface fingerprint (name|flags|addrs), compared to itself"],
+  ["AnchorPayload", "in-memory signed anchor payload (head|id|timestamp), never sent to an implant"],
 ]);
 
 const GUARDS = ["validateCommandArg(", "credentialCommandHasSeparator("];

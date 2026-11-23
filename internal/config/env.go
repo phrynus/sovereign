@@ -36,6 +36,10 @@ func ApplyEnvOverrides(cfg *Config) {
 	if envLootKey := os.Getenv("FORGEC2_LOOT_KEY"); envLootKey != "" {
 		cfg.Crypto.LootKey = envLootKey
 	}
+	// Env override for the audit chain signing seed (takes precedence over config).
+	if envAuditSigningKey := os.Getenv("FORGEC2_AUDIT_SIGNING_KEY"); envAuditSigningKey != "" {
+		cfg.Crypto.AuditSigningKey = envAuditSigningKey
+	}
 
 	// Env override for ExtC2 key (takes precedence over config file)
 	if envExtC2Key := os.Getenv("FORGEC2_EXTC2_KEY"); envExtC2Key != "" {

@@ -351,12 +351,14 @@ Current timeouts, and where they live:
 The audit log is a hash chain (`auditEntryHash`, `PrevHash` -> `EntryHash`).
 Three things are easy to get wrong here:
 
-- **Never state that it detects a full rewrite.** The hash is unkeyed, the
-  algorithm is public and PrevHash is not part of the entry hash, so it detects
-  **partial** edits (one row changed, a row removed, a link rewritten) - the shape
-  an operator or a compromised account produces through the app or a DB client. An
-  attacker with write access who recomputes every hash is **not** detected; that
-  would need a keyed MAC or an external anchor.
+- **Do not call the whole chain authenticated.** The legacy hash is unkeyed,
+  public and does not include PrevHash, so rows without a signature detect only
+  **partial** edits. With `crypto.audit_signing_key` (or
+  `FORGEC2_AUDIT_SIGNING_KEY`) new rows and the external anchor head carry
+  Ed25519 signatures (`<pubhex>.<sighex>`), which do resist a full rewrite that
+  recomputes every hash. The seed is a secret: keep it out of DB backups, and
+  archive the `/audit/chain/anchor` response (it carries the signatures) out of
+  band as the trust root.
 - **Anything that deletes rows must leave a marker.** handlePurgeAuditLogs
   writes an `audit_purge` record before deleting, and `verifyAuditChain` accepts a
   discontinuity only at the window start when the id sequence has a gap - a

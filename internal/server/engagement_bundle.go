@@ -189,6 +189,7 @@ func (s *Server) handleEngagementBundle(c *gin.Context) {
 				Action: rows[i].Action, Resource: rows[i].Resource, AgentID: rows[i].AgentID,
 				IP: rows[i].IP, Success: rows[i].Success, Error: rows[i].Error,
 				Details: rows[i].Details, PrevHash: rows[i].PrevHash, EntryHash: rows[i].EntryHash,
+				Signature: rows[i].Signature,
 				CreatedAt: rows[i].CreatedAt.UTC().Format(time.RFC3339Nano),
 			}
 			if err := enc.Encode(&row); err != nil {

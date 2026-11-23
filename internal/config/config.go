@@ -193,6 +193,7 @@ type Config struct {
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 		UpdateSigningKey        string `yaml:"update_signing_key"`         // OPTIONAL: 32-byte hex Ed25519 pubkey; when set, hot updates require a detached "<checksum>.sig" release signature (empty = checksum-only + warning unless require_release_signature)
 		RequireReleaseSignature bool   `yaml:"require_release_signature"`  // when true, refuse hot updates if update_signing_key is empty or the detached .sig fails verification (default false for upgrade compat; set true in production)
+		AuditSigningKey         string `yaml:"audit_signing_key"`          // OPTIONAL: 64-char hex Ed25519 SEED for per-entry audit signatures + signed anchor head; empty = legacy hash-only mode
 		// SessionCipher selects the beacon session AEAD: "" / "aes-gcm" (default)
 		// or "chacha20" (ChaCha20-Poly1305). Agreed at handshake via the MAC'd
 		// auth response field sc; both suites use a 12-byte nonce so the wire
