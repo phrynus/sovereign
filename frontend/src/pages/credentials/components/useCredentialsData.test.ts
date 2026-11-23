@@ -84,3 +84,70 @@ describe("useCredentialsData", () => {
     expect(sawLoading).toBe(false);
   });
 });
+
+describe("useCredentialsData WebSocket throttle", () => {
+  it("coalesces a harvest burst into one immediate and one trailing refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      getMock.mockResolvedValue(vault(2));
+      let subscriber: ((msg: { type: string }) => void) | undefined;
+      subscribeMock.mockImplementation((fn: (msg: { type: string }) => void) => {
+        subscriber = fn;
+        return () => {};
+      });
+      const { unmount } = renderHook(() => useCredentialsData());
+      await act(async () => {
+        await Promise.resolve();
+      });
+      getMock.mockClear();
+
+      act(() => {
+        subscriber?.({ type: "credential_update" });
+        subscriber?.({ type: "credential_update" });
+        subscriber?.({ type: "sync" });
+      });
+      expect(getMock).toHaveBeenCalledTimes(1);
+
+      // Let the immediate load settle so its in-flight join does not swallow
+      // the trailing refresh, then advance past the throttle window.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(800);
+      });
+      expect(getMock).toHaveBeenCalledTimes(2);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a pending trailing refresh on unmount", async () => {
+    vi.useFakeTimers();
+    try {
+      getMock.mockResolvedValue(vault(1));
+      let subscriber: ((msg: { type: string }) => void) | undefined;
+      subscribeMock.mockImplementation((fn: (msg: { type: string }) => void) => {
+        subscriber = fn;
+        return () => {};
+      });
+      const { unmount } = renderHook(() => useCredentialsData());
+      await act(async () => {
+        await Promise.resolve();
+      });
+      getMock.mockClear();
+
+      act(() => {
+        subscriber?.({ type: "credential_update" });
+        subscriber?.({ type: "credential_update" });
+      });
+      expect(getMock).toHaveBeenCalledTimes(1);
+      unmount();
+      vi.advanceTimersByTime(2000);
+      expect(getMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
