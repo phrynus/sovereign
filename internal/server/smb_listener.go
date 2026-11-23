@@ -83,7 +83,13 @@ func (s *Server) handleSMBConnection(conn net.Conn) {
 					return
 				}
 			} else {
-				slog.Error("SMB beacon envelope rejected", "remote", conn.RemoteAddr().String())
+				// Any unauthenticated failure (bad JSON, bad MAC with a live
+				// session, stale timestamp) ends the connection like a failed
+				// auth frame. Keeping it open for one failure shape turns the
+				// listener into an oracle. The peer cannot read logs, so this
+				// is Debug-only instead of an Error line per probe.
+				slog.Debug("SMB beacon envelope rejected without resync", "remote", conn.RemoteAddr().String())
+				return
 			}
 			continue
 		}

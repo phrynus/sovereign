@@ -137,10 +137,13 @@ func (s *grpcBeaconServer) Beacon(stream c2pb.C2Service_BeaconServer) error {
 			return nil
 		}
 		if err != nil {
-			return status.Errorf(codes.Aborted, "recv failed: %v", err)
+			// The stream is already broken; end it like a rejected frame
+			// instead of returning a distinct gRPC status a prober can read.
+			slog.Debug("gRPC beacon recv failed", "err", err)
+			return nil
 		}
 		if len(env.Payload) == 0 {
-			return status.Errorf(codes.InvalidArgument, "empty envelope")
+			return nil
 		}
 
 		if p, ok := peer.FromContext(stream.Context()); ok {

@@ -130,3 +130,22 @@ func TestSMBBeaconV2RegisterAndEncrypted(t *testing.T) {
 		t.Fatalf("result output = %q status=%q, want ok", result.Result, result.Status)
 	}
 }
+
+func TestSMBUnauthenticatedFailuresAllClose(t *testing.T) {
+	ginSetTestMode(t)
+	database := testutil.SetupTestDB(t)
+	s := initTCPBeaconServer(t, database)
+
+	// Bad JSON and a frame with no ciphertext are both unauthenticated
+	// failures. Neither may keep the connection open while another closes it.
+	for _, body := range []string{"not-json", `{"uuid":"aaaaaaaa-bbbb-4333-8444-cccccccccccc","ts":0}`} {
+		conn, done := smbFrameConn(t, s)
+		tcpWriteFrame(t, conn, []byte(body))
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		var msgLen uint32
+		if err := binary.Read(conn, binary.BigEndian, &msgLen); err == nil {
+			t.Fatalf("body %q: expected connection close, got frame length %d", body, msgLen)
+		}
+		done()
+	}
+}

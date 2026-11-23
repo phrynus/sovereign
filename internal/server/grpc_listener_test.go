@@ -134,3 +134,29 @@ func TestGRPCBeaconRejectedFrame(t *testing.T) {
 		t.Fatal("expected stream to end without a response")
 	}
 }
+
+func TestGRPCEmptyEnvelopeEndsStreamLikeRejection(t *testing.T) {
+	addr := testFreeAddr(t)
+	srv := NewGRPCListener(addr)
+	srv.SetHandler(func(string, []byte) []byte {
+		return []byte("should not be reached")
+	})
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start grpc listener: %v", err)
+	}
+	defer srv.Stop()
+
+	_, cli := testGRPCDial(t, addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := cli.Beacon(ctx)
+	if err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	if err := stream.Send(&c2pb.Envelope{}); err != nil {
+		t.Fatalf("send empty envelope: %v", err)
+	}
+	if _, err := stream.Recv(); err == nil {
+		t.Fatal("empty envelope must end the stream like any other rejected frame")
+	}
+}
