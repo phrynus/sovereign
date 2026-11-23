@@ -140,6 +140,16 @@ answers rejected frames that never touched it.
 swing too widely to attribute the difference; the allocation count is
 deterministic.
 
+### The adaptive jump cap is only computed for a jump (2026-11-23)
+
+`acceptSeqInner` compared `jump > seqJumpCap(...)`, and Go evaluates the right
+side, so every beacon — where `jump` is 1 — paid a `Pluck(current_interval)`
+query plus the config read. The adaptive cap is never below `maxSeqJump`, so the
+normal path now short-circuits on the base cap and only a real jump reads the
+interval. `BenchmarkBeaconCheckin`: **97.0 KB → 92.4 KB**, **1 157 → 1 100
+allocations**, one fewer query per check-in. The replay/jump tests
+(`TestBeacon*`, `TestSeq*`) pin the accept/reject behaviour.
+
 ### Page payloads are snake_case-only (2026-11-22)
 
 `renderPageOrJSON` used to add a snake_case alias **next to** every PascalCase

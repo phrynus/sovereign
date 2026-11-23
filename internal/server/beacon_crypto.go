@@ -119,7 +119,11 @@ func (s *Server) acceptSeqInner(agentID string, seq uint64, useLockout bool) (ac
 		return false
 	}
 	jump := seq - lastSeq
-	if jump > s.seqJumpCap(agentID, row.UpdatedAt) {
+	// seqJumpCap reads the agent's interval from the DB, and it is never below
+	// maxSeqJump, so the normal case (jump == 1) must not pay for it: the call
+	// used to run on every beacon because Go evaluates both sides of the
+	// comparison. Only a jump past the base cap needs the adaptive value.
+	if jump > maxSeqJump && jump > s.seqJumpCap(agentID, row.UpdatedAt) {
 		// Cryptographically valid frame but an implausible jump. Do not
 		// advance the window and (for non-handshake frames) lock the agent
 		// out briefly so a flood cannot keep hammering the database or the
