@@ -283,6 +283,14 @@ by hand at least once; do not weaken one to make a change pass — fix the chang
   it, two real defects shipped: installs using the configurable prefix were
   invisible to `listPersistence`, and Windows-only methods fell through to a
   default install on Linux/macOS. Wired into both `check` and `check:pre`.
+- `check:audit-writes` (`scripts/check-audit-writes.mjs`) — every audit row must
+  go through `persistAuditBatch`, the single place that assigns PrevHash/EntryHash,
+  signs rows and appends the external anchor. A direct `Create`/`Save` of an
+  `AuditLog` elsewhere produces an unsigned, unanchored row that looks like part
+  of the chain. The gate also checks the canonical writer still calls `SignRow`,
+  `VerifyRow` and `appendAuditAnchor`; it is wired into both `check` and
+  `check:pre`. Its pattern is deliberately narrow (the model name on the write
+  line): archive helpers also call `Create("audit.ndjson")`.
 - `check:config-drivers` (`scripts/check-config-drivers.mjs`) — every tracked config
   template/generator (`config.example.yaml`, `scripts/setup-dev.sh`, `deploy/demo/deploy.sh`)
   must declare a driver the server ships (`postgres`). v2.8 removed SQLite, but
