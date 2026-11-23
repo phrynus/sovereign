@@ -104,6 +104,7 @@ type Config struct {
 		OperatorClientCAFile string        `yaml:"operator_client_ca_file"` // PEM CA bundle verifying operator client certs (independent from beacon mTLS CA)
 		CookieDomain         string        `yaml:"cookie_domain"`           // domain for session/CSRF cookies (for cross-origin deployments)
 		BeaconKey            string        `yaml:"beacon_key"`              // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
+		BeaconCloakRedirect  string        `yaml:"beacon_cloak_redirect"`   // when set, malformed/auth-failing beacon requests get one identical 302 to this URL (no decrypt oracle)
 		RequireTLSForAuth    bool          `yaml:"require_tls_for_auth"`    // require TLS before issuing session cookies (strongly recommended in production)
 		EnableMetrics        bool          `yaml:"enable_metrics"`          // expose /metrics (default false; requires auth when enabled)
 		SocksListenHost      string        `yaml:"socks_listen_host"`       // bind host for SOCKS/rportfwd (default 127.0.0.1)

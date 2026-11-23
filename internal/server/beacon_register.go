@@ -344,6 +344,22 @@ func (s *Server) buildBeaconResponse(agentID string, seq uint64, resp beaconResp
 	return marshalJSONSafe(beaconResponse{CipherB64: cipherB64})
 }
 
+// cloakBeaconFailure answers every unauthenticated failure shape with the
+// same redirect when the operator opts in. Without it, a probe could tell
+// bad JSON, a rejected frame and an auth failure apart and use the listener
+// as an oracle. Valid beacons, 426 protocol refusals and 429 rate limits
+// keep their explicit answers.
+func (s *Server) cloakBeaconFailure(c *gin.Context) bool {
+	s.configMu.RLock()
+	target := s.cfg.Server.BeaconCloakRedirect
+	s.configMu.RUnlock()
+	if target == "" {
+		return false
+	}
+	c.Redirect(http.StatusFound, target)
+	return true
+}
+
 func (s *Server) handleBeacon(c *gin.Context) {
 	beaconStart := time.Now()
 	defer func() {
@@ -356,6 +372,9 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	// Step 1: parse the top-level JSON envelope (v2 protocol)
 	raw, err := c.GetRawData()
 	if err != nil {
+		if s.cloakBeaconFailure(c) {
+			return
+		}
 		respondError(c, http.StatusBadRequest, "failed to read body")
 		return
 	}
@@ -384,6 +403,9 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		// session the server no longer holds, so this is not a UUID oracle.
 		if body, ok := s.resyncResponseFor(env); ok {
 			c.Data(http.StatusOK, "application/json", body)
+			return
+		}
+		if s.cloakBeaconFailure(c) {
 			return
 		}
 		respondError(c, http.StatusBadRequest, "invalid beacon payload")
@@ -443,6 +465,9 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		var ok bool
 		respBytes, ok = s.processAuthFrame(env, kind)
 		if !ok {
+			if s.cloakBeaconFailure(c) {
+				return
+			}
 			respondError(c, http.StatusBadRequest, "authentication failed")
 			return
 		}

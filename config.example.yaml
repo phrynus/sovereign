@@ -38,6 +38,11 @@ server:
   #   use with: curl --cert op.crt --key op.key https://teamserver:8000/api/...
   cookie_domain: ""
   beacon_key: ""
+  # Optional listener cloaking: malformed or unauthenticated beacon requests
+  # (including browsers hitting a custom beacon URI) all answer the SAME 302 to
+  # this URL, so probing cannot distinguish a decrypt failure from bad JSON.
+  # Valid beacons, 426 protocol refusals and 429 rate limits are unchanged.
+  # beacon_cloak_redirect: "https://www.example.com/"
   # Egress hygiene: update checks phone home to api.github.com - opt-in only.
   update_check_enabled: false
   # Repository the update checker polls (owner/name). Defaults to the

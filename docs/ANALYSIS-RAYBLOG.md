@@ -266,9 +266,9 @@ JPEG 编码，经**控制信令**发送（不建立媒体面），控制台用 `
 |缺口|文章|决定|
 |---|---|---|
 |Defender 扫描排除项（含可逆移除）|1/18/37/38/45|**本轮实现**：复现次数最多、成本最低的 OPSEC 缺口|
-|会话保活（`PreventSleep`）|83|排期：小任务，但需要先定 WebRTC 会话自动挂钩的边界|
-|TypeLib / `UserInitMprLogonScript` 持久化|21/23|排期：现有 `persistence_add` 加两个枚举值即可，需 Windows 实测|
-|监听器伪装重定向|59|排期：需在 beacon 解密失败后跳转，先解决"不能当 oracle"的判定顺序|
+|会话保活（`PreventSleep`）|83|本轮实现：`keep_awake` 任务有界调用 `SetThreadExecutionState`，0 提前释放；WebRTC 自动挂钩仍单独决策|
+|TypeLib / `UserInitMprLogonScript` 持久化|21/23|本轮实现：`persistence_add` 新增 `typelib` 与 `logon_script`，注册表 argv 由跨平台计划固定；Windows 实机观测仍待 CI/用户侧确认|
+|监听器伪装重定向|59|本轮实现：`server.beacon_cloak_redirect` 把三类未认证失败统一成同一 302；有效 beacon 的 200/426/429 保留，浏览器经 NoRoute 命中自定义 URI 也得到同一跳转|
 |clipboard 自动替换|3/12|不做：跨入资金窃取形态，超出授权演练的克制边界|
 |SaaS 死信箱 C2（Telegram/云盘）|48/71/77/86/88|排期：需外部账号与 ToS/token 生命周期，不能半成品上线|
 |硬件/文件名绑定载荷解密|42/49/76|排期：payload 工厂大改，本地构建会触发 Defender，需专门环境|
