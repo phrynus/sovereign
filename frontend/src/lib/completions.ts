@@ -26,6 +26,7 @@ const WINDOWS_COMMANDS = [
   "beacon_now", "set_sleep", "config_push",
   "portscan", "netstat", "drives", "users", "services", "av",
   "persistence_add", "persistence_list", "persistence_remove",
+  "keep_awake",
   "token_list_procs", "token_steal", "token_make", "token_revert",
   "socks", "rportfwd_start", "lateral",
   "upload", "download", "find",

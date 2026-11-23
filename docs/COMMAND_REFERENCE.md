@@ -3,11 +3,11 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 229
-- **Constants in tasks.go:** 230
+- **Task types:** 230
+- **Constants in tasks.go:** 231
 - **Aliases:** 3
 - **Approval-gated:** 62
-- **Parameters (total):** 82
+- **Parameters (total):** 83
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
@@ -21,7 +21,7 @@
 - [Persistence](#persistence) (4)
 - [C2 / Session](#c2-session) (29)
 - [Impact](#impact) (4)
-- [Other](#other) (28)
+- [Other](#other) (29)
 
 ## Execution
 
@@ -283,6 +283,7 @@
 | `execute_assembly_forkrun` | Exec Assembly FR | no | — | — |  |
 | `fodhelper` | Fodhelper | no | — | — | Fodhelper UAC bypass |
 | `juicy_potato` | Juicy Potato | no | — | — | Juicy Potato privilege escalation |
+| `keep_awake` | Keep Awake | no | — | command:string | Prevent the Windows target from sleeping for a bounded duration (Windows only) |
 | `lateral_list` | Lateral List | no | — | — |  |
 | `lateral_scf` | Lateral SCF | no | — | — |  |
 | `list_inject_methods` | List Inject Meth | no | — | — |  |

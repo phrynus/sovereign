@@ -1,6 +1,6 @@
 # 👑 Sovereign
 
-**Self-hosted, open-source command and control (C2) that ships as a single binary.** <!--fact:tasks-->229<!--/fact--> implant tasks, 9 transports, an in-browser payload factory and an AI copilot — with signed releases and hot updates that roll back on failure. Built for authorized red team operations and adversary simulation.
+**Self-hosted, open-source command and control (C2) that ships as a single binary.** <!--fact:tasks-->230<!--/fact--> implant tasks, 9 transports, an in-browser payload factory and an AI copilot — with signed releases and hot updates that roll back on failure. Built for authorized red team operations and adversary simulation.
 
 Website: [https://r0si.github.io/sovereign/](https://r0si.github.io/sovereign/) · Source & releases: <https://github.com/r0si/sovereign/releases>
 
@@ -82,7 +82,7 @@ See [docs/DEPLOY.md](docs/DEPLOY.md) for configuration and TLS details.
 
 ## Implant capabilities
 
-<!--fact:tasks-->229<!--/fact--> task specs, defined once in a shared registry and consumed by both the teamserver and the agent:
+<!--fact:tasks-->230<!--/fact--> task specs, defined once in a shared registry and consumed by both the teamserver and the agent:
 
 - **Access** — shell, PowerShell, execute-assembly, BOF, PowerPick, PE/CLR loading, token steal/make/revert, credentials, mimikatz, kerberoast, DCSync
 - **Lateral** — WMI, WinRM, PsExec, pass-the-hash, pass-the-ticket, SMB/TCP relay, SOCKS5, port forwarding, NTLM relay

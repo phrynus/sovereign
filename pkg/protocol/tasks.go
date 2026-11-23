@@ -67,8 +67,11 @@ const (
 	TaskTypeBeaconNow    = "beacon_now"
 	// Self-heal watchdog: watchdog_start launches a detached sibling that
 	// restarts the implant when it dies; watchdog_stop ends it.
-	TaskTypeWatchdogStart    = "watchdog_start"
-	TaskTypeWatchdogStop     = "watchdog_stop"
+	TaskTypeWatchdogStart = "watchdog_start"
+	TaskTypeWatchdogStop  = "watchdog_stop"
+	// keep_awake prevents the target from sleeping for a bounded duration;
+	// command 0 releases the request early. Windows only.
+	TaskTypeKeepAwake        = "keep_awake"
 	TaskTypeServices         = "services"
 	TaskTypePortscan         = "portscan"
 	TaskTypeNetstat          = "netstat"
@@ -315,6 +318,7 @@ func AllTaskTypes() []string {
 		TaskTypeBeaconNow,
 		TaskTypeWatchdogStart,
 		TaskTypeWatchdogStop,
+		TaskTypeKeepAwake,
 		TaskTypeServices,
 		TaskTypePortscan,
 		TaskTypeNetstat,
