@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // TestBeaconCloakRedirectCollapsesFailures pins the no-oracle contract: once
@@ -11,6 +13,7 @@ import (
 // indistinguishable to a probe, while the default stays a 400.
 func TestBeaconCloakRedirectCollapsesFailures(t *testing.T) {
 	s, _ := v2TestServer(t)
+	s.metrics = NewMetricsCollector(s)
 
 	baseline := v2Post(t, s, "not-json")
 	if baseline.Code != http.StatusBadRequest {
@@ -43,5 +46,8 @@ func TestBeaconCloakRedirectCollapsesFailures(t *testing.T) {
 		if w.Body.String() != first.Body.String() {
 			t.Errorf("body %q produced a distinguishable response: %q vs %q", body, w.Body.String(), first.Body.String())
 		}
+	}
+	if got := promtestutil.ToFloat64(s.metrics.BeaconCloakedTotal.WithLabelValues("frame")); got != 3 {
+		t.Fatalf("cloaked frame counter = %v, want 3", got)
 	}
 }

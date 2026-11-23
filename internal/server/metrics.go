@@ -45,6 +45,10 @@ type MetricsCollector struct {
 	// sustained climb means either an attack or a NAT/fleet sharing one IP
 	// that needs rate_limit.beacon raised.
 	BeaconRateLimitedTotal prometheus.Counter
+	// BeaconCloakedTotal counts beacon failures answered with the uniform
+	// decoy response, labelled by failure stage. A climb means someone is
+	// probing the listener; the logs deliberately stay quiet for these.
+	BeaconCloakedTotal *prometheus.CounterVec
 	// BeaconProtocolRejectedTotal counts beacons refused because the agent's
 	// protocol version is not served (too_old / too_new). A climb means
 	// deployed agents need a rebuild - or the server is behind.
@@ -174,6 +178,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Name: "sovereign_beacon_rate_limited_total",
 			Help: "Total beacon requests rejected with 429 by the per-IP beacon rate limiter.",
 		}),
+		BeaconCloakedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "sovereign_beacon_cloaked_total",
+			Help: "Total unauthenticated beacon failures answered with the cloaking redirect, by stage.",
+		}, []string{"reason"}),
 		BeaconProtocolRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "sovereign_beacon_protocol_rejected_total",
 			Help: "Total beacons refused because the agent's protocol version is not served, by reason (too_old, too_new).",
@@ -215,6 +223,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.StatsCacheMissesTotal,
 		mc.StatsCacheEvictionsTotal,
 		mc.BeaconRateLimitedTotal,
+		mc.BeaconCloakedTotal,
 		mc.BeaconProtocolRejectedTotal,
 		mc.BeaconProtocolDeprecatedTotal,
 	}

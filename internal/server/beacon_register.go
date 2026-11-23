@@ -349,12 +349,15 @@ func (s *Server) buildBeaconResponse(agentID string, seq uint64, resp beaconResp
 // bad JSON, a rejected frame and an auth failure apart and use the listener
 // as an oracle. Valid beacons, 426 protocol refusals and 429 rate limits
 // keep their explicit answers.
-func (s *Server) cloakBeaconFailure(c *gin.Context) bool {
+func (s *Server) cloakBeaconFailure(c *gin.Context, reason string) bool {
 	s.configMu.RLock()
 	target := s.cfg.Server.BeaconCloakRedirect
 	s.configMu.RUnlock()
 	if target == "" {
 		return false
+	}
+	if s.metrics != nil {
+		s.metrics.BeaconCloakedTotal.WithLabelValues(reason).Inc()
 	}
 	c.Redirect(http.StatusFound, target)
 	return true
@@ -372,7 +375,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	// Step 1: parse the top-level JSON envelope (v2 protocol)
 	raw, err := c.GetRawData()
 	if err != nil {
-		if s.cloakBeaconFailure(c) {
+		if s.cloakBeaconFailure(c, "read") {
 			return
 		}
 		respondError(c, http.StatusBadRequest, "failed to read body")
@@ -405,7 +408,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 			c.Data(http.StatusOK, "application/json", body)
 			return
 		}
-		if s.cloakBeaconFailure(c) {
+		if s.cloakBeaconFailure(c, "frame") {
 			return
 		}
 		respondError(c, http.StatusBadRequest, "invalid beacon payload")
@@ -465,7 +468,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		var ok bool
 		respBytes, ok = s.processAuthFrame(env, kind)
 		if !ok {
-			if s.cloakBeaconFailure(c) {
+			if s.cloakBeaconFailure(c, "auth") {
 				return
 			}
 			respondError(c, http.StatusBadRequest, "authentication failed")
