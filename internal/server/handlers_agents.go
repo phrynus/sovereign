@@ -119,6 +119,26 @@ func agentSortOrder(sortKey, sortDir string) string {
 	return col + " " + dir
 }
 
+// agentChildRow is the child list the detail page renders (id/hostname/os/ip/
+// status/p2p_mode). Scanning into db.Implant makes the JSON encoder serialize
+// every other model field — dozens of zero-valued columns per child.
+type agentChildRow struct {
+	ID       string `gorm:"column:id" json:"id"`
+	Hostname string `gorm:"column:hostname" json:"hostname"`
+	OS       string `gorm:"column:os" json:"os"`
+	IP       string `gorm:"column:ip" json:"ip"`
+	Status   string `gorm:"column:status" json:"status"`
+	P2PMode  string `gorm:"column:p2p_mode" json:"p2p_mode"`
+}
+
+// agentLinkRow is the include_unlinked picker payload.
+type agentLinkRow struct {
+	ID       string `gorm:"column:id" json:"id"`
+	Hostname string `gorm:"column:hostname" json:"hostname"`
+	IP       string `gorm:"column:ip" json:"ip"`
+	OS       string `gorm:"column:os" json:"os"`
+}
+
 func (s *Server) handleAgentDetail(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
@@ -157,14 +177,16 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		taskStatsMap = computeTaskStats(s.db.WithContext(ctx), []string{id})
 		return nil
 	})
-	var children []db.Implant
+	var children []agentChildRow
 	g.Go(func() error {
-		return s.tenantScope(s.db.WithContext(ctx), c).Where("parent_id = ?", id).Limit(500).Find(&children).Error
+		return s.tenantScope(s.db.WithContext(ctx).Model(&db.Implant{}), c).
+			Select("id, hostname, os, ip, status, p2p_mode").
+			Where("parent_id = ?", id).Limit(500).Find(&children).Error
 	})
-	var unlinkedAgents []db.Implant
+	var unlinkedAgents []agentLinkRow
 	if c.Query("include_unlinked") != "false" {
 		g.Go(func() error {
-			return s.tenantScope(s.db.WithContext(ctx), c).Select("id", "hostname", "ip", "os").
+			return s.tenantScope(s.db.WithContext(ctx).Model(&db.Implant{}), c).Select("id", "hostname", "ip", "os").
 				Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Limit(500).Find(&unlinkedAgents).Error
 		})
 	}
