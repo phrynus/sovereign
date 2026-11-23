@@ -127,6 +127,19 @@ reduction (~39%), not the wall-clock number. `TestFetchPendingTasksRespectsCapac
 covers the case where more rows arrive than the pre-sized capacity, and the
 never-cross-claims/dedupe/recarry tests keep the claim semantics pinned.
 
+### The beacon response reuses the accepted sequence (2026-11-23)
+
+`processBeaconWithBudget` called `currentLastSeq` for the response's `last_seq`
+— a second read of the value `acceptSeq` had just persisted with its
+compare-and-swap. A frame only reaches that code after the swap succeeded, so
+`req.Seq` *is* the stored value; the resync path still reads the row because it
+answers rejected frames that never touched it.
+
+`BenchmarkBeaconCheckin` (idle check-in): **101.5 KB → 97.0 KB** and **1 216 →
+1 157 allocations** per request (one fewer query). Latency runs on this host
+swing too widely to attribute the difference; the allocation count is
+deterministic.
+
 ### Page payloads are snake_case-only (2026-11-22)
 
 `renderPageOrJSON` used to add a snake_case alias **next to** every PascalCase

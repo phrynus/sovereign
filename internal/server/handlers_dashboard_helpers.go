@@ -215,7 +215,13 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 	// every page response for the old server-rendered templates. The console is
 	// a React SPA with its own i18n fragments and never read this key, so it is
 	// gone: see the response_bytes metric in BenchmarkTaskList.
-	data["online_users"] = []map[string]string{}
+	// online_users is a count in page payloads; the live list travels over the
+	// WebSocket. A handler that merged getNavStats already provided the number —
+	// keep it. The old code unconditionally replaced it with an empty array, so
+	// every page reported "0 online" even when operators were connected.
+	if _, ok := data["online_users"]; !ok {
+		data["online_users"] = int64(len(s.getOnlineUsers()))
+	}
 	if _, ok := data["search_query"]; !ok {
 		data["search_query"] = ""
 	}

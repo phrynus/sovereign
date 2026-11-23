@@ -60,7 +60,6 @@ func (s *Server) handleAIPage(c *gin.Context) {
 		"AIConfigured": aiEnabled && aiHasAPIKey,
 		"AIHasAPIKey":  aiHasAPIKey,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}

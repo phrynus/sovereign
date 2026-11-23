@@ -395,7 +395,12 @@ func (s *Server) processBeaconWithBudget(req beaconRequest, publicIP string, fra
 		RelayedReplies:     relayedReplies,
 		ProtocolVersion:    protocol.CurrentProtocolVersion,
 		ProtocolDeprecated: decision.Level == protocol.SupportDeprecated,
-		LastSeq:            s.currentLastSeq(req.UUID),
+		// The frame reached this point only after acceptSeq persisted req.Seq
+		// with its compare-and-swap, so the accepted value IS the stored
+		// last_seq. Reading it back cost one more query per beacon; the resync
+		// path (buildResyncResponse) still reads the row because it runs for
+		// rejected frames that never touched it.
+		LastSeq: req.Seq,
 	}
 
 	// Online config refresh: deliver the operator's live network config when it
