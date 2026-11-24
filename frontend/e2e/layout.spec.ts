@@ -76,25 +76,10 @@ async function expectNoPageOverflow(page: Page) {
   expect(overflow.body, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
 }
 
-/** Routes the SPA rewrites client-side; the requested file is not the surface. */
-const REDIRECT_ROUTES: Partial<Record<(typeof ROUTES)[number], string>> = {
-  chat: "/ai",
-};
-
 async function waitForPageSurface(page: Page, route: typeof ROUTES[number] | "login") {
   if (route === "login") {
     await expect(page.getByRole("form")).toBeVisible();
     return;
-  }
-  // Waiting for <main> only proves that the app shell mounted. Several pages
-  // resolve permissions and initial data one tick later, which previously
-  // produced misleading blank visual baselines on mobile.
-  const redirect = REDIRECT_ROUTES[route];
-  if (redirect) {
-    await page.waitForURL((url) => url.pathname.replace(/\.html$/, "") === redirect || `${url.pathname}.html`.replace(/\.html\.html$/, ".html") === redirect, {
-      timeout: 15_000,
-    });
-    await page.waitForTimeout(300);
   }
   await expect(page.locator("main h1").first()).toBeAttached({ timeout: 15_000 });
   // Lazy chunks (charts, AI panels) resolve after the shell paints. Under the
@@ -228,6 +213,7 @@ test.describe("responsive shell", () => {
       ["/users", "i18n-users"],
       ["/listeners", "i18n-listeners"],
       ["/listeners", "i18n-dashboard"],
+      ["/chat", "i18n-chat"],
     ];
     for (const [path, chunk] of singlePage) {
       dictChunks.length = 0;
@@ -386,13 +372,14 @@ test.describe("route transitions", () => {
     });
   }
 
-  async function loadChatRedirect(page: Page) {
-    // /chat is rewritten client-side to /ai by the route table (see
-    // REDIRECT_ROUTES above): a deterministic router navigation that needs no
-    // operator interaction, so the assertion cannot drift with page data or
-    // viewport-specific chrome.
-    await page.goto("/chat.html");
-    await page.waitForURL(/\/ai/);
+  async function navigateToChat(page: Page) {
+    // /chat is a real page now. Reach it through a sidebar link so the
+    // counter measures a router-driven client navigation (page.goto alone
+    // would not call router.navigate()).
+    await page.goto("/dashboard.html");
+    await expect(page.locator("main h1").first()).toBeAttached({ timeout: 15_000 });
+    await page.locator('a[href="/chat"], a[href="/chat.html"]').first().click();
+    await page.waitForURL(/\/chat/);
   }
 
   async function transitionCalls(page: Page) {
@@ -402,7 +389,7 @@ test.describe("route transitions", () => {
   test("client navigation opts into the View Transitions API", async ({ page }) => {
     await prepare(page);
     await installTransitionCounter(page);
-    await loadChatRedirect(page);
+    await navigateToChat(page);
     // Poll: the counter is installed by an init script but the router may call
     // it a tick after waitForURL resolves, which flaked under parallel load.
     await expect.poll(() => transitionCalls(page)).toBeGreaterThan(0);
@@ -412,7 +399,7 @@ test.describe("route transitions", () => {
     await prepare(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await installTransitionCounter(page);
-    await loadChatRedirect(page);
+    await navigateToChat(page);
     // Give the client navigation a moment to finish before asserting the
     // counter stayed at zero.
     await page.waitForTimeout(300);

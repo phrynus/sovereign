@@ -1,3 +1,6 @@
+import { api } from "./api";
+import { paths } from "./api-paths";
+
 const WINDOWS_COMMANDS = [
   "whoami", "hostname", "ipconfig", "ipconfig /all", "systeminfo",
   "tasklist", "tasklist /v", "netstat -ano", "netstat -anob",
@@ -73,8 +76,33 @@ const SUB_COMMANDS: Record<string, string[]> = {
   "chmod": ["755", "777", "644", "+x"],
 };
 
-export function getCompletions(input: string, osType: string): string[] {
-  const commands = osType === "linux" ? LINUX_COMMANDS : WINDOWS_COMMANDS;
+export type TaskSpecInfo = { type: string; name?: string; description?: string };
+
+/** Fetch the live task catalogue once; never block completion on metadata. */
+export async function fetchTaskSpecs(): Promise<TaskSpecInfo[]> {
+  try {
+    const data = await api.get<{ specs?: TaskSpecInfo[] }>(paths.tasks.specs);
+    const specs = Array.isArray(data?.specs) ? data.specs : [];
+    return specs.filter(
+      (spec): spec is TaskSpecInfo =>
+        !!spec && typeof spec.type === "string" && spec.type.length > 0,
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function getCompletions(input: string, osType: string, specs: TaskSpecInfo[] = []): string[] {
+  const staticCommands = osType === "linux" ? LINUX_COMMANDS : WINDOWS_COMMANDS;
+  const known = new Set<string>(staticCommands);
+  const extraCommands: string[] = [];
+  for (const spec of specs) {
+    if (typeof spec.type === "string" && spec.type.length > 0 && !known.has(spec.type)) {
+      known.add(spec.type);
+      extraCommands.push(spec.type);
+    }
+  }
+  const commands = [...staticCommands, ...extraCommands];
   const trimmed = input.trim().toLowerCase();
 
   if (!trimmed) return commands.slice(0, 20);
@@ -90,4 +118,19 @@ export function getCompletions(input: string, osType: string): string[] {
   }
 
   return commands.filter(c => c.toLowerCase().startsWith(trimmed));
+}
+
+/** Render the multi-match list; with no catalog loaded this is the legacy bare join. */
+export function formatCompletionList(matches: string[], specs: TaskSpecInfo[]): string {
+  if (specs.length === 0) return matches.join("  ");
+  const shown = matches.slice(0, 12);
+  const parts = shown.map((match) => {
+    const spec = specs.find(s => s.type === match);
+    const raw = typeof spec?.description === "string" ? spec.description.trim() : "";
+    if (!raw) return match;
+    const description = raw.length > 100 ? `${raw.slice(0, 100)}…` : raw;
+    return `${match} — ${description}`;
+  });
+  if (matches.length > shown.length) parts.push(`+${matches.length - shown.length} more`);
+  return parts.join("  ");
 }

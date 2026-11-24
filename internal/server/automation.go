@@ -18,6 +18,7 @@ import (
 
 	"github.com/r0si/sovereign/internal/db"
 	"github.com/r0si/sovereign/internal/scripting"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 )
 
@@ -267,9 +268,11 @@ func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event
 		}
 	case ActionCreateTask:
 		var params struct {
-			AgentID string `json:"agent_id"`
-			Type    string `json:"type"`
-			Command string `json:"command"`
+			AgentID          string               `json:"agent_id"`
+			Type             string               `json:"type"`
+			Command          string               `json:"command"`
+			CredentialID     *uint                `json:"credential_id,omitempty"`
+			CredentialParams CredentialTaskParams `json:"credential_params,omitempty"`
 		}
 		if err := json.Unmarshal(action.Params, &params); err == nil {
 			targetAgent := s.automationTarget(evt, params.AgentID)
@@ -281,8 +284,18 @@ func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event
 				break
 			}
 			{
+				opts := []TaskOption{}
+				if params.CredentialID != nil && *params.CredentialID != 0 {
+					allowed, permErr := middleware.UserHasPermission(s.db, rule.CreatedBy, db.PermCredsRead)
+					if permErr != nil || !allowed {
+						slog.Warn("Automation: create_task refused, creator lost credentials.read",
+							"rule", rule.ID, "creator", rule.CreatedBy, "err", permErr)
+						break
+					}
+					opts = append(opts, WithCredentialReference(*params.CredentialID, params.CredentialParams))
+				}
 				expanded := s.expandTemplate(params.Command, evt)
-				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0)
+				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0, opts...)
 				if err != nil {
 					slog.Error("Automation: failed to create task", "error", err)
 				} else if err := s.db.Model(task).Update("created_by", "automation").Error; err != nil {

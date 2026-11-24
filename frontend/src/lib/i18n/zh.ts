@@ -56,6 +56,9 @@ export const zh: Record<string, string> = {
     "attack.all_agents": "所有 Beacon",
     "attack.coverage": "覆盖率",
     "attack.fetch_failed": "获取覆盖率失败",
+    "attack.export_navigator": "导出 Navigator 图层",
+    "attack.export_navigator_done": "Navigator 图层已导出",
+    "attack.export_navigator_failed": "无法导出 Navigator 图层",
     "attack.honesty_desc": "显示已运行任务类型映射到哪些 ATT&CK 技术，并非完整 kill-chain 自动化、EDR 逃逸质量或战役成功。许多映射任务为脚本包装或平台受限。",
     "attack.honesty_title": "覆盖图 ≠ 攻陷证明",
     "attack.kill_chain_subtitle": "所有 14 个 MITRE ATT&CK 阶段的战役覆盖",
@@ -1537,5 +1540,6 @@ export const zh: Record<string, string> = {
     "spray.vault_empty": "保险库暂无明文密码可选",
     "spray.vault_pick": "从保险库选取",
     "spray.waiting_result": "任务已排队 — 查看任务输出获取结果",
+    "spray.vault_mode_hint": "保险库模式仅提交凭据 ID、域控、延迟和用户名列表，密码由服务端解析。",
 };
 

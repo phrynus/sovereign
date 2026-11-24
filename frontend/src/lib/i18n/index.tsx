@@ -37,6 +37,7 @@ const ZH_LOADERS: Record<string, () => Promise<Record<string, Dict>>> = {
   settings: () => import("./fragments/zh.settings"),
   generate: () => import("./fragments/zh.generate"),
   ai: () => import("./fragments/zh.ai"),
+  chat: () => import("./fragments/zh.chat"),
   cred: () => import("./fragments/zh.cred"),
   bof: () => import("./fragments/zh.bof"),
   campaign: () => import("./fragments/zh.campaign"),

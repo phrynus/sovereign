@@ -133,6 +133,12 @@ func init() {
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Remote path"}}},
 		{Type: TaskTypeUpload, Name: "Upload File", Description: "Upload a file to the agent", Category: "execution",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Target path"}}},
+		{Type: TaskTypeWrite, Name: "Write Text File", Description: "Atomically replace an existing text file with optimistic-concurrency hash checking (SHA-256 compare-and-swap)", Category: "execution",
+			Parameters: []TaskParam{
+				{Name: "command", Type: "string", Required: true, Description: "Target path"},
+				{Name: "data", Type: "string", Required: false, Description: "Base64 UTF-8 content (empty file allowed)"},
+				{Name: "expected_sha256", Type: "string", Required: true, Description: "SHA-256 of the baseline file content"},
+			}},
 		{Type: TaskTypeMkdir, Name: "Make Directory", Description: "Create a directory (parents created as needed)", Category: "execution",
 			Parameters: []TaskParam{{Name: "command", Type: "string", Required: true, Description: "Directory path"}}},
 		{Type: TaskTypeRename, Name: "Rename / Move", Description: "Rename or move a file or directory", Category: "execution",

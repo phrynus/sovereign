@@ -304,35 +304,6 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 	respond(c, gin.H{"events": events, "total": len(events)})
 }
 
-func (s *Server) handleAPIChatHistory(c *gin.Context) {
-	channel := c.DefaultQuery("channel", "general")
-	var msgs []db.ChatMessage
-	if err := s.db.Where("channel = ?", channel).Order("created_at asc").Limit(200).Find(&msgs).Error; err != nil {
-		// An empty 200 here reads as "the channel is quiet".
-		handleQueryError(c, err, "Failed to query chat history")
-		return
-	}
-	respond(c, gin.H{"messages": msgs})
-}
-
-func (s *Server) handleAPIChatChannels(c *gin.Context) {
-	type channelRow struct {
-		Channel      string `gorm:"column:channel" json:"channel"`
-		MessageCount int    `gorm:"column:message_count" json:"message_count"`
-		LastMessage  string `gorm:"column:last_message" json:"last_message"`
-		LastTime     string `gorm:"column:last_time" json:"last_time"`
-	}
-	var rows []channelRow
-	if err := s.db.Model(&db.ChatMessage{}).
-		Select("channel, COUNT(*) as message_count, MAX(message) as last_message, MAX(created_at) as last_time").
-		Group("channel").Order("MAX(created_at) DESC").Limit(500).Find(&rows).Error; err != nil {
-		// An empty 200 here reads as "no chat channels exist".
-		handleQueryError(c, err, "Failed to query chat channels")
-		return
-	}
-	respond(c, gin.H{"channels": rows})
-}
-
 // buildChainEntries loads the agent parent/child relations for the chain
 // topology views. A failed read returns an error so callers answer 500
 // instead of drawing an empty topology that reads as "no agents".
@@ -369,39 +340,6 @@ func (s *Server) handleAPIChainGraph(c *gin.Context) {
 
 func (s *Server) handleAPIChainList(c *gin.Context) {
 	s.respondChainEntries(c, "chains")
-}
-
-func (s *Server) handleAPISendChatMessage(c *gin.Context) {
-	var req struct {
-		Message string `json:"message"`
-		Channel string `json:"channel"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request")
-		return
-	}
-	if req.Message == "" {
-		respondError(c, http.StatusBadRequest, "message is required")
-		return
-	}
-	if len(req.Message) > MaxChatMessageBytes {
-		respondError(c, http.StatusBadRequest, fmt.Sprintf("message too long (max %d bytes)", MaxChatMessageBytes))
-		return
-	}
-	if req.Channel == "" {
-		req.Channel = "general"
-	}
-	msg := db.ChatMessage{
-		Username:  s.currentUsername(c),
-		Message:   req.Message,
-		Channel:   req.Channel,
-		CreatedAt: time.Now(),
-	}
-	if err := s.db.Create(&msg).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Chat message"))
-		return
-	}
-	respond(c, gin.H{"id": msg.ID})
 }
 
 func (s *Server) handleDownloadBuild(c *gin.Context) {

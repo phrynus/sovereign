@@ -74,12 +74,22 @@ export const paths = {
     filesMkdir: (id: string) => `/agents/${id}/files/mkdir`,
     filesRename: (id: string) => `/agents/${id}/files/rename`,
     filesChmod: (id: string) => `/agents/${id}/files/chmod`,
-    /** Queue implant→server exfil (path only — do not attach a file). */
-    filesExfil: (id: string) => `/agents/${id}/files/pull`,
-    filesExfilGet: (id: string, filename: string) =>
-      `/agents/${id}/files/exfil/${encodeURIComponent(filename)}`,
-    /** Push a teamserver file onto the implant. */
-    filesPush: (id: string) => `/agents/${id}/files/push`,
+    filesWrite: (id: string) => `/agents/${id}/files/write`,
+    filesHistory: (id: string, path: string, limit = 50) =>
+      `/agents/${id}/files/history?path=${encodeURIComponent(path)}&limit=${limit}`,
+    filesRevision: (id: string, taskId: number | string) =>
+      `/agents/${id}/files/revisions/${taskId}`,
+    transfers: (id: string) => `/agents/${id}/transfers`,
+    transfer: (id: string, transferId: number | string) =>
+      `/agents/${id}/transfers/${transferId}`,
+    transferChunk: (id: string, transferId: number | string) =>
+      `/agents/${id}/transfers/${transferId}/chunk`,
+    transferResume: (id: string, transferId: number | string) =>
+      `/agents/${id}/transfers/${transferId}/resume`,
+    transferPause: (id: string, transferId: number | string) =>
+      `/agents/${id}/transfers/${transferId}/pause`,
+    transferFile: (id: string, transferId: number | string) =>
+      `/agents/${id}/transfers/${transferId}/file`,
     drives: (id: string) => `/agents/${id}/drives`,
     services: (id: string) => `/agents/${id}/services`,
     portscan: (id: string) => `/agents/${id}/portscan`,
@@ -176,6 +186,8 @@ export const paths = {
     usage: (id: string | number) => `/credentials/${id}/usage`,
     batchTags: "/credentials/batch/tags",
     batchVerify: "/credentials/batch/verify",
+    /** Redacted credential options for vault task references (no secrets). */
+    options: "/api/credentials/options",
   },
   config: {
     reload: "/config/reload",
@@ -486,12 +498,31 @@ export const paths = {
     channels: "/chat/channels",
     send: "/chat/send",
   },
+  engagements: {
+    list: "/api/engagements",
+    create: "/api/engagements",
+    close: (id: number | string) => `/api/engagements/${id}/close`,
+  },
+  // Engagement-scoped chat used by the standalone /chat workspace.
+  scopedChat: {
+    history: (engagementId: number | string, channelId?: number | string) =>
+      `/chat/history?engagement_id=${engagementId}` +
+      (channelId === undefined ? "" : `&channel_id=${channelId}`),
+    channels: (engagementId: number | string) =>
+      `/chat/channels?engagement_id=${engagementId}`,
+    send: "/chat/send",
+    createChannel: "/chat/channels",
+    archive: (channelId: number | string) => `/chat/channels/${channelId}/archive`,
+    mute: (channelId: number | string) => `/chat/channels/${channelId}/mute`,
+    read: (channelId: number | string) => `/chat/channels/${channelId}/read`,
+  },
   mitre: {
     templates: "/mitre/templates",
     phases: "/mitre/phases",
     timeline: (query = "") =>
       query ? `/mitre/timeline?${query}` : "/mitre/timeline",
     heatmap: (range = "30d") => `/api/mitre/heatmap?range=${range}`,
+    navigator: "/api/mitre/navigator",
   },
   v1: {
     taskTypes: "/api/v1/task-types",
@@ -531,6 +562,8 @@ export const paths = {
     list: (query = "") => (query ? `/tasks?${query}` : "/tasks"),
     /** Full single-task record (includes complete result) under REST /api/v1. */
     one: (id: string | number) => `/api/v1/tasks/${id}`,
+    /** Live dispatchable task catalogue (type + short description) for shell completions. */
+    specs: "/api/tasks/specs",
   },
   opsec: {
     history: "/opsec/history",

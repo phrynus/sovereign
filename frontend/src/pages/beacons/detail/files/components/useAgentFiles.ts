@@ -6,7 +6,15 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { errorText } from "@/lib/errors";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
-import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
+import {
+  cancelTransfer as cancelTransferApi,
+  downloadTransferFile,
+  listTransfers,
+  pauseTransfer as pauseTransferApi,
+  pullRemoteFile,
+  pushLocalFile,
+  type TransferSession,
+} from "@/lib/agent-files/file-transfer";
 import {
   isImageFile,
   joinPath,
@@ -54,6 +62,8 @@ export function useAgentFiles(agentId: string) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [transfers, setTransfers] = useState<TransferSession[]>([]);
+  const [transferBusyId, setTransferBusyId] = useState<number | null>(null);
   const [pullName, setPullName] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState<TransferProgress | null>(null);
   const [previewContent, setPreviewContent] = useState("");
@@ -70,6 +80,9 @@ export function useAgentFiles(agentId: string) {
   const [osError, setOsError] = useState<string | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lsAbortRef = useRef<AbortController | null>(null);
+  // A push needs the original File to resume; after a reload the operator
+  // must pick it again, so this cache is intentionally session-local.
+  const pushFilesRef = useRef(new Map<string, File>());
   // Live mirror of currentPath: long polls must not rewind a navigation
   // the operator made while waiting (see deleteFile/mkdir/renameFile).
   const currentPathRef = useRef("");
@@ -84,6 +97,22 @@ export function useAgentFiles(agentId: string) {
     else if (type === "error") toast.error(text);
     else toast(text);
   }, []);
+
+  const upsertTransfer = useCallback((session: TransferSession) => {
+    setTransfers((prev) => [session, ...prev.filter((s) => s.id !== session.id)]);
+  }, []);
+
+  const loadTransfers = useCallback(async () => {
+    if (!agentId) return;
+    try {
+      // The server is authoritative after reloads: raw committed offsets only.
+      const rows = await listTransfers(agentId);
+      setTransfers((prev) => prev.length === 0 && rows.length === 0 ? prev : rows);
+    } catch {
+      // Keep the last known sessions; a transient list failure is not a
+      // transfer failure and must not render as an empty transfer list.
+    }
+  }, [agentId]);
 
   const loadDirectory = useCallback(
     async (path: string, opts?: { refresh?: boolean }) => {
@@ -165,6 +194,7 @@ export function useAgentFiles(agentId: string) {
 
   useEffect(() => {
     if (!agentId) return;
+    void loadTransfers();
     let cancelled = false;
     (async () => {
       setOsError(null);
@@ -191,7 +221,13 @@ export function useAgentFiles(agentId: string) {
         lsAbortRef.current = null;
       }
     };
-  }, [agentId, detectOs, loadDirectory]);
+  }, [agentId, detectOs, loadDirectory, loadTransfers]);
+
+  useEffect(() => {
+    if (!transfers.some((s) => s.status === "active" || s.status === "paused")) return;
+    const timer = setInterval(() => { void loadTransfers(); }, 4000);
+    return () => clearInterval(timer);
+  }, [transfers, loadTransfers]);
 
   const navigateTo = useCallback(
     (path: string) => {
@@ -227,9 +263,10 @@ export function useAgentFiles(agentId: string) {
       } finally {
         setPullName(null);
         setPullProgress(null);
+        void loadTransfers();
       }
     },
-    [agentId, currentPath, entries, osType, showToast, toastError, t],
+    [agentId, currentPath, entries, osType, showToast, toastError, t, loadTransfers],
   );
 
   const readFile = useCallback(
@@ -406,6 +443,7 @@ export function useAgentFiles(agentId: string) {
       file: next.file,
       t,
       onProgress: (pct) => { if (!abort.signal.aborted) setUploadProgress(pct); },
+      onSession: (session) => { if (!abort.signal.aborted) upsertTransfer(session); },
       signal: abort.signal,
     })
       .then(() => {
@@ -413,6 +451,7 @@ export function useAgentFiles(agentId: string) {
         showToast(t("agents.files_push_done", { name: next.file.name }), "success");
         next.onDone?.();
         if (currentPathRef.current === pathAtStart) void loadDirectory(pathAtStart);
+        void loadTransfers();
       })
       .catch((err) => {
         if (abort.signal.aborted) return;
@@ -429,7 +468,7 @@ export function useAgentFiles(agentId: string) {
         }
         pumpRef.current();
       });
-  }, [agentId, loadDirectory, showToast, toastError, t]);
+  }, [agentId, loadDirectory, loadTransfers, showToast, toastError, t, upsertTransfer]);
   pumpRef.current = pumpUploadQueue;
 
   const cancelUpload = useCallback(() => {
@@ -440,6 +479,60 @@ export function useAgentFiles(agentId: string) {
     setUploading(false);
     setUploadProgress(0);
   }, []);
+
+  const runTransferAction = useCallback(
+    async (id: number, action: "pause" | "resume" | "cancel" | "start-over") => {
+      const session = transfers.find((s) => s.id === id);
+      if (!session) return;
+      setTransferBusyId(id);
+      try {
+        if (action === "pause") upsertTransfer(await pauseTransferApi(agentId, id));
+        else if (action === "cancel") upsertTransfer(await cancelTransferApi(agentId, id));
+        else {
+          const file = session.direction === "push" ? pushFilesRef.current.get(session.remote_path) : null;
+          if (session.direction === "push" && !file) throw new Error(t("agents.files_transfer_repick"));
+          if (session.direction === "pull") {
+            await pullRemoteFile({
+              agentId,
+              remotePath: session.remote_path,
+              filename: session.filename || session.remote_path,
+              fileSize: session.total_size || undefined,
+              t,
+              transferId: action === "start-over" ? undefined : id,
+              fresh: action === "start-over",
+              onProgress: setPullProgress,
+            });
+          } else if (file) {
+            await pushLocalFile({
+              agentId,
+              destPath: session.remote_path,
+              file,
+              t,
+              transferId: action === "start-over" ? undefined : id,
+              fresh: action === "start-over",
+              onSession: upsertTransfer,
+            });
+          }
+        }
+        await loadTransfers();
+      } catch (err) {
+        toastError(err, session.direction === "push" ? "agents.files_push_failed" : "agents.files_pull_failed");
+      } finally {
+        setTransferBusyId(null);
+        setPullProgress(null);
+      }
+    },
+    [agentId, loadTransfers, t, toastError, transfers, upsertTransfer],
+  );
+
+  const pauseTransfer = useCallback((id: number) => { void runTransferAction(id, "pause"); }, [runTransferAction]);
+  const resumeTransfer = useCallback((id: number) => { void runTransferAction(id, "resume"); }, [runTransferAction]);
+  const cancelTransfer = useCallback((id: number) => { void runTransferAction(id, "cancel"); }, [runTransferAction]);
+  const startOverTransfer = useCallback((id: number) => { void runTransferAction(id, "start-over"); }, [runTransferAction]);
+  const downloadTransfer = useCallback((session: TransferSession) => {
+    void downloadTransferFile(agentId, session.id, session.filename || session.remote_path)
+      .catch((err) => toastError(err, "agents.files_pull_failed"));
+  }, [agentId, toastError]);
 
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number; current: string } | null>(null);
@@ -574,7 +667,9 @@ export function useAgentFiles(agentId: string) {
 
   const uploadFile = useCallback(
     (file: File, onDone?: () => void) => {
-      uploadQueueRef.current.push({ file, dest: joinPath(currentPathRef.current, file.name, osType), onDone });
+      const dest = joinPath(currentPathRef.current, file.name, osType);
+      pushFilesRef.current.set(dest, file);
+      uploadQueueRef.current.push({ file, dest, onDone });
       setUploading(true);
       pumpUploadQueue();
     },
@@ -683,6 +778,14 @@ export function useAgentFiles(agentId: string) {
     uploadProgress,
     uploading,
     pullName,
+    transfers,
+    transferBusyId,
+    loadTransfers,
+    pauseTransfer,
+    resumeTransfer,
+    cancelTransfer,
+    startOverTransfer,
+    downloadTransfer,
     pullProgress,
     previewContent,
     previewIsImage,

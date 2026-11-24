@@ -12,9 +12,18 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Link } from "react-router-dom";
 import { CloudUpload, Download, File, Folder, FolderUp } from "lucide-react";
 import { formatBytes, joinPath, parentPath, type FileEntry } from "@/lib/agent-files/types";
-import { extractImmediateListing, filesLsTaskId, isFilesLsAck, parseLsListing } from "@/lib/agent-files/ls-listing";
-import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
 import { transferPercent, type TransferProgress } from "@/lib/agent-files/file-task";
+import { extractImmediateListing, filesLsTaskId, isFilesLsAck, parseLsListing } from "@/lib/agent-files/ls-listing";
+import {
+  cancelTransfer as cancelTransferApi,
+  downloadTransferFile,
+  listTransfers,
+  pauseTransfer as pauseTransferApi,
+  pullRemoteFile,
+  pushLocalFile,
+  type TransferSession,
+} from "@/lib/agent-files/file-transfer";
+import TransferList from "../detail/files/components/TransferList";
 
 interface AgentDockFilesProps {
   agentId: string;
@@ -33,8 +42,11 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
   const [busyName, setBusyName] = useState<string | null>(null);
   const [pushPct, setPushPct] = useState(0);
   const [pullProgress, setPullProgress] = useState<TransferProgress | null>(null);
+  const [transfers, setTransfers] = useState<TransferSession[]>([]);
+  const [transferBusyId, setTransferBusyId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pushFilesRef = useRef(new Map<string, File>());
 
   const load = useCallback(async (next: string) => {
     if (!agentId) return;
@@ -73,12 +85,29 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
     }
   }, [agentId, t]);
 
+  const loadTransfers = useCallback(async () => {
+    if (!agentId) return;
+    try {
+      const rows = await listTransfers(agentId);
+      setTransfers((prev) => prev.length === 0 && rows.length === 0 ? prev : rows);
+    } catch {
+      // Keep the last known sessions: a list hiccup is not a transfer failure.
+    }
+  }, [agentId]);
+
   useEffect(() => {
-    const start = osType === "linux" ? "/" : "C:\\";
-    setPath(start);
-    setPathInput(start);
-    void load(start);
-  }, [agentId, osType, load]);
+    void loadTransfers();
+  }, [loadTransfers]);
+
+  useEffect(() => {
+    if (!transfers.some((s) => s.status === "active" || s.status === "paused")) return;
+    const timer = setInterval(() => { void loadTransfers(); }, 4000);
+    return () => clearInterval(timer);
+  }, [transfers, loadTransfers]);
+
+  useEffect(() => {
+    void load(initial);
+  }, [load, initial]);
 
   const go = (next: string) => { void load(next); };
 
@@ -108,11 +137,13 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
     } finally {
       setBusyName(null);
       setPullProgress(null);
+      void loadTransfers();
     }
   };
 
   const push = (file: File) => {
     const dest = joinPath(path, file.name, osType);
+    pushFilesRef.current.set(dest, file);
     setBusyName(file.name);
     setPushPct(0);
     toast(t("agents.files_push_queued", { name: file.name }));
@@ -133,7 +164,50 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
       .finally(() => {
         setBusyName(null);
         setPushPct(0);
+        void loadTransfers();
       });
+  };
+
+  const actOnTransfer = async (session: TransferSession, action: "pause" | "resume" | "cancel" | "start-over") => {
+    setTransferBusyId(session.id);
+    try {
+      if (action === "pause") {
+        const updated = await pauseTransferApi(agentId, session.id);
+        setTransfers((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+      } else if (action === "cancel") {
+        const updated = await cancelTransferApi(agentId, session.id);
+        setTransfers((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+      } else if (session.direction === "pull") {
+        await pullRemoteFile({
+          agentId,
+          remotePath: session.remote_path,
+          filename: session.filename || session.remote_path,
+          fileSize: session.total_size || undefined,
+          t,
+          transferId: action === "start-over" ? undefined : session.id,
+          fresh: action === "start-over",
+          onProgress: setPullProgress,
+        });
+      } else {
+        const file = pushFilesRef.current.get(session.remote_path);
+        if (!file) throw new Error(t("agents.files_transfer_repick"));
+        await pushLocalFile({
+          agentId,
+          destPath: session.remote_path,
+          file,
+          t,
+          transferId: action === "start-over" ? undefined : session.id,
+          fresh: action === "start-over",
+          onProgress: setPushPct,
+        });
+      }
+      await loadTransfers();
+    } catch (e) {
+      toastError(e, session.direction === "push" ? "agents.files_push_failed" : "agents.files_pull_failed");
+    } finally {
+      setTransferBusyId(null);
+      setPullProgress(null);
+    }
   };
 
   return (
@@ -197,6 +271,21 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
           </span>
         )}
       </p>
+      <div className="max-h-40 overflow-auto border-b border-border px-2 py-2">
+        <TransferList
+          t={t}
+          transfers={transfers}
+          busyId={transferBusyId}
+          onPause={(id) => { const s = transfers.find((x) => x.id === id); if (s) void actOnTransfer(s, "pause"); }}
+          onResume={(session) => { void actOnTransfer(session, "resume"); }}
+          onCancel={(id) => { const s = transfers.find((x) => x.id === id); if (s) void actOnTransfer(s, "cancel"); }}
+          onStartOver={(session) => { void actOnTransfer(session, "start-over"); }}
+          onDownload={(session) => {
+            void downloadTransferFile(agentId, session.id, session.filename || session.remote_path)
+              .catch((e) => toastError(e, "agents.files_pull_failed"));
+          }}
+        />
+      </div>
       <div className="content-auto min-h-0 flex-1 overscroll-contain overflow-auto scrollbar-thin">
         {loading ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-3">

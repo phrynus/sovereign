@@ -82,10 +82,6 @@ const LEGACY_REDIRECTS: { path: string; to: string }[] = [
 
 const MAIN_ROUTES: MainRoute[] = [
   ...Object.keys(MAIN_PAGES).map((name) => ({ path: `/${name}`, comp: MAIN_PAGES[name] })),
-  // Chat is now a mode of the AI workspace. Keep the old URL as a
-  // compatibility redirect so bookmarks and external links continue to work
-  // without shipping a second chat application bundle.
-  { path: "/chat", redirect: "/ai" },
   ...LEGACY_REDIRECTS.map((r) => ({ path: r.path, legacyTo: r.to })),
   { path: "/beacons/:id", comp: BeaconDetailPage },
   { path: "/beacons/:id/config", comp: BeaconConfigPage },
@@ -112,6 +108,7 @@ function zhNamespacesFor(pathname: string): string[] {
   if (pathname === "/listeners") return ["listeners", "generate", "dashboard"];
   if (pathname.startsWith("/listeners/")) return ["listeners"];
   if (pathname === "/ai" || pathname === "/macros") return ["ai"];
+  if (pathname === "/chat") return ["chat"];
   if (pathname === "/credentials") return ["cred"];
   if (pathname === "/beacons") return ["agents", "generate"];
   if (pathname.startsWith("/beacons/")) {

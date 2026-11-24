@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 )
 
@@ -398,13 +399,11 @@ func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, task
 // were verified by LogonUser on the agent), locked/erroneous results are
 // discarded. Returns the number of new entries stored.
 func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task, raw string) int {
-	if task.Command == "" || raw == "" {
+	command, _, werr := taskWireArgs(task)
+	if werr != nil || command == "" || raw == "" {
 		return 0
 	}
-	cmdParts := strings.SplitN(task.Command, "|", 4)
-	if len(cmdParts) < 2 {
-		return 0
-	}
+	cmdParts := strings.SplitN(command, "|", 4)
 	password := cmdParts[0]
 	domain := cmdParts[1]
 
@@ -505,10 +504,11 @@ func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task,
 // user|domain|password|[dc_ip]; the password is never written to audit.
 // Returns true when at least one vault entry was confirmed.
 func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw string) bool {
-	if task.Command == "" || raw == "" {
+	command, _, werr := taskWireArgs(task)
+	if werr != nil || command == "" || raw == "" {
 		return false
 	}
-	cmdParts := strings.SplitN(task.Command, "|", 4)
+	cmdParts := strings.SplitN(command, "|", 4)
 	if len(cmdParts) < 3 {
 		return false
 	}
@@ -533,6 +533,31 @@ func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw 
 	case "invalid", "locked":
 		s.credCheckFuse.recordFailure(agentID, cmdDomain)
 	default:
+		return false
+	}
+	if task.CredentialID != nil && *task.CredentialID != 0 {
+		// A referenced check knows its source row. Never fall back to
+		// plaintext matching here: that could confirm a different credential
+		// with the same password and would overwrite the row's own source TaskID.
+		result := "unknown"
+		if status == "valid" {
+			result = "ok"
+		} else {
+			result = status
+		}
+		_ = s.recordCredentialUsageOnce(task, "verify", result, fmt.Sprintf("%s@%s", strings.TrimSpace(r.User), cmdDomain))
+		if status == "valid" {
+			now := time.Now()
+			if err := s.db.Model(&db.CredentialEntry{}).Where("id = ?", *task.CredentialID).Updates(map[string]interface{}{
+				"confirmed":        true,
+				"verify_status":    "valid",
+				"last_verified_at": &now,
+			}).Error; err != nil {
+				slog.Error("Failed to confirm referenced credential", "credential_id", *task.CredentialID, "error", err)
+				return false
+			}
+			return true
+		}
 		return false
 	}
 
@@ -725,13 +750,58 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 		}
 	}
 
+	// JWT output is often pasted as a bare line. Keep it as attack material,
+	// deduplicated against credentials already recognized by the formats above.
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if entry.Password != "" {
+			seen[entry.Password] = struct{}{}
+		}
+		if entry.Hash != "" {
+			seen[entry.Hash] = struct{}{}
+		}
+	}
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		metadata, ok := parseCredentialMetadata(line)
+		if !ok || metadata.Subtype != "jwt" {
+			continue
+		}
+		if _, exists := seen[line]; exists {
+			continue
+		}
+		seen[line] = struct{}{}
+		entries = append(entries, db.CredentialEntry{
+			AgentID: agentID, TaskID: taskID, Password: line,
+			Type: "jwt", Source: "task_parse", Subtype: metadata.Subtype,
+			ExpiresAt: metadata.ExpiresAt, RenewUntil: metadata.RenewUntil,
+			ExpiryKnown: !metadata.ExpiresAt.IsZero(),
+		})
+	}
+
 	return entries
+}
+
+const credentialExpiringWindow = 7 * 24 * time.Hour
+
+func credentialExpiryState(cred db.CredentialEntry, now time.Time) string {
+	if !cred.ExpiryKnown || cred.ExpiresAt.IsZero() || cred.ExpiresAt.Year() <= 1 {
+		return "unknown"
+	}
+	if !cred.ExpiresAt.After(now) {
+		return "expired"
+	}
+	if !cred.ExpiresAt.After(now.Add(credentialExpiringWindow)) {
+		return "expiring"
+	}
+	return "valid"
 }
 
 // handleCredentialsPage renders the credentials vault page (DB-backed)
 func (s *Server) handleCredentialsPage(c *gin.Context) {
 	var creds []db.CredentialEntry
 	query := s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).Order("created_at desc")
+	now := time.Now()
 
 	tagFilter := c.Query("tag")
 	searchQuery := c.Query("search")
@@ -759,15 +829,16 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		// while datetime('now') is UTC, making naive string comparison
 		// timezone-dependent. Passing time.Time parameters keeps both sides
 		// on the same storage format.
-		now := time.Now()
-		weekAhead := now.Add(7 * 24 * time.Hour)
+		weekAhead := now.Add(credentialExpiringWindow)
 		switch expiryFilter {
 		case "expired":
-			query = query.Where("expires_at IS NOT NULL AND expires_at < ?", now)
+			query = query.Where("expiry_known = ? AND expires_at IS NOT NULL AND expires_at >= ? AND expires_at < ?", true, time.Date(2, 1, 1, 0, 0, 0, 0, time.UTC), now)
 		case "expiring":
-			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN ? AND ?", now, weekAhead)
+			query = query.Where("expiry_known = ? AND expires_at IS NOT NULL AND expires_at BETWEEN ? AND ?", true, now, weekAhead)
 		case "valid":
-			query = query.Where("expires_at IS NULL OR expires_at > ?", now)
+			query = query.Where("expiry_known = ? AND expires_at IS NOT NULL AND expires_at > ?", true, time.Date(2, 1, 1, 0, 0, 0, 0, time.UTC), weekAhead)
+		case "unknown":
+			query = query.Where("expiry_known = ? OR expires_at IS NULL", false)
 		}
 	}
 
@@ -843,10 +914,10 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		}
 	}
 
-	now := time.Now()
 	type credWithLifecycle struct {
 		db.CredentialEntry
-		Lifecycle string `json:"lifecycle"`
+		Lifecycle   string `json:"lifecycle"`
+		ExpiryState string `json:"expiry_state"`
 	}
 	var enriched []credWithLifecycle
 	for _, cred := range creds {
@@ -854,7 +925,11 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		if lifecycleFilter != "" && lc != lifecycleFilter {
 			continue
 		}
-		enriched = append(enriched, credWithLifecycle{cred, lc})
+		enriched = append(enriched, credWithLifecycle{
+			CredentialEntry: cred,
+			Lifecycle:       lc,
+			ExpiryState:     credentialExpiryState(cred, now),
+		})
 	}
 
 	var allTags []string
@@ -1044,6 +1119,18 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 			entry.Type = "cleartext"
 		}
 	}
+	value := entry.Password
+	if value == "" {
+		value = entry.Hash
+	}
+	if metadata, ok := parseCredentialMetadata(value); ok {
+		entry.Subtype = metadata.Subtype
+		entry.ExpiresAt = metadata.ExpiresAt
+		if !metadata.ExpiresAt.IsZero() {
+			entry.ExpiryKnown = true
+		}
+		entry.RenewUntil = metadata.RenewUntil
+	}
 	if err := s.db.Create(&entry).Error; err != nil {
 		slog.Error("Failed to create credential entry", "error", err)
 		s.LogAuditRecord(c, "credential_add", "credential", entry.AgentID, "add credential failed", false, err)
@@ -1137,6 +1224,7 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 		t, err := time.Parse("2006-01-02", expiresAt)
 		if err == nil {
 			cred.ExpiresAt = t
+			cred.ExpiryKnown = true
 		}
 	}
 	if confirmed := c.PostForm("confirmed"); confirmed != "" {
@@ -1208,6 +1296,10 @@ func (s *Server) visibleAgentIDs(c *gin.Context, ids []string) map[string]bool {
 
 func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 	if !s.requireOperator(c) {
+		return
+	}
+	if !middleware.HasPermission(c, db.PermCredsRead) {
+		respondError(c, http.StatusForbidden, "credentials.read is required to verify vault entries")
 		return
 	}
 	var req struct {
@@ -1288,8 +1380,8 @@ func (s *Server) handleBatchVerifyCredentials(c *gin.Context) {
 			outcomes = append(outcomes, out)
 			continue
 		}
-		cmd := entry.Username + "|" + entry.Domain + "|" + entry.Password + "|"
-		task, err := s.createTask(entry.AgentID, "cred_check", cmd, "", "", "", 0, 0, callerOpts(c)...)
+		opts := append(callerOpts(c), WithCredentialReference(entry.ID, CredentialTaskParams{}))
+		task, err := s.createTask(entry.AgentID, "cred_check", "", "", "", "", 0, 0, opts...)
 		if err != nil {
 			out.Status = "error"
 			out.Error = sanitizeError(err, "Credential operation")

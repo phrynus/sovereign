@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -40,6 +41,21 @@ type taskOptions struct {
 	// is the human-provided reason (audited). Only set for explicit admin
 	// overrides — see issueAgentTask.
 	forceWrite string
+	// credentialID is a vault reference resolved by createTask. The parsed
+	// secret never appears in the persisted public fields.
+	credentialID     *uint
+	credentialParams string
+	// transferID ties a chunk task to a durable transfer session.
+	transferID *uint
+	direction  string
+	final      bool
+	// Edit baseline for optimistic concurrency.
+	baseTaskID     *uint
+	expectedSHA256 string
+	// fileChainPrev/MAC carry a ready-made HMAC link for transfer chunks, so
+	// the beacon cannot claim the task before the signature is persisted.
+	fileChainPrev string
+	fileChainMAC  string
 }
 
 // WithCaller tags a createTask call with the operator user ID so the
@@ -61,6 +77,43 @@ func WithIdempotencyKey(key string) TaskOption {
 // admin overrides; system paths never set it.
 func WithForceWrite(reason string) TaskOption {
 	return func(o *taskOptions) { o.forceWrite = reason }
+}
+
+// WithCredentialReference attaches a vault reference to a task. createTask
+// resolves it before any policy/length check and stores the wire arguments in
+// encrypted columns, keeping the public Command as "@cred:<id>".
+func WithCredentialReference(id uint, params CredentialTaskParams) TaskOption {
+	return func(o *taskOptions) {
+		o.credentialID = &id
+		o.credentialParams = encodeCredentialParams(params)
+	}
+}
+
+// WithTransferRef binds a chunk task to a durable transfer session.
+func WithTransferRef(transferID uint, direction string, final bool) TaskOption {
+	return func(o *taskOptions) {
+		o.transferID = &transferID
+		o.direction = direction
+		o.final = final
+	}
+}
+
+// WithEditBaseline binds a write task to the read result it is based on.
+func WithEditBaseline(baseTaskID uint, expectedSHA256 string) TaskOption {
+	return func(o *taskOptions) {
+		o.baseTaskID = &baseTaskID
+		o.expectedSHA256 = expectedSHA256
+	}
+}
+
+// WithFileChain supplies the signed HMAC link for a transfer/editor chunk.
+// Both values are persisted in the INSERT, so an agent can never claim a
+// half-signed task after a server restart or a slow second UPDATE.
+func WithFileChain(prev, mac string) TaskOption {
+	return func(o *taskOptions) {
+		o.fileChainPrev = prev
+		o.fileChainMAC = mac
+	}
 }
 
 // callerOpts extracts the user_id from gin.Context and returns a WithCaller
@@ -197,7 +250,32 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	for _, opt := range opts {
 		opt(&tOpts)
 	}
-
+	var ref credentialTaskReference
+	if tOpts.credentialID != nil && *tOpts.credentialID != 0 {
+		if !credentialReferenceTaskTypes(taskType) {
+			return nil, taskRequestErrorf("credential references are not supported for task type %s", taskType)
+		}
+		if command != "" || shell != "" || path != "" || data != "" {
+			return nil, taskRequestErrorf("credential reference tasks must not carry inline secret parameters")
+		}
+		resolved, rc, rp, rd, fingerprint, label, err := s.prepareCredentialTask(
+			agentID, taskType, credentialTaskReference{ID: *tOpts.credentialID, Params: tOpts.credentialParams})
+		if err != nil {
+			return nil, &taskRequestError{msg: sanitizeError(err, "invalid credential reference")}
+		}
+		ref = credentialTaskReference{
+			ID: *tOpts.credentialID, Params: tOpts.credentialParams,
+			Command: resolved, Shell: rc, Path: rp, Data: rd,
+			Fingerprint: fingerprint, Label: label,
+		}
+		// RoE/OPSEC, length and required-parameter checks must see the REAL
+		// arguments: a safe placeholder would let a long or forbidden command
+		// through policy and fail only on the wire.
+		command, shell, path = resolved, rc, rp
+		if taskType == "password_spray" {
+			data = rd
+		}
+	}
 	if err := s.validateTaskCreation(nil, agentID, taskType, command, data, path, tOpts.callerUserID); err != nil {
 		return nil, &taskRequestError{msg: err.Error()}
 	}
@@ -238,7 +316,14 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		if err := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
 			agentID, key, []string{"pending", TaskStatusPendingApproval, "running"}).
 			Order("id DESC").First(&existing).Error; err == nil {
-			return &existing, nil
+			if ref.ID == 0 {
+				return &existing, nil
+			}
+			if existing.Type == taskType && existing.CredentialID != nil &&
+				*existing.CredentialID == ref.ID && existing.CredentialFingerprint == ref.Fingerprint {
+				return &existing, nil
+			}
+			return nil, errCredentialReferenceConflict
 		}
 		tOpts.idempotencyKey = key
 	}
@@ -278,15 +363,33 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	s.agentPendingTasksMu.Unlock()
 
 	task := db.Task{
-		AgentID: agentID,
-		Type:    taskType,
-		Command: command,
-		Shell:   shell,
-		Path:    path,
-		Data:    data,
-		Offset:  offset,
-		Size:    size,
-		Status:  "pending",
+		AgentID:        agentID,
+		Type:           taskType,
+		Command:        command,
+		Shell:          shell,
+		Path:           path,
+		Data:           data,
+		Offset:         offset,
+		Size:           size,
+		Status:         "pending",
+		TransferID:     tOpts.transferID,
+		Direction:      tOpts.direction,
+		Final:          tOpts.final,
+		BaseTaskID:     tOpts.baseTaskID,
+		ExpectedSHA256: tOpts.expectedSHA256,
+		PrevMAC:        tOpts.fileChainPrev,
+		MAC:            tOpts.fileChainMAC,
+	}
+	if ref.ID != 0 {
+		id := ref.ID
+		task.Command = fmt.Sprintf("@cred:%d", id)
+		task.Shell = ""
+		task.CredentialID = &id
+		task.CredentialFingerprint = ref.Fingerprint
+		task.CredentialLabel = ref.Label
+		task.CredentialParams = ref.Params
+		task.ResolvedCommand = ref.Command
+		task.ResolvedShell = ref.Shell
 	}
 	// Inherit the agent's tenant so tenant-scoped single-task reads
 	// (handleGetTaskStatus/apiGetTask) see the row. Previously tasks were
@@ -300,7 +403,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		task.IdempotencyKey = tOpts.idempotencyKey
 	}
 
-	task.Status = s.resolveInitialTaskStatus(taskType)
+	task.Status = s.resolveInitialTaskStatusFor(taskType, tOpts.credentialID)
 	if task.Status == TaskStatusPendingApproval {
 		exp := time.Now().Add(ApprovalExpiryDuration)
 		task.ApprovalExpiresAt = &exp
@@ -315,10 +418,20 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 			if e2 := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
 				agentID, tOpts.idempotencyKey, []string{"pending", TaskStatusPendingApproval, "running"}).
 				Order("id DESC").First(&existing).Error; e2 == nil {
-				return &existing, nil
+				if ref.ID == 0 || (existing.Type == taskType && existing.CredentialID != nil &&
+					*existing.CredentialID == ref.ID && existing.CredentialFingerprint == ref.Fingerprint) {
+					return &existing, nil
+				}
+				return nil, errCredentialReferenceConflict
 			}
 		}
 		return nil, err
+	}
+	if task.Status == TaskStatusPendingApproval {
+		// Upserted on (task_id, kind); a replayed create cannot duplicate the card.
+		s.postTaskApprovalChat(task, "approval",
+			fmt.Sprintf("Task #%d (%s) on %s by %s awaits approval", task.ID, task.Type, task.AgentID, task.CreatedBy),
+			fmt.Sprintf(`{"task_id":%d,"type":%q,"status":"pending_approval"}`, task.ID, task.Type))
 	}
 	// lportfwd bookkeeping: register the operator-declared target so
 	// connect frames can be validated against it, and clear declarations on
@@ -469,16 +582,40 @@ func (s *Server) resolveInitialTaskStatus(taskType string) string {
 	return "pending"
 }
 
+// resolveInitialTaskStatusFor adds the vault-reference approval rule: a
+// referenced cred_check/token_make waits for a second operator whenever
+// approval is enabled, even when the inline task type itself is not flagged.
+// dangerousTaskTypes is deliberately unchanged.
+func (s *Server) resolveInitialTaskStatusFor(taskType string, credentialID *uint) string {
+	status := s.resolveInitialTaskStatus(taskType)
+	if status != "pending" || credentialID == nil || *credentialID == 0 {
+		return status
+	}
+	if taskType == "cred_check" || taskType == "token_make" {
+		return TaskStatusPendingApproval
+	}
+	return status
+}
+
 // TaskSpec describes a single agent task issued from an HTTP handler.
 type TaskSpec struct {
-	Type           string
-	Command        string
-	Shell          string
-	Path           string
-	Data           string
-	Offset         int64
-	Size           int64
-	IdempotencyKey string
+	Type             string
+	Command          string
+	Shell            string
+	Path             string
+	Data             string
+	Offset           int64
+	Size             int64
+	IdempotencyKey   string
+	CredentialID     *uint
+	CredentialParams CredentialTaskParams
+	TransferID       *uint
+	Direction        string
+	Final            bool
+	BaseTaskID       *uint
+	ExpectedSHA256   string
+	FileChainPrev    string
+	FileChainMAC     string
 }
 
 // issueAgentTask is the single choke point for handler-issued tasks: it runs
@@ -492,6 +629,22 @@ func (s *Server) issueAgentTask(c *gin.Context, id string, spec TaskSpec) *db.Ta
 		return nil
 	}
 	opts := append(callerOpts(c), WithIdempotencyKey(spec.IdempotencyKey))
+	if spec.CredentialID != nil && *spec.CredentialID != 0 {
+		if !requireCredentialReferencePermission(c, spec.CredentialID) {
+			respondError(c, http.StatusForbidden, "credentials.read is required to reference vault entries")
+			return nil
+		}
+		opts = append(opts, WithCredentialReference(*spec.CredentialID, spec.CredentialParams))
+	}
+	if spec.TransferID != nil {
+		opts = append(opts, WithTransferRef(*spec.TransferID, spec.Direction, spec.Final))
+	}
+	if spec.BaseTaskID != nil {
+		opts = append(opts, WithEditBaseline(*spec.BaseTaskID, spec.ExpectedSHA256))
+	}
+	if spec.FileChainMAC != "" {
+		opts = append(opts, WithFileChain(spec.FileChainPrev, spec.FileChainMAC))
+	}
 	// Admin force override for another operator's collaboration lock. The
 	// reason is mandatory and audited inside createTask's lock gate.
 	if c.Query("force") == "true" && s.isAdmin(c) {
@@ -544,7 +697,13 @@ func (s *Server) checkAgentLockForCreate(agentID string, tOpts *taskOptions) err
 // for audit trails. Raw commands may carry credentials, so only the hash is
 // logged — enough to correlate create/approve/execute records of one task.
 func taskArgsHash(t *db.Task) string {
-	sum := sha256.Sum256([]byte(t.Type + "\x00" + t.Command + "\x00" + t.Shell + "\x00" + t.Path + "\x00" + t.Data))
+	command, shell, err := taskWireArgs(*t)
+	if err != nil {
+		// Never fall back to the safe placeholder: an audit fingerprint that
+		// omits the real arguments cannot correlate approval with execution.
+		command, shell = t.Command, t.Shell
+	}
+	sum := sha256.Sum256([]byte(t.Type + "\x00" + command + "\x00" + shell + "\x00" + t.Path + "\x00" + t.Data))
 	return hex.EncodeToString(sum[:])[:16]
 }
 
@@ -1186,8 +1345,13 @@ func clientErrorStatus(err error) (int, bool) {
 	if err == nil {
 		return 0, false
 	}
+	if errors.Is(err, errCredentialReferenceConflict) {
+		return http.StatusConflict, true
+	}
 	msg := err.Error()
 	switch {
+	case strings.Contains(msg, "fuse_tripped"):
+		return http.StatusTooManyRequests, true
 	case strings.Contains(msg, "too many pending tasks"),
 		strings.Contains(msg, "pending tasks (limit"):
 		return http.StatusTooManyRequests, true
@@ -1204,6 +1368,13 @@ func clientErrorStatus(err error) (int, bool) {
 		strings.Contains(msg, "requires 'path' parameter"),
 		strings.Contains(msg, "requires 'data' parameter"),
 		strings.Contains(msg, "command too long"):
+		return http.StatusBadRequest, true
+	case strings.Contains(msg, "credential reference"),
+		strings.Contains(msg, "credential_id"),
+		strings.Contains(msg, "credential has no password"),
+		strings.Contains(msg, "credential has expired"),
+		strings.Contains(msg, "credential type"),
+		strings.Contains(msg, "credential snapshot"):
 		return http.StatusBadRequest, true
 	}
 	return 0, false

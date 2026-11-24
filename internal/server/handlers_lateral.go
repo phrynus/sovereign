@@ -136,19 +136,19 @@ func (s *Server) handleProcessLateralResult(c *gin.Context) {
 }
 
 type lateralSpec struct {
-	Source     string `json:"source"`
-	Target     string `json:"target"`
-	Method     string `json:"method"`
-	Credential string `json:"credential,omitempty"`
-	Username   string `json:"username,omitempty"`
-	Password   string `json:"password,omitempty"`
-	Command    string `json:"command,omitempty"`
-	Hash       string `json:"hash,omitempty"`
-	KeyPath    string `json:"key_path,omitempty"`
-	Port       string `json:"port,omitempty"`
-	Share      string `json:"share,omitempty"`
-	Namespace  string `json:"namespace,omitempty"`
-	Pivot      string `json:"pivot,omitempty"`
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	Method       string `json:"method"`
+	CredentialID *uint  `json:"credential_id,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+	Command      string `json:"command,omitempty"`
+	Hash         string `json:"hash,omitempty"`
+	KeyPath      string `json:"key_path,omitempty"`
+	Port         string `json:"port,omitempty"`
+	Share        string `json:"share,omitempty"`
+	Namespace    string `json:"namespace,omitempty"`
+	Pivot        string `json:"pivot,omitempty"`
 }
 
 // lateralAuditSummary renders a redacted summary of a lateral-movement spec
@@ -235,23 +235,48 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "source, target and method required")
 		return
 	}
+	if req.CredentialID != nil && (req.Username != "" || req.Password != "" || req.Hash != "" || req.KeyPath != "") {
+		respondError(c, http.StatusBadRequest, "credential reference tasks must not carry inline secrets")
+		return
+	}
 	// The implant has no pivot slot, so accepting one would let the operator
 	// believe traffic is tunnelled through an agent they chose when it is not.
 	if strings.TrimSpace(req.Pivot) != "" {
 		respondError(c, http.StatusBadRequest, "pivot is not supported by the implant")
 		return
 	}
-	spec, err := encodeLateralSpec(req)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
-		return
+	spec := ""
+	taskSpec := TaskSpec{Type: "lateral"}
+	if req.CredentialID != nil {
+		taskSpec.CredentialID = req.CredentialID
+		taskSpec.CredentialParams = CredentialTaskParams{
+			Target: req.Target, Method: req.Method, Command: req.Command,
+		}
+	} else {
+		encoded, err := encodeLateralSpec(req)
+		if err != nil {
+			respondError(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		spec = encoded
+		taskSpec.Command = spec
 	}
-	task := s.issueAgentTask(c, req.Source, TaskSpec{Type: "lateral", Command: spec})
+	task := s.issueAgentTask(c, req.Source, taskSpec)
 	if task == nil {
 		return // issueAgentTask already responded: 404 (wrong tenant), 409 (locked) or 400
 	}
 	slog.Info("Lateral movement via JSON API", "agent_id", req.Source, "target", req.Target, "method", req.Method)
-	s.LogAuditRecord(c, "lateral", "agent", req.Source, lateralAuditSummary(spec), true, nil)
+	auditSpec := spec
+	if task.CredentialID != nil {
+		// Same separator contract as the wire spec: never let a field shift
+		// the summary the operator reads in the audit chain.
+		if credentialCommandHasSeparator(req.Method, req.Target, task.CredentialLabel) {
+			auditSpec = "reference|redacted|user|"
+		} else {
+			auditSpec = req.Method + "|" + req.Target + "|" + task.CredentialLabel + "|"
+		}
+	}
+	s.LogAuditRecord(c, "lateral", "agent", req.Source, lateralAuditSummary(auditSpec), true, nil)
 	s.broadcastTaskUpdate(req.Source, *task)
 	respond(c, gin.H{"task_id": task.ID})
 }

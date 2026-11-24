@@ -1,443 +1,275 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { API_BASE } from "@/lib/constants";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { paths } from "@/lib/api-paths";
 import { TASK_HARD_TIMEOUT_MS } from "@/lib/task-poll";
-import { EXFIL_CAP, EXFIL_CHUNK, exfilBasename, pullPlan, transferProgressAt } from "./file-task";
-import { pullRemoteFile, pushLocalFile } from "./file-transfer";
+import {
+  FILE_TRANSFER_CHUNK_SIZE,
+  FILE_TRANSFER_MAX_BYTES,
+  transferProgressAt,
+} from "./file-task";
+import {
+  cancelTransfer,
+  getTransfer,
+  listTransfers,
+  pauseTransfer,
+  pullRemoteFile,
+  pushLocalFile,
+  resumeTransfer,
+  type TransferSession,
+} from "./file-transfer";
 
 const mocks = vi.hoisted(() => ({
-  post: vi.fn(),
+  get: vi.fn(),
+  postJson: vi.fn(),
+  putJson: vi.fn(),
+  del: vi.fn(),
   downloadGet: vi.fn(),
   pollTask: vi.fn(),
-  getCsrfToken: vi.fn(() => "csrf-token"),
-  handleUnauthorized: vi.fn(),
   downloadBlob: vi.fn(),
+  digest: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
-  api: { post: mocks.post, downloadGet: mocks.downloadGet },
+  api: {
+    get: mocks.get,
+    postJson: mocks.postJson,
+    putJson: mocks.putJson,
+    del: mocks.del,
+    downloadGet: mocks.downloadGet,
+  },
   pollTask: mocks.pollTask,
-  getCsrfToken: mocks.getCsrfToken,
-  handleUnauthorized: mocks.handleUnauthorized,
 }));
 vi.mock("@/lib/download", () => ({ downloadBlob: mocks.downloadBlob }));
 
 const t = vi.fn((key: string) => key);
+const CHUNK = FILE_TRANSFER_CHUNK_SIZE;
 
-class FakeXHR {
-  static instances: FakeXHR[] = [];
-  static reset() {
-    FakeXHR.instances = [];
-  }
-
-  method = "";
-  url = "";
-  headers: Record<string, string> = {};
-  withCredentials = false;
-  timeout = 0;
-  status = 0;
-  responseText = "";
-  aborted = false;
-  sentBody: unknown;
-
-  private listeners = new Map<string, Array<(ev?: unknown) => void>>();
-  private uploadListeners = new Map<string, Array<(ev?: unknown) => void>>();
-
-  upload = {
-    addEventListener: (type: string, cb: (ev?: unknown) => void) => {
-      const list = this.uploadListeners.get(type) ?? [];
-      list.push(cb);
-      this.uploadListeners.set(type, list);
-    },
+function session(overrides: Partial<TransferSession> = {}): TransferSession {
+  return {
+    id: 7,
+    direction: "push",
+    remote_path: "/tmp/blob.bin",
+    filename: "blob.bin",
+    total_size: 2 * CHUNK + 10,
+    committed_offset: 0,
+    chunk_size: CHUNK,
+    status: "active",
+    ...overrides,
   };
-
-  constructor() {
-    FakeXHR.instances.push(this);
-  }
-
-  open(method: string, url: string) {
-    this.method = method;
-    this.url = url;
-  }
-
-  setRequestHeader(key: string, value: string) {
-    this.headers[key] = value;
-  }
-
-  addEventListener(type: string, cb: (ev?: unknown) => void) {
-    const list = this.listeners.get(type) ?? [];
-    list.push(cb);
-    this.listeners.set(type, list);
-  }
-
-  send(body: unknown) {
-    this.sentBody = body;
-  }
-
-  abort() {
-    this.aborted = true;
-  }
-
-  emit(type: string, ev?: unknown) {
-    for (const cb of this.listeners.get(type) ?? []) cb(ev);
-  }
-
-  emitUpload(type: string, ev?: unknown) {
-    for (const cb of this.uploadListeners.get(type) ?? []) cb(ev);
-  }
 }
 
-function lastXhr(): FakeXHR {
-  const list = FakeXHR.instances;
-  const xhr = list[list.length - 1];
-  if (!xhr) throw new Error("no XHR was created");
-  return xhr;
+function testFile(size: number, name = "blob.bin"): File {
+  const file = new File([new Uint8Array(Math.min(size, FILE_TRANSFER_MAX_BYTES))], name, {
+    type: "application/octet-stream",
+  });
+  if (file.size !== size) Object.defineProperty(file, "size", { value: size });
+  return file;
 }
 
-describe("pullRemoteFile", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+/** Route list vs detail reads by path so tests can drive committed offsets. */
+function mockTransfers(list: TransferSession[], detail: (id: number) => TransferSession) {
+  mocks.get.mockImplementation((path: string) => {
+    if (/\/transfers\/\d+$/.test(path)) {
+      const id = Number(path.split("/").pop());
+      return Promise.resolve({ transfer: detail(id) });
+    }
+    if (path.endsWith("/transfers")) return Promise.resolve({ transfers: list });
+    return Promise.resolve({});
   });
+}
 
-  it("pulls a small file in one chunk and downloads the blob", async () => {
-    mocks.post.mockResolvedValue({ success: true, task_id: 42 });
-    mocks.pollTask.mockResolvedValue({ status: "completed" });
-    const blob = new Blob(["loot"]);
-    mocks.downloadGet.mockResolvedValue({ blob, filename: "saved.txt" });
-    const onProgress = vi.fn();
-    const plan = pullPlan(128);
-
-    const out = await pullRemoteFile({
-      agentId: "a1",
-      remotePath: "C:\\tmp\\loot.txt",
-      filename: "loot.txt",
-      fileSize: 128,
-      t,
-      onProgress,
-    });
-
-    expect(out).toBe("pulled");
-    expect(mocks.post).toHaveBeenCalledTimes(1);
-    expect(mocks.post).toHaveBeenCalledWith(paths.agents.filesExfil("a1"), {
-      path: "C:\\tmp\\loot.txt",
-      offset: "0",
-      size: "128",
-    });
-    expect(mocks.pollTask).toHaveBeenCalledWith(
-      "a1",
-      42,
-      expect.objectContaining({ timeoutMs: TASK_HARD_TIMEOUT_MS }),
-    );
-    expect(mocks.downloadGet).toHaveBeenCalledWith(
-      paths.agents.filesExfilGet("a1", exfilBasename("C:\\tmp\\loot.txt")),
-    );
-    expect(mocks.downloadBlob).toHaveBeenCalledWith(blob, "saved.txt");
-    expect(onProgress).toHaveBeenNthCalledWith(1, transferProgressAt(0, plan));
-    expect(onProgress).toHaveBeenNthCalledWith(2, transferProgressAt(128, plan));
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubGlobal("crypto", {
+    subtle: { digest: mocks.digest.mockResolvedValue(new ArrayBuffer(32)) },
   });
+  mocks.pollTask.mockResolvedValue({ status: "completed" });
+  mocks.downloadGet.mockResolvedValue({ blob: new Blob(["x"]), filename: "saved.bin" });
+  mocks.postJson.mockResolvedValue({ transfer: session(), task_id: 12 });
+  mocks.putJson.mockResolvedValue({ task_id: 11, transfer: session() });
+  mocks.del.mockResolvedValue({ transfer: session() });
+  mockTransfers([], () => session());
+});
 
-  it("treats an unknown size as a single partial chunk", async () => {
-    mocks.post.mockResolvedValue({ task_id: 1 });
-    mocks.pollTask.mockResolvedValue({ status: "completed" });
-    mocks.downloadGet.mockResolvedValue({ blob: new Blob(), filename: "" });
+describe("durable session actions", () => {
+  it("lists sessions and maps pause/resume/cancel responses", async () => {
+    mockTransfers([session({ direction: "pull" })], () => session({ direction: "pull", status: "paused" }));
+    mocks.postJson.mockResolvedValue({ transfer: session({ direction: "pull", status: "paused" }) });
 
-    const out = await pullRemoteFile({
-      agentId: "a1",
-      remotePath: "/tmp/unknown.bin",
-      filename: "unknown.bin",
-      t,
-    });
-
-    expect(out).toBe("partial");
-    expect(mocks.post).toHaveBeenCalledTimes(1);
-    // The saved filename is empty: the caller-provided name is the fallback.
-    expect(mocks.downloadBlob).toHaveBeenCalledWith(expect.any(Blob), "unknown.bin");
-  });
-
-  it("loops chunked pulls and reports partial at the cap", async () => {
-    mocks.post.mockResolvedValue({ task_id: 7 });
-    mocks.pollTask.mockResolvedValue({ status: "completed" });
-    mocks.downloadGet.mockResolvedValue({ blob: new Blob(), filename: "big.bin" });
-    const onProgress = vi.fn();
-
-    const out = await pullRemoteFile({
-      agentId: "a",
-      remotePath: "/loot/big.bin",
-      filename: "big.bin",
-      fileSize: EXFIL_CAP + 1,
-      t,
-      onProgress,
-    });
-
-    const chunks = Math.ceil(EXFIL_CAP / EXFIL_CHUNK);
-    const lastOffset = (chunks - 1) * EXFIL_CHUNK;
-    expect(out).toBe("partial");
-    expect(mocks.post).toHaveBeenCalledTimes(chunks);
-    expect(mocks.pollTask).toHaveBeenCalledTimes(chunks);
-    expect(mocks.post).toHaveBeenLastCalledWith(paths.agents.filesExfil("a"), {
-      path: "/loot/big.bin",
-      offset: String(lastOffset),
-      size: String(EXFIL_CAP - lastOffset),
-    });
-    expect(mocks.downloadBlob).toHaveBeenCalledWith(expect.any(Blob), "big.bin");
-    expect(onProgress).toHaveBeenCalledTimes(chunks + 1);
-  });
-
-  it("fails the pull when the dispatch ACK carries no task id", async () => {
-    mocks.post.mockResolvedValue({});
-
-    await expect(
-      pullRemoteFile({ agentId: "a", remotePath: "/x", filename: "x", fileSize: 8, t }),
-    ).rejects.toThrow("agents.files_pull_failed");
-    expect(mocks.pollTask).not.toHaveBeenCalled();
-  });
-
-  it("surfaces the server's task error, falling back to the i18n message", async () => {
-    mocks.post.mockResolvedValue({ task_id: 5 });
-
-    mocks.pollTask.mockResolvedValue({ status: "failed", error: "no such file" });
-    await expect(
-      pullRemoteFile({ agentId: "a", remotePath: "/x", filename: "x", fileSize: 8, t }),
-    ).rejects.toThrow("no such file");
-
-    mocks.pollTask.mockResolvedValue({ status: "failed" });
-    await expect(
-      pullRemoteFile({ agentId: "a", remotePath: "/x", filename: "x", fileSize: 8, t }),
-    ).rejects.toThrow("agents.files_pull_failed");
-    expect(t).toHaveBeenCalledWith("agents.files_pull_failed");
-  });
-
-  it("refuses to start when the signal is already aborted", async () => {
-    const controller = new AbortController();
-    controller.abort();
-
-    await expect(
-      pullRemoteFile({
-        agentId: "a",
-        remotePath: "/x",
-        filename: "x",
-        fileSize: 8,
-        t,
-        signal: controller.signal,
-      }),
-    ).rejects.toMatchObject({ name: "AbortError" });
-    expect(mocks.post).not.toHaveBeenCalled();
-    expect(mocks.downloadBlob).not.toHaveBeenCalled();
-  });
-
-  it("stops chunking when the signal aborts mid-pull", async () => {
-    const controller = new AbortController();
-    mocks.post.mockResolvedValue({ task_id: 5 });
-    mocks.pollTask.mockImplementation(async () => {
-      controller.abort();
-      return { status: "completed" };
-    });
-
-    await expect(
-      pullRemoteFile({
-        agentId: "a",
-        remotePath: "/x",
-        filename: "x",
-        fileSize: EXFIL_CHUNK * 2,
-        t,
-        signal: controller.signal,
-      }),
-    ).rejects.toMatchObject({ name: "AbortError" });
-    expect(mocks.post).toHaveBeenCalledTimes(1);
-    expect(mocks.pollTask).toHaveBeenCalledTimes(1);
+    expect(await listTransfers("a1")).toHaveLength(1);
+    expect((await getTransfer("a1", 7)).status).toBe("paused");
+    expect((await pauseTransfer("a1", 7)).status).toBe("paused");
+    expect(mocks.postJson).toHaveBeenCalledWith(paths.agents.transferPause("a1", 7), {});
+    expect((await resumeTransfer("a1", 7)).status).toBe("paused");
+    expect(mocks.postJson).toHaveBeenCalledWith(paths.agents.transferResume("a1", 7), {});
+    expect((await cancelTransfer("a1", 7)).id).toBe(7);
+    expect(mocks.del).toHaveBeenCalledWith(paths.agents.transfer("a1", 7));
   });
 });
 
 describe("pushLocalFile", () => {
-  const file = () => new File(["payload"], "x.bin", { type: "application/octet-stream" });
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    FakeXHR.reset();
-    vi.stubGlobal("XMLHttpRequest", FakeXHR);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("rejects files over the 50 MiB cap before any upload starts", async () => {
-    const big = file();
-    Object.defineProperty(big, "size", { value: EXFIL_CAP + 1 });
-
-    await expect(pushLocalFile({ agentId: "a", destPath: "C:\\drop", file: big, t })).rejects.toThrow(
-      "agents.files_upload_too_large",
-    );
-    expect(t).toHaveBeenCalledWith("agents.files_upload_too_large", { max: "50 MB" });
-    expect(FakeXHR.instances).toHaveLength(0);
-  });
-
-  it("uploads the form and resolves on a 2xx without a task ACK", async () => {
-    const payload = file();
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: payload, t });
-    const xhr = lastXhr();
-
-    expect(xhr.method).toBe("POST");
-    expect(xhr.url).toBe(`${API_BASE}${paths.agents.filesPush("a1")}`);
-    expect(xhr.headers["X-CSRF-Token"]).toBe("csrf-token");
-    expect(xhr.withCredentials).toBe(true);
-    expect(xhr.timeout).toBe(600_000);
-    const formData = xhr.sentBody as FormData;
-    expect(formData.get("file")).toBe(payload);
-    expect(formData.get("target_path")).toBe("C:\\drop");
-    expect(formData.get("path")).toBe("C:\\drop");
-
-    xhr.status = 200;
-    xhr.responseText = "{}";
-    xhr.emit("load");
-
-    await expect(p).resolves.toBeUndefined();
-    expect(mocks.pollTask).not.toHaveBeenCalled();
-  });
-
-  it("polls the resulting chunk task and resolves when it completes", async () => {
-    mocks.pollTask.mockResolvedValue({ status: "completed" });
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 200;
-    xhr.responseText = JSON.stringify({ success: true, task_id: 9 });
-    xhr.emit("load");
-
-    await expect(p).resolves.toBeUndefined();
-    expect(mocks.pollTask).toHaveBeenCalledWith(
-      "a1",
-      9,
-      expect.objectContaining({ timeoutMs: TASK_HARD_TIMEOUT_MS }),
-    );
-  });
-
-  it("rejects when the chunk task fails, with the i18n fallback", async () => {
-    mocks.pollTask.mockResolvedValue({ status: "failed", error: "disk full" });
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 200;
-    xhr.responseText = JSON.stringify({ success: true, task_id: 9 });
-    xhr.emit("load");
-    await expect(p).rejects.toThrow("disk full");
-
-    mocks.pollTask.mockResolvedValue({ status: "failed" });
-    const p2 = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr2 = lastXhr();
-    xhr2.status = 200;
-    xhr2.responseText = JSON.stringify({ success: true, task_id: 9 });
-    xhr2.emit("load");
-    await expect(p2).rejects.toThrow("agents.files_push_failed");
-    expect(t).toHaveBeenCalledWith("agents.files_push_failed");
-  });
-
-  it("waits for every chunk task before reporting a successful push", async () => {
-    mocks.pollTask.mockResolvedValue({ status: "completed" });
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 200;
-    xhr.responseText = JSON.stringify({ success: true, task_id: 9, task_ids: [9, 10, 11] });
-    xhr.emit("load");
-
-    await expect(p).resolves.toBeUndefined();
-    expect(mocks.pollTask).toHaveBeenCalledTimes(3);
-    expect(mocks.pollTask.mock.calls.map((call) => call[1])).toEqual([9, 10, 11]);
-  });
-
-  it("fails the whole push when a later chunk failed", async () => {
-    mocks.pollTask.mockImplementation((_agentId: string, taskId: number) =>
-      Promise.resolve(taskId === 11
-        ? { status: "failed", error: "chunk 3 write failed" }
-        : { status: "completed" }),
-    );
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 200;
-    xhr.responseText = JSON.stringify({ success: true, task_id: 9, task_ids: [9, 10, 11] });
-    xhr.emit("load");
-
-    await expect(p).rejects.toThrow("chunk 3 write failed");
-    expect(mocks.pollTask).toHaveBeenCalledTimes(3);
-  });
-
-  it("routes a 401 through the central unauthorized flow and reports the status", async () => {
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 401;
-    xhr.responseText = "";
-    xhr.emit("load");
-
-    await expect(p).rejects.toThrow("agents.files_upload_failed_status");
-    expect(mocks.handleUnauthorized).toHaveBeenCalledWith({ status: 401 });
-    expect(t).toHaveBeenCalledWith("agents.files_upload_failed_status", { status: 401 });
-  });
-
-  it("reports non-401 HTTP failures without the unauthorized flow", async () => {
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 500;
-    xhr.responseText = "boom";
-    xhr.emit("load");
-
-    await expect(p).rejects.toThrow("agents.files_upload_failed_status");
-    expect(mocks.handleUnauthorized).not.toHaveBeenCalled();
-    expect(t).toHaveBeenCalledWith("agents.files_upload_failed_status", { status: 500 });
-  });
-
-  it("treats a non-JSON success body as an empty ack", async () => {
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    const xhr = lastXhr();
-    xhr.status = 200;
-    xhr.responseText = "OK";
-    xhr.emit("load");
-
-    await expect(p).resolves.toBeUndefined();
-    expect(mocks.pollTask).not.toHaveBeenCalled();
-  });
-
-  it("maps transport error and timeout events to i18n errors", async () => {
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    lastXhr().emit("error");
-    await expect(p).rejects.toThrow("agents.files_upload_failed_network");
-    expect(t).toHaveBeenCalledWith("agents.files_upload_failed_network");
-
-    const p2 = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t });
-    lastXhr().emit("timeout");
-    await expect(p2).rejects.toThrow("agents.files_upload_timed_out");
-    expect(t).toHaveBeenCalledWith("agents.files_upload_timed_out", { seconds: 600 });
-  });
-
-  it("aborts the request when the signal fires", async () => {
-    const controller = new AbortController();
-    const p = pushLocalFile({
-      agentId: "a1",
-      destPath: "C:\\drop",
-      file: file(),
-      t,
-      signal: controller.signal,
+  it("hashes the file, creates a push session and sends 2 MiB chunks in order", async () => {
+    const file = testFile(2 * CHUNK + 10);
+    mocks.postJson.mockResolvedValue({ transfer: session({ total_size: file.size }) });
+    mockTransfers([], () => {
+      const offset = Math.min(mocks.putJson.mock.calls.length * CHUNK, file.size);
+      return session({ total_size: file.size, committed_offset: offset, status: offset === file.size ? "completed" : "active" });
     });
-    const xhr = lastXhr();
+    const onProgress = vi.fn();
+    const onSession = vi.fn();
 
-    controller.abort();
+    await pushLocalFile({ agentId: "a1", destPath: "/tmp/blob.bin", file, t, onProgress, onSession });
 
-    await expect(p).rejects.toMatchObject({ name: "AbortError" });
-    expect(xhr.aborted).toBe(true);
+    expect(mocks.digest).toHaveBeenCalledTimes(1);
+    expect(mocks.postJson).toHaveBeenCalledWith(paths.agents.transfers("a1"), {
+      direction: "push",
+      path: "/tmp/blob.bin",
+      total_size: file.size,
+      sha256: "0".repeat(64),
+      filename: "blob.bin",
+    });
+    expect(mocks.putJson).toHaveBeenCalledTimes(3);
+    expect(mocks.putJson.mock.calls.map(([, body]) => body.offset)).toEqual([0, CHUNK, 2 * CHUNK]);
+    expect(mocks.putJson.mock.calls.map(([, body]) => body.final)).toEqual([false, false, true]);
+    expect(mocks.putJson.mock.calls[0]?.[2]).toEqual({ signal: undefined });
+    expect(mocks.pollTask).toHaveBeenCalledTimes(3);
+    expect(mocks.pollTask).toHaveBeenCalledWith(
+      "a1", 11, expect.objectContaining({ timeoutMs: TASK_HARD_TIMEOUT_MS }),
+    );
+    expect(onProgress).toHaveBeenLastCalledWith(100);
+    expect(onSession).toHaveBeenCalled();
   });
 
-  it("reports upload progress percentages only when computable", async () => {
+  it("resumes from the server-confirmed offset after a refresh", async () => {
+    const file = testFile(2 * CHUNK + 10);
+    mockTransfers(
+      [session({ total_size: file.size, committed_offset: CHUNK, status: "paused", sha256: "0".repeat(64) })],
+      () => {
+        const offset = Math.min(CHUNK + mocks.putJson.mock.calls.length * CHUNK, file.size);
+        return session({ total_size: file.size, committed_offset: offset, status: offset === file.size ? "completed" : "active" });
+      },
+    );
     const onProgress = vi.fn();
-    const p = pushLocalFile({ agentId: "a1", destPath: "C:\\drop", file: file(), t, onProgress });
-    const xhr = lastXhr();
 
-    xhr.emitUpload("progress", { lengthComputable: true, loaded: 25, total: 100 });
-    xhr.emitUpload("progress", { lengthComputable: true, loaded: 51, total: 100 });
-    xhr.emitUpload("progress", { lengthComputable: false, loaded: 1, total: 2 });
-    expect(onProgress).toHaveBeenNthCalledWith(1, 25);
-    expect(onProgress).toHaveBeenNthCalledWith(2, 51);
-    expect(onProgress).toHaveBeenCalledTimes(2);
+    await pushLocalFile({ agentId: "a1", destPath: "/tmp/blob.bin", file, t, onProgress });
 
-    xhr.status = 200;
-    xhr.responseText = "{}";
-    xhr.emit("load");
-    await expect(p).resolves.toBeUndefined();
+    expect(mocks.postJson).not.toHaveBeenCalled();
+    expect(mocks.putJson.mock.calls.map(([, body]) => body.offset)).toEqual([CHUNK, 2 * CHUNK]);
+    expect(onProgress).toHaveBeenNthCalledWith(1, 50);
+    expect(onProgress).toHaveBeenLastCalledWith(100);
+  });
+
+  it("starts a fresh session when the stored push is failed", async () => {
+    mockTransfers(
+      [session({ status: "failed", error: "disk full", sha256: "0".repeat(64) })],
+      () => session({ total_size: 8, committed_offset: 8, status: "completed" }),
+    );
+    mocks.postJson.mockResolvedValue({ transfer: session({ total_size: 8 }) });
+
+    await pushLocalFile({ agentId: "a1", destPath: "/tmp/blob.bin", file: testFile(8), t });
+
+    expect(mocks.postJson).toHaveBeenCalledTimes(1);
+    expect(mocks.putJson).toHaveBeenCalledTimes(1);
+    expect(mocks.putJson.mock.calls[0]?.[1]).toMatchObject({ offset: 0, final: true });
+  });
+
+  it("rejects files over 50 MiB before any request", async () => {
+    const big = testFile(FILE_TRANSFER_MAX_BYTES + 1);
+    await expect(
+      pushLocalFile({ agentId: "a1", destPath: "/tmp/blob.bin", file: big, t }),
+    ).rejects.toThrow("agents.files_upload_too_large");
+    expect(mocks.postJson).not.toHaveBeenCalled();
+    expect(t).toHaveBeenCalledWith("agents.files_upload_too_large", { max: "50 MB" });
+  });
+
+  it("sends one empty final chunk for a zero-byte file", async () => {
+    const file = testFile(0, "empty.txt");
+    mocks.postJson.mockResolvedValue({ transfer: session({ total_size: 0 }) });
+    mockTransfers([], () => session({ total_size: 0, committed_offset: 0, status: "completed" }));
+
+    await pushLocalFile({ agentId: "a1", destPath: "/tmp/empty.txt", file, t });
+
+    expect(mocks.putJson).toHaveBeenCalledTimes(1);
+    expect(mocks.putJson.mock.calls[0]?.[1]).toMatchObject({ offset: 0, data_base64: "", final: true });
+  });
+
+  it("surfaces task failures and aborts", async () => {
+    mocks.pollTask.mockResolvedValue({ status: "failed", error: "chunk rejected" });
+    mocks.postJson.mockResolvedValue({ transfer: session({ total_size: 8 }) });
+    await expect(
+      pushLocalFile({ agentId: "a1", destPath: "/tmp/blob.bin", file: testFile(8), t }),
+    ).rejects.toThrow("chunk rejected");
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      pushLocalFile({ agentId: "a1", destPath: "/tmp/blob.bin", file: testFile(8), t, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("pullRemoteFile", () => {
+  it("creates a pull transfer, resumes it and exposes committed-byte progress", async () => {
+    const detail = session({ direction: "pull", total_size: 2 * CHUNK, committed_offset: 0 });
+    mocks.postJson.mockResolvedValue({ transfer: detail, task_id: 12 });
+    mocks.putJson.mockResolvedValue({ task_id: 12 });
+    mockTransfers([], () => detail);
+    let polls = 0;
+    mocks.pollTask.mockImplementation(async () => {
+      polls += 1;
+      detail.committed_offset = polls * CHUNK;
+      return { status: "completed" };
+    });
+    const onProgress = vi.fn();
+
+    const out = await pullRemoteFile({
+      agentId: "a1", remotePath: "/tmp/pull.bin", filename: "pull.bin", fileSize: 2 * CHUNK, t, onProgress,
+    });
+
+    expect(out).toBe("pulled");
+    expect(mocks.postJson).toHaveBeenCalledWith(paths.agents.transfers("a1"), {
+      direction: "pull", path: "/tmp/pull.bin", total_size: 2 * CHUNK, filename: "pull.bin",
+    });
+    expect(mocks.postJson.mock.calls.some(([p]) => p === paths.agents.transferResume("a1", 7))).toBe(true);
+    expect(mocks.pollTask).toHaveBeenCalledTimes(2);
+    expect(mocks.downloadGet).toHaveBeenCalledWith(paths.agents.transferFile("a1", 7));
+    expect(onProgress).toHaveBeenNthCalledWith(1, transferProgressAt(0, {
+      total: 2 * CHUNK, chunk: CHUNK, partial: false,
+    }));
+    expect(onProgress).toHaveBeenLastCalledWith(transferProgressAt(2 * CHUNK, {
+      total: 2 * CHUNK, chunk: CHUNK, partial: false,
+    }));
+  });
+
+  it("resumes an existing session from the API offset after refresh", async () => {
+    const stored = session({
+      direction: "pull", remote_path: "/tmp/pull.bin", total_size: 3 * CHUNK, committed_offset: CHUNK,
+    });
+    mockTransfers([stored], () => ({ ...stored, committed_offset: 3 * CHUNK, status: "completed" }));
+    const onProgress = vi.fn();
+
+    await pullRemoteFile({
+      agentId: "a1", remotePath: "/tmp/pull.bin", filename: "pull.bin", fileSize: 3 * CHUNK, t, onProgress,
+    });
+
+    expect(mocks.postJson).not.toHaveBeenCalledWith(paths.agents.transfers("a1"), expect.anything());
+    expect(mocks.postJson.mock.calls.some(([p]) => p === paths.agents.transferResume("a1", 7))).toBe(true);
+    expect(onProgress).toHaveBeenNthCalledWith(1, transferProgressAt(CHUNK, {
+      total: 3 * CHUNK, chunk: CHUNK, partial: false,
+    }));
+  });
+
+  it("surfaces a failed task and honours an already-aborted signal", async () => {
+    mocks.postJson.mockResolvedValue({ transfer: session({ direction: "pull" }), task_id: 12 });
+    mockTransfers([], () => session({ direction: "pull" }));
+    mocks.pollTask.mockResolvedValue({ status: "failed", error: "beacon offline" });
+    await expect(
+      pullRemoteFile({ agentId: "a1", remotePath: "/x", filename: "x", fileSize: 8, t }),
+    ).rejects.toThrow("beacon offline");
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      pullRemoteFile({ agentId: "a1", remotePath: "/x", filename: "x", fileSize: 8, t, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });

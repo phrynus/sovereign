@@ -156,11 +156,25 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 	}
 	id := c.Param("id")
 	domUser := c.PostForm("user")
+	var credentialID *uint
+	if raw := strings.TrimSpace(c.PostForm("credential_id")); raw != "" {
+		id64, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || id64 == 0 {
+			respondError(c, http.StatusBadRequest, "credential_id must be a positive integer")
+			return
+		}
+		credID := uint(id64)
+		credentialID = &credID
+	}
 	password := c.PostForm("password")
 	logonType := c.PostForm("logon_type")
 
-	if domUser == "" {
+	if credentialID == nil && domUser == "" {
 		respondError(c, http.StatusBadRequest, "user required (format: DOMAIN\\user or user@domain)")
+		return
+	}
+	if credentialID != nil && (domUser != "" || password != "") {
+		respondError(c, http.StatusBadRequest, "credential reference tasks must not carry inline secrets")
 		return
 	}
 	if logonType == "" {
@@ -168,15 +182,23 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 	}
 
 	// Command = user, Shell = password (needed by agent for LogonUser), Path = logon_type
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "token_make", Command: domUser, Shell: password, Path: logonType})
+	spec := TaskSpec{Type: "token_make", Command: domUser, Shell: password, Path: logonType}
+	if credentialID != nil {
+		spec = TaskSpec{Type: "token_make", CredentialID: credentialID, CredentialParams: CredentialTaskParams{LogonType: logonType}}
+	}
+	task := s.issueAgentTask(c, id, spec)
 	if task == nil {
 		return
 	}
 
-	slog.Info("Token make requested", "agent_id", id, "user", domUser)
+	principal := domUser
+	if task.CredentialID != nil {
+		principal = task.CredentialLabel
+	}
+	slog.Info("Token make requested", "agent_id", id, "principal", principal)
 	// The password is deliberately absent from the detail string: dispatchTask
 	// fingerprints the arguments for dangerous task types instead.
-	s.dispatchTask(c, task, "token_make", fmt.Sprintf("make_token for %s (logon: %s)", domUser, logonType))
+	s.dispatchTask(c, task, "token_make", fmt.Sprintf("make_token for %s (logon: %s)", principal, logonType))
 }
 
 // handleTokenRevert dispatches rev2self

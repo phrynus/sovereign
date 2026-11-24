@@ -54,6 +54,8 @@ func (s *Server) registerCredentialRoutes(auth *gin.RouterGroup) {
 	credsRead.Use(middleware.RequirePermission(db.PermCredsRead))
 	{
 		credsRead.GET("/credentials", s.handleCredentialsPage)
+		credsRead.GET("/credentials/options", s.handleCredentialOptions)
+		credsRead.GET("/api/credentials/options", s.handleCredentialOptions)
 		credsRead.GET("/credentials/export", s.handleExportCredentials)
 		credsRead.GET("/credentials/:cred_id", s.handleGetCredential)
 	}

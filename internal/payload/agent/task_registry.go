@@ -68,6 +68,7 @@ func init() {
 		"read":              handleRead,
 		"download":          handleDownload,
 		"upload":            handleUpload,
+		"write":             handleWrite,
 
 		// Interactive Shell
 		"interactive_shell_start": handleInteractiveShellStart,

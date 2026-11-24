@@ -47,6 +47,26 @@ describe("typed-ws", () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
+  it("narrows chat frames to the engagement chat payload", () => {
+    const cb = vi.fn();
+    const unsub = subscribeTyped("chat", cb);
+    __testDispatchWS({
+      type: "chat",
+      id: 42,
+      tenant_id: 1,
+      engagement_id: 2,
+      channel_id: 3,
+      username: "operator",
+      message: "hello channel",
+      kind: "user",
+      created_at: "2026-11-24T00:00:00Z",
+    });
+    unsub();
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb.mock.calls[0][0].engagement_id).toBe(2);
+    expect(cb.mock.calls[0][0].message).toBe("hello channel");
+  });
+
   it("isWSEvent narrows the message type", () => {
     const msg = { type: "system_alert", message: "alert!", alert_type: "critical" };
     expect(isWSEvent(msg, "system_alert")).toBe(true);

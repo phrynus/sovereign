@@ -752,6 +752,24 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		// A 30-day review horizon is not an expiry. Only JWT/ccache rows with
+		// a parsed or operator-supplied expiry may be reported as expired.
+		ID: "2026-11-24-credential-expiry-known",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("credential_entries") {
+				return nil
+			}
+			execMigration(tx, "ALTER TABLE credential_entries ADD COLUMN expiry_known BOOLEAN DEFAULT FALSE", "add_credential_expiry_known")
+			if !tx.Migrator().HasColumn("credential_entries", "expiry_known") {
+				return nil
+			}
+			return tx.Exec("UPDATE credential_entries SET expiry_known = ? WHERE subtype IN (?, ?) AND expires_at IS NOT NULL", true, "jwt", "ccache").Error
+		},
+		Rollback: func(tx *gorm.DB) error {
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their
@@ -1268,6 +1286,29 @@ var indexMigrations = []*gormigrate.Migration{
 		},
 		Rollback: func(tx *gorm.DB) error {
 			execMigration(tx, "DROP INDEX IF EXISTS idx_audit_agent_created", "drop_idx_audit_agent_created")
+			return nil
+		},
+	},
+	{
+		// A late result must write at most one ledger row per task. Collapse
+		// existing duplicates before installing the partial unique index so an
+		// upgrade never fails on old data.
+		ID: "2026-11-24-reference-transfer-unique-indexes",
+		Migrate: func(tx *gorm.DB) error {
+			if tx.Migrator().HasTable("credential_usages") {
+				if err := tx.Exec("DELETE FROM credential_usages WHERE task_id <> 0 AND id NOT IN (SELECT MIN(id) FROM credential_usages WHERE task_id <> 0 GROUP BY credential_id, task_id)").Error; err != nil {
+					return err
+				}
+				execMigration(tx, "CREATE UNIQUE INDEX IF NOT EXISTS uidx_credential_usage_task ON credential_usages(credential_id, task_id) WHERE task_id <> 0", "uidx_credential_usage_task")
+			}
+			if tx.Migrator().HasTable("file_transfers") {
+				execMigration(tx, "CREATE UNIQUE INDEX IF NOT EXISTS uidx_file_transfers_active_path ON file_transfers(agent_id, path_key) WHERE status IN ('active', 'paused')", "uidx_file_transfers_active_path")
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS uidx_file_transfers_active_path", "drop_uidx_file_transfers_active_path")
+			execMigration(tx, "DROP INDEX IF EXISTS uidx_credential_usage_task", "drop_uidx_credential_usage_task")
 			return nil
 		},
 	},

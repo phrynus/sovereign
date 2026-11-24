@@ -821,6 +821,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server { // config-lock: constr
 	})
 	s.migrateAutomationRules()
 	s.registerBuiltinAutomations()
+	if err := migrateLegacyChatMessages(database); err != nil {
+		slog.Warn("Legacy chat migration failed", "err", err)
+	}
 
 	s.monitorCollector = NewMonitorCollector(s)
 	s.monitorCollector.Start()
@@ -993,7 +996,19 @@ func (s *Server) SetupRoutes() { // config-lock: boot, before the listener serve
 	auth.Use(s.operatorPlaneGuard())
 	auth.Use(middleware.AuthRequired(s.db))
 	auth.Use(middleware.CSRFProtect())
-	auth.Use(middleware.RequestBodyLimit(MaxJSONBodySize))
+	// Transfer chunks are 2 MiB RAW; base64 inflates them to ~2.8 MiB. A
+	// blanket 2 MiB reader rejected the largest legal chunk before the handler
+	// could validate it, so only this one route gets the larger budget.
+	auth.Use(func(c *gin.Context) {
+		limit := int64(MaxJSONBodySize)
+		if c.Request.Method == http.MethodPut && strings.HasSuffix(c.Request.URL.Path, "/chunk") {
+			limit = TransferChunkJSONLimit
+		}
+		if c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		}
+		c.Next()
+	})
 	auth.Use(s.apiRateLimiter.LimitByUser())
 	auth.Use(s.AuditMiddleware())
 	auth.Use(s.ActivityMiddleware())

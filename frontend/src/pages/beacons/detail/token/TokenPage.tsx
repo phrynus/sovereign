@@ -1,8 +1,10 @@
-import { registerFragment } from "@/lib/i18n";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { enAgents } from "@/lib/i18n/fragments/en.agents";
 registerFragment(enAgents);
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { registerFragment, useI18n } from "@/lib/i18n";
+import { enCred } from "@/lib/i18n/fragments/en.cred";
+registerFragment(enCred);
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -22,12 +24,12 @@ import { AlertCircle, AlertTriangle, BadgeInfo, Check, CircleDot, Info, Key, Lis
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { formatTime } from "@/lib/utils";
 import { Field } from "@/components/ui/field";
+import CredentialPicker from "@/pages/credentials/components/CredentialPicker";
 
 interface Token {
   id?: number;
@@ -78,6 +80,8 @@ export default function AgentTokenPage() {
   const [makeUser, setMakeUser] = useState("");
   const [makeDomain, setMakeDomain] = useState("");
   const [makePass, setMakePass] = useState("");
+  const [makeMode, setMakeMode] = useState<"manual" | "vault">("manual");
+  const [makeCredentialId, setMakeCredentialId] = useState<number | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
   const [whoamiResult, setWhoamiResult] = useState<string | null>(null);
@@ -160,14 +164,19 @@ export default function AgentTokenPage() {
   const { mutate: makeToken, reset: resetMake } = useMutation({
     fn: () => {
       const body = new URLSearchParams();
-      // B2 fix: backend reads "user" not "username"
-      body.append("user", makeUser);
-      body.append("domain", makeDomain);
-      body.append("password", makePass);
+      if (makeMode === "vault" && makeCredentialId !== null) {
+        // Vault mode: the server resolves the secret; no inline secret fields.
+        body.append("credential_id", String(makeCredentialId));
+      } else {
+        // B2 fix: backend reads "user" not "username"
+        body.append("user", makeUser);
+        body.append("domain", makeDomain);
+        body.append("password", makePass);
+      }
       return api.post(paths.agents.tokenMake(agentId), Object.fromEntries(body.entries()));
     },
     onSuccess: () => {
-      setMakeUser(""); setMakeDomain(""); setMakePass("");
+      setMakeUser(""); setMakeDomain(""); setMakePass(""); setMakeCredentialId(null);
       // B7 fix: token operations only return task_id, the actual token appears
       // later via agent callback. Show "task accepted" instead of false success.
       toast.info(t("agents.token_task_queued"));
@@ -243,6 +252,7 @@ export default function AgentTokenPage() {
     setMakeUser("");
     setMakeDomain("");
     setMakePass("");
+    setMakeCredentialId(null);
     setActiveAction(null);
     setWhoamiResult(null);
     setWhoamiError(false);
@@ -274,7 +284,7 @@ export default function AgentTokenPage() {
 
   const handleMakeToken = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!makeUser) return;
+    if (makeMode === "vault" ? makeCredentialId === null : !makeUser) return;
     setActiveAction("make");
     try {
       await makeToken();
@@ -437,17 +447,51 @@ export default function AgentTokenPage() {
         <Card className="p-(--card-spacing)">          <h2 className="text-sm font-semibold text-foreground mb-3">            <PlusCircle className="size-4" />{t("agents.token_make")}
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
-            <div>
-              <Label htmlFor="make-user" className="block mb-1.5">{t("agents.token_username")} <span className="text-destructive-ink">*</span></Label>
-              <Input id="make-user" type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
+            <div role="group" aria-label={t("cred.mode.label")} className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                data-testid="token-mode-manual"
+                aria-pressed={makeMode === "manual"}
+                variant={makeMode === "manual" ? "default" : "outline"}
+                onClick={() => setMakeMode("manual")}
+              >
+                {t("cred.mode.manual")}
+              </Button>
+              <Button
+                type="button"
+                data-testid="token-mode-vault"
+                aria-pressed={makeMode === "vault"}
+                variant={makeMode === "vault" ? "default" : "outline"}
+                onClick={() => setMakeMode("vault")}
+              >
+                {t("cred.mode.vault")}
+              </Button>
             </div>
-            <Field label={t("agents.token_domain")} htmlFor="make-domain">
-              <Input id="make-domain" type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
-            </Field>
-            <Field label={t("agents.token_password")} htmlFor="make-pass">
-              <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
-            </Field>
-            <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">
+            {makeMode === "vault" ? (
+              <div>
+                <CredentialPicker
+                  id="token-credential-picker"
+                  selectedId={makeCredentialId}
+                  onSelect={setMakeCredentialId}
+                  allowedTypes={["password", "cleartext"]}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">{t("cred.vault_hint")}</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="make-user" className="block mb-1.5">{t("agents.token_username")} <span className="text-destructive-ink">*</span></Label>
+                  <Input id="make-user" type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
+                </div>
+                <Field label={t("agents.token_domain")} htmlFor="make-domain">
+                  <Input id="make-domain" type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
+                </Field>
+                <Field label={t("agents.token_password")} htmlFor="make-pass">
+                  <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
+                </Field>
+              </>
+            )}
+            <Button type="submit" disabled={(makeMode === "vault" ? makeCredentialId === null : !makeUser) || activeAction === "make"} className="w-full" variant="default">
               {activeAction === "make" ? <><Spinner size="sm" />{t("agents.token_creating")}</> : <><Plus className="size-4" />{t("agents.token_make")}</>}
             </Button>
           </form>

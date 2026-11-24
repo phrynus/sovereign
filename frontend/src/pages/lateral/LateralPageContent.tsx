@@ -1,7 +1,7 @@
 
-import { registerFragment } from "@/lib/i18n";
-import { enLateral } from "@/lib/i18n/fragments/en.lateral";
-registerFragment(enLateral);
+import { registerFragment, useI18n } from "@/lib/i18n";
+import { enCred } from "@/lib/i18n/fragments/en.cred";
+registerFragment(enCred);
 
 import { useState } from "react";
 import { api } from "@/lib/api";
@@ -11,7 +11,6 @@ import { useMutation } from "@/lib/hooks/useMutation";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
-import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
 import { Banner } from "@/components/ui/banner";
 import { IconBadge } from "@/components/ui/icon-badge";
@@ -30,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataError } from "@/components/ui/data-state";
 import { Bot, Code, Crosshair, FolderTree, GitBranch, History, IdCard, Inbox, Key, Lock, Network, Rocket, Route, Share2, Terminal, Ticket, Wallet, AlertTriangle } from "lucide-react";
+import CredentialPicker from "@/pages/credentials/components/CredentialPicker";
 
 interface LateralStats {
   online_agents?: number;
@@ -69,7 +69,7 @@ interface FormData {
   namespace: string;
   command: string;
   key_path: string;
-  credential: string;
+  credential_id: string;
 }
 
 const defaultForm: FormData = {
@@ -84,7 +84,7 @@ const defaultForm: FormData = {
   namespace: "root\\cimv2",
   command: "whoami /all",
   key_path: "",
-  credential: "",
+  credential_id: "",
 };
 
 const methods = [
@@ -98,11 +98,12 @@ const methods = [
 export default function LateralPageContent() {
   const [activeMethod, setActiveMethod] = useState("smb");
   const [form, setForm] = useState<FormData>(defaultForm);
+  const [mode, setMode] = useState<"manual" | "vault">("manual");
   const { t } = useI18n();
 
   const { mutate: runLateral, isPending: submitting } = useMutation({
     fn: async () => {
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | number> = {
         source: form.source,
         target: form.target,
         method: activeMethod,
@@ -124,25 +125,34 @@ export default function LateralPageContent() {
         toast.error(t("lateral.pivot_unsupported"));
         throw new Error("pivot unsupported");
       }
-      if (form.credential) payload.credential = form.credential;
-      if (form.username) payload.username = form.username;
+      if (mode === "vault") {
+        if (!form.credential_id || !Number.isFinite(Number(form.credential_id))) {
+          toast.error(t("cred.picker.placeholder"));
+          throw new Error("credential required");
+        }
+        // Only an opaque vault reference and non-sensitive parameters leave
+        // the browser; the server resolves the secret.
+        payload.credential_id = Number(form.credential_id);
+      } else if (form.username) {
+        payload.username = form.username;
+      }
       if (form.command) payload.command = form.command;
 
       if (activeMethod === "smb") {
-        if (form.password) payload.password = form.password;
+        if (mode === "manual" && form.password) payload.password = form.password;
         payload.share = form.share;
       } else if (activeMethod === "winrm") {
-        if (form.password) payload.password = form.password;
+        if (mode === "manual" && form.password) payload.password = form.password;
         payload.port = port;
       } else if (activeMethod === "wmi") {
-        if (form.password) payload.password = form.password;
+        if (mode === "manual" && form.password) payload.password = form.password;
         payload.namespace = form.namespace;
       } else if (activeMethod === "ssh") {
-        if (form.password) payload.password = form.password;
-        if (form.key_path) payload.key_path = form.key_path;
+        if (mode === "manual" && form.password) payload.password = form.password;
+        if (mode === "manual" && form.key_path) payload.key_path = form.key_path;
         payload.port = port;
       } else if (activeMethod === "pth") {
-        if (form.hash) payload.hash = form.hash;
+        if (mode === "manual" && form.hash) payload.hash = form.hash;
       }
 
       await api.postJson(paths.lateral.execute, payload);
@@ -195,7 +205,6 @@ export default function LateralPageContent() {
   const historyFailed = partialFailures.includes(t("lateral.source_tasks"));
   const stats = data?.stats ?? {};
   const agents = data?.agents ?? [];
-  const credentials = data?.credentials ?? [];
   const history = data?.history ?? [];
 
   const updateForm = (key: keyof FormData, value: string) => {
@@ -203,7 +212,7 @@ export default function LateralPageContent() {
   };
 
   const handleSubmit = async () => {
-    if (!form.source || !form.target) return;
+    if (mode === "vault" && !form.credential_id) return;
     await runLateral();
   };
 
@@ -214,6 +223,41 @@ export default function LateralPageContent() {
   };
 
   const renderMethodForm = () => {
+    // Vault mode must not render inline secret inputs: the server materialises
+    // the password/hash from the referenced credential.
+    if (mode === "vault") {
+      if (activeMethod === "smb") {
+        return (
+          <div>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <FolderTree className="size-4" />{t("lateral.a11y_share")}
+            </span>
+            <Input aria-label={t("lateral.a11y_share")} name="vault-admin-share" type="text" placeholder="ADMIN$" className="font-mono" value={form.share} onChange={e => updateForm("share", e.target.value)} />
+          </div>
+        );
+      }
+      if (activeMethod === "winrm" || activeMethod === "ssh") {
+        return (
+          <div>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <Network className="size-4" />{t("lateral.a11y_port")}
+            </span>
+            <Input aria-label={t("lateral.a11y_port")} name="vault-port" type="text" placeholder={activeMethod === "ssh" ? "22" : "5985"} className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
+          </div>
+        );
+      }
+      if (activeMethod === "wmi") {
+        return (
+          <div>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <Code className="size-4" />{t("lateral.a11y_namespace")}
+            </span>
+            <Input aria-label={t("lateral.a11y_namespace")} name="vault-namespace" type="text" placeholder="root\cimv2" className="font-mono" value={form.namespace} onChange={e => updateForm("namespace", e.target.value)} />
+          </div>
+        );
+      }
+      return null;
+    }
     switch (activeMethod) {
       case "smb":
         return (
@@ -444,23 +488,31 @@ export default function LateralPageContent() {
 
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-              <Wallet className="size-4" />{t("lateral.credential")}            </span>
-            <Select value={form.credential || undefined} onValueChange={v => updateForm("credential", v ?? "")}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("lateral.manual_cred")} />
-              </SelectTrigger>
-              <SelectContent>
-                {credentials.map(c => {
-                  const cid = c.id || "";
-                  const cuser = c.username || "";
-                  const cdomain = c.domain || "";
-                  const ctarget = c.target || "";
-                  return <SelectItem key={cid} value={cid}>{cdomain ? `${cdomain}\\` : ""}{cuser} ({ctarget})</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
+              <Wallet className="size-4" />{t("lateral.credential")}
+            </span>
+            <div role="group" aria-label={t("cred.mode.label")} className="flex flex-wrap gap-2 mb-2">
+              <Button type="button" data-testid="lateral-mode-manual" aria-pressed={mode === "manual"}
+                variant={mode === "manual" ? "default" : "outline"} onClick={() => setMode("manual")}>
+                {t("cred.mode.manual")}
+              </Button>
+              <Button type="button" data-testid="lateral-mode-vault" aria-pressed={mode === "vault"}
+                variant={mode === "vault" ? "default" : "outline"} onClick={() => setMode("vault")}>
+                {t("cred.mode.vault")}
+              </Button>
+            </div>
+            {mode === "vault" ? (
+              <div className="space-y-1">
+                <CredentialPicker
+                  id="lateral-credential-picker"
+                  selectedId={form.credential_id ? Number(form.credential_id) : null}
+                  onSelect={(id) => updateForm("credential_id", id === null ? "" : String(id))}
+                />
+                <p className="text-xs text-muted-foreground">{t("cred.vault_hint")}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t("lateral.manual_cred")}</p>
+            )}
           </div>
-
           <div className="border-t border-border pt-4">
             <div className="text-xs font-semibold text-muted-foreground mb-3">
               {(() => { const m = methods.find(m => m.key === activeMethod); return m ? <span className="mr-1.5">{m.icon}</span> : null; })()}
@@ -477,7 +529,7 @@ export default function LateralPageContent() {
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-border">
-            <Button onClick={handleSubmit} size="lg" disabled={submitting || !form.source || !form.target}
+            <Button onClick={handleSubmit} size="lg" disabled={submitting || !form.source || !form.target || (mode === "vault" && !form.credential_id)}
               className="flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
               {submitting ? <Spinner size="xs" /> : <Rocket className="size-4" />}
               <span>{submitting ? t("lateral.executing") : t("lateral.execute_lateral")}</span>

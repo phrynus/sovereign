@@ -27,6 +27,11 @@ describe("router table", () => {
     }
   });
 
+  it("registers the standalone engagement chat workspace", () => {
+    const paths = collectPaths(router.routes as never, []);
+    expect(paths.filter((p) => p === "/chat")).toHaveLength(1);
+  });
+
   // The former top-level stubs rendered nothing and bounced the operator to a
   // tab elsewhere, so they were removed rather than kept as redirect routes.
   // This locks that in: reintroducing one would silently re-add a dead URL.

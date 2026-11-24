@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,18 @@ int cng_random(BYTE *out, DWORD len);
 
 /* SHA-256 (CNG). out must hold 32 bytes. */
 int cng_sha256(const BYTE *data, DWORD len, BYTE out[32]);
+
+/* Streaming SHA-256 of an on-disk file (64 KiB reads; empty files supported). */
+int cng_sha256_file(const char *path, BYTE out[32]);
+
+/* Compare-and-swap replace of an existing file. Returns 0 on success,
+ * 1 when the current digest no longer matches expected, -1 on I/O failure. */
+int cng_cas_write_file(const char *path, const BYTE *data, DWORD datalen,
+                       const BYTE expected[32], BYTE newsha[32],
+                       long long *mtime, char *err, size_t errcap);
+
+/* Modification time of an existing file, in Unix seconds. */
+int cng_file_mtime(const char *path, long long *out);
 
 /* HMAC-SHA256 (CNG). out must hold 32 bytes. */
 int cng_hmac_sha256(const BYTE *key, DWORD keylen,

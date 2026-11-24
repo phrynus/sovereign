@@ -176,6 +176,6 @@ describe("FilesMediaPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "agents.files_media_play" }));
 
     await waitFor(() => expect(screen.getByText("agents.files_media_play_too_large")).toBeTruthy());
-    expect(api.post).not.toHaveBeenCalledWith("/agents/a1/files/pull", expect.anything());
+    expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining("/transfers"), expect.anything());
   });
 });

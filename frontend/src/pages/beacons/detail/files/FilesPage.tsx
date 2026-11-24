@@ -24,6 +24,8 @@ import FilesMediaPanel from "./components/FilesMediaPanel";
 import FilesScanPanel from "./components/FilesScanPanel";
 import FilesTable from "./components/FilesTable";
 import FilesDialogs from "./components/FilesDialogs";
+import FilesEditor from "./components/FilesEditor";
+import TransferList from "./components/TransferList";
 
 export default function FilesPage() {
   const { t } = useI18n();
@@ -38,6 +40,7 @@ export default function FilesPage() {
   const [mkdirName, setMkdirName] = useState("");
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
+  const [editTarget, setEditTarget] = useState<string | null>(null);
   const [chmodTarget, setChmodTarget] = useState<string | null>(null);
   const [chmodMode, setChmodMode] = useState("644");
   const [dragOver, setDragOver] = useState(false);
@@ -55,6 +58,13 @@ export default function FilesPage() {
     uploadProgress,
     uploading,
     pullName,
+    transfers,
+    transferBusyId,
+    pauseTransfer,
+    resumeTransfer,
+    cancelTransfer,
+    startOverTransfer,
+    downloadTransfer,
     pullProgress,
     previewContent,
     previewIsImage,
@@ -307,6 +317,17 @@ export default function FilesPage() {
         </Card>
       )}
 
+      <TransferList
+        t={t}
+        transfers={transfers}
+        busyId={transferBusyId}
+        onPause={(id) => pauseTransfer(id)}
+        onResume={(session) => resumeTransfer(session.id)}
+        onCancel={(id) => cancelTransfer(id)}
+        onStartOver={(session) => startOverTransfer(session.id)}
+        onDownload={(session) => downloadTransfer(session)}
+      />
+
       {view === "browse" && (
         <>
           {loading && (
@@ -349,6 +370,7 @@ export default function FilesPage() {
               batchBusy={batchBusy}
               pullName={pullName}
               onFileClick={handleFileClick}
+              onEdit={(name) => setEditTarget(name)}
               onPreview={(name) => void readFile(name)}
               onDownload={(name) => void downloadFile(name)}
               onRename={(name) => { setRenameTarget(name); setRenameName(name); }}
@@ -428,6 +450,16 @@ export default function FilesPage() {
         previewIsImage={previewIsImage}
         selectedFile={selectedFile}
       />
+      {editTarget && (
+        <FilesEditor
+          t={t}
+          agentId={id}
+          path={joinPath(currentPath, editTarget, osType)}
+          filename={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); void loadDirectory(currentPath, { refresh: true }); }}
+        />
+      )}
       {modal}
       </>
       )}

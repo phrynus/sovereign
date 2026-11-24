@@ -2,8 +2,9 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCredentialsData } from "./useCredentialsData";
 
-const { getMock, subscribeMock, toastErrorMock, tMock } = vi.hoisted(() => ({
+const { getMock, listMock, subscribeMock, toastErrorMock, tMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
+  listMock: vi.fn(),
   subscribeMock: vi.fn(),
   toastErrorMock: vi.fn(),
   tMock: (key: string) => key,
@@ -29,7 +30,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/lib/api-paths", () => ({
-  paths: { credentials: { list: () => "/api/credentials/list" } },
+  paths: { credentials: { list: (query: string) => listMock(query) } },
 }));
 
 const vault = (count: number) => ({ data: { credentials: Array.from({ length: count }, (_, i) => ({ username: `u${i}` })) } });
@@ -37,6 +38,8 @@ const vault = (count: number) => ({ data: { credentials: Array.from({ length: co
 describe("useCredentialsData", () => {
   beforeEach(() => {
     getMock.mockReset();
+    listMock.mockReset();
+    listMock.mockImplementation((query = "") => `/credentials?${query}`);
     subscribeMock.mockReset();
     toastErrorMock.mockReset();
     subscribeMock.mockReturnValue(() => {});
@@ -49,6 +52,76 @@ describe("useCredentialsData", () => {
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.data).not.toBeNull();
+  });
+
+  it("keeps the expiry filter on initial and WebSocket reloads", async () => {
+    getMock.mockResolvedValue(vault(1));
+    let subscriber: ((msg: { type: string }) => void) | undefined;
+    subscribeMock.mockImplementation((fn: (msg: { type: string }) => void) => {
+      subscriber = fn;
+      return () => {};
+    });
+    const { result } = renderHook(() => useCredentialsData("expired"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const query = "format=json&expiry=expired";
+    expect(listMock).toHaveBeenCalledWith(query);
+    expect(getMock.mock.calls[0][0]).toBe(`/credentials?${query}`);
+
+    getMock.mockClear();
+    listMock.mockClear();
+    await act(async () => {
+      subscriber?.({ type: "credential_update" });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
+    expect(listMock).toHaveBeenCalledWith(query);
+    expect(getMock.mock.calls[0][0]).toBe(`/credentials?${query}`);
+  });
+
+  it("ignores an older response and keeps the new filter refreshable", async () => {
+    const { promise: unfiltered, resolve: resolveUnfiltered } = Promise.withResolvers<unknown>();
+    const { promise: filtered, resolve: resolveFiltered } = Promise.withResolvers<unknown>();
+    let subscriber: ((msg: { type: string }) => void) | undefined;
+    subscribeMock.mockImplementation((fn: (msg: { type: string }) => void) => {
+      subscriber = fn;
+      return () => {};
+    });
+    getMock.mockResolvedValueOnce(vault(1));
+    const { result, rerender } = renderHook(
+      ({ filter }) => useCredentialsData(filter),
+      { initialProps: { filter: "all" } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    getMock.mockReset();
+    getMock.mockReturnValueOnce(unfiltered).mockReturnValueOnce(filtered);
+    await act(async () => {
+      subscriber?.({ type: "credential_update" });
+      await Promise.resolve();
+    });
+    expect(getMock).toHaveBeenCalledTimes(1);
+
+    rerender({ filter: "expired" });
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      resolveFiltered(vault(1));
+      await filtered;
+    });
+    const filteredData = result.current.data;
+
+    getMock.mockResolvedValueOnce(vault(2));
+    let reload!: Promise<void>;
+    act(() => { reload = result.current.loadData(); });
+    expect(getMock).toHaveBeenCalledTimes(3);
+    await act(async () => { await reload; });
+
+    await act(async () => {
+      resolveUnfiltered(vault(3));
+      await unfiltered;
+    });
+    expect(result.current.data).not.toBe(filteredData);
+    expect(getMock.mock.calls[2][0]).toBe("/credentials?format=json&expiry=expired");
   });
 
   it("keeps the loaded rows on screen when a WebSocket refresh fails", async () => {

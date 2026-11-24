@@ -46,6 +46,9 @@ var exportFields = []exportField{
 	{name: "engagement", header: "Engagement", value: func(_ db.Task, _, engagementName string) string {
 		return csvSafe(engagementName)
 	}},
+	// operator is the account that signed the task. Historical rows may have no
+	// issuer: emit an empty cell rather than inventing one from the agent.
+	{name: "operator", header: "Operator", value: func(t db.Task, _, _ string) string { return t.CreatedBy }},
 	// agent_id is selectable but not part of the default set: the CSV has always shown the hostname, and a
 	// caller that wants to join on the id can now ask for it without losing the human-readable column.
 	{name: "agent_id", header: "Agent ID", value: func(t db.Task, _, _ string) string { return t.AgentID }},
@@ -151,9 +154,11 @@ func fieldsByName(names []string) []exportField {
 // already parse. The JSON format is new, and a script reading JSON wants the id, so it gets both. An explicit
 // `?fields=` overrides this for either format.
 func defaultExportFields(format string) []exportField {
+	// operator is selectable and in full, but never in a default: an export that
+	// suddenly names an issuer for historical rows would imply an audit trail.
 	out := make([]exportField, 0, len(exportFields))
 	for _, field := range exportFields {
-		if (field.name == "agent_id" || field.name == "retry_count" || field.name == "late_result") && format != "json" {
+		if field.name == "operator" || ((field.name == "agent_id" || field.name == "retry_count" || field.name == "late_result") && format != "json") {
 			continue
 		}
 		out = append(out, field)

@@ -4,7 +4,7 @@ import type { KeylogTask, DownloadTask, LootData } from "@/types/loot";
 export type LootTab = "screenshots" | "keylogs" | "downloads";
 
 export function emptyLootData(): LootData {
-  return { screenshots: [], keylog_tasks: [], download_tasks: [] };
+  return { screenshots: [], keylog_tasks: [], download_tasks: [], completed_transfers: [] };
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -61,8 +61,10 @@ function normalizeKeylog(raw: unknown): KeylogTask | null {
 function normalizeDownload(raw: unknown): DownloadTask | null {
   const o = asRecord(raw);
   if (!o) return null;
-  const id = firstStr(o, ["id", "ID"]);
-  if (!id) return null;
+  const rawId = firstStr(o, ["id", "ID"]);
+  if (!rawId) return null;
+  const transferID = o.transfer_id == null ? undefined : Number(o.transfer_id);
+  const id = transferID ? `transfer:${transferID}` : rawId;
   const agent = asRecord(o.agent ?? o.Agent);
   return {
     id,
@@ -74,6 +76,10 @@ function normalizeDownload(raw: unknown): DownloadTask | null {
     result: firstStr(o, ["result", "Result"]),
     status: firstStr(o, ["status", "Status"]),
     created_at: firstStr(o, ["created_at", "CreatedAt"]),
+    transfer_id: transferID,
+    filename: firstStr(o, ["filename", "Filename"]),
+    sha256: firstStr(o, ["sha256", "SHA256"]),
+    size: o.size == null ? undefined : Number(o.size),
   };
 }
 
@@ -93,5 +99,6 @@ export function normalizeLootData(result: Record<string, unknown> | null | undef
     screenshots: asList(result.screenshots ?? result.Screenshots).map(normalizeScreenshot).filter((s): s is Screenshot => s != null),
     keylog_tasks: asList(result.keylog_tasks ?? result.keylogs ?? result.KeylogTasks).map(normalizeKeylog).filter((k): k is KeylogTask => k != null),
     download_tasks: asList(result.download_tasks ?? result.downloads ?? result.DownloadTasks).map(normalizeDownload).filter((d): d is DownloadTask => d != null),
+    completed_transfers: asList(result.completed_transfers ?? result.CompletedTransfers).map(normalizeDownload).filter((d): d is DownloadTask => d != null),
   };
 }

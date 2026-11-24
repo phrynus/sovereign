@@ -128,10 +128,10 @@ func TestListTemplatesJSON_QueryFailureIsNotAnEmptyList(t *testing.T) {
 // history/channels and mesh route/topology endpoints: an empty 200 on each
 // would read as "quiet channel", "no channels", "no peers".
 func TestChatAndMeshReads_QueryFailureIsNotAnEmptyList(t *testing.T) {
-	assertQueryFailureIs500(t, "chat history", "/chat/history", func(s *Server, c *gin.Context) {
+	assertQueryFailureIs500(t, "chat history", "/chat/history?engagement_id=1", func(s *Server, c *gin.Context) {
 		s.handleAPIChatHistory(c)
 	})
-	assertQueryFailureIs500(t, "chat channels", "/chat/channels", func(s *Server, c *gin.Context) {
+	assertQueryFailureIs500(t, "chat channels", "/chat/channels?engagement_id=1", func(s *Server, c *gin.Context) {
 		s.handleAPIChatChannels(c)
 	})
 	assertQueryFailureIs500(t, "mesh topology", "/api/mesh/topology", func(s *Server, c *gin.Context) {

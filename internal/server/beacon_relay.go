@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -72,6 +73,15 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			// Durable idempotency: exact rid already applied once.
 			if r.ResultID != "" && task.LastResultID == r.ResultID && (task.Status == "completed" || task.Status == "failed") {
 				continue
+			}
+			if task.TransferID != nil && (task.Type == "upload" || task.Type == "download") {
+				handled, terr := s.commitTransferChunk(*childAgentMap[rd.AgentID], r, task, now)
+				if terr != nil && !errors.Is(terr, errTransferStale) {
+					slog.Warn("Relayed transfer chunk rejected", "child", rd.AgentID, "task_id", task.ID, "error", terr)
+				}
+				if handled {
+					continue
+				}
 			}
 			task.Status = "completed"
 			if r.Error != "" {

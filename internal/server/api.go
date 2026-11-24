@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -113,6 +114,9 @@ func (s *Server) apiListTasks(c *gin.Context) {
 	if agentID := c.Query("agent_id"); agentID != "" {
 		query = query.Where("agent_id = ?", agentID)
 	}
+	if credID := c.Query("credential_id"); credID != "" {
+		query = query.Where("credential_id = ?", credID)
+	}
 	if taskType := c.Query("type"); taskType != "" {
 		query = query.Where("type = ?", taskType)
 	}
@@ -130,6 +134,9 @@ func (s *Server) apiListTasks(c *gin.Context) {
 	if err := query.Limit(limit).Find(&tasks).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "database error")
 		return
+	}
+	for i := range tasks {
+		tasks[i] = taskForOperator(tasks[i])
 	}
 	// Documented REST v1 list shape: {"success": true, "data": [...], "total": n}
 	// (api/openapi.yaml). The sibling total is part of the published scripting
@@ -164,7 +171,7 @@ func (s *Server) apiGetTask(c *gin.Context) {
 			return
 		}
 	}
-	respond(c, task)
+	respond(c, taskForOperator(task))
 }
 
 func (s *Server) apiCreateTask(c *gin.Context) {
@@ -172,13 +179,15 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AgentID       string `json:"agent_id" binding:"required"`
-		Type          string `json:"type" binding:"required"`
-		Command       string `json:"command"`
-		Shell         string `json:"shell"`
-		Path          string `json:"path"`
-		Data          string `json:"data"`
-		EncryptResult bool   `json:"encrypt_result"`
+		AgentID          string               `json:"agent_id" binding:"required"`
+		Type             string               `json:"type" binding:"required"`
+		Command          string               `json:"command"`
+		Shell            string               `json:"shell"`
+		Path             string               `json:"path"`
+		Data             string               `json:"data"`
+		EncryptResult    bool                 `json:"encrypt_result"`
+		CredentialID     *uint                `json:"credential_id,omitempty"`
+		CredentialParams CredentialTaskParams `json:"credential_params,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
@@ -199,7 +208,21 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, req.AgentID); !ok {
 		return
 	}
-	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, req.Path, req.Data, 0, 0)
+	if req.CredentialID != nil && *req.CredentialID != 0 {
+		if !requireCredentialReferencePermission(c, req.CredentialID) {
+			respondError(c, http.StatusForbidden, "credentials.read is required to reference vault entries")
+			return
+		}
+		if req.Command != "" || req.Shell != "" || req.Path != "" || req.Data != "" {
+			respondError(c, http.StatusBadRequest, "credential reference tasks must not carry inline parameters")
+			return
+		}
+	}
+	opts := callerOpts(c)
+	if req.CredentialID != nil {
+		opts = append(opts, WithCredentialReference(*req.CredentialID, req.CredentialParams))
+	}
+	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, req.Path, req.Data, 0, 0, opts...)
 	if err != nil {
 		var reqErr *taskRequestError
 		if errors.As(err, &reqErr) {
@@ -209,6 +232,13 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		slog.Error("Task creation failed", "agent_id", req.AgentID, "type", req.Type, "err", err)
 		respondError(c, http.StatusInternalServerError, "task creation failed")
 		return
+	}
+	if username := s.currentUsername(c); username != "" {
+		s.persistTaskCreator(task, username)
+		if task.CredentialID != nil {
+			s.LogAuditRecord(c, "credential_task_create", "agent", req.AgentID,
+				fmt.Sprintf("task #%d: %s (%s)", task.ID, task.Command, task.CredentialLabel), true, nil)
+		}
 	}
 
 	// Per-task result encryption (P2): mint a per-task AES-256-GCM key, store it

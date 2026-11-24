@@ -61,7 +61,7 @@ var auditCategoryRules = []auditCategoryRule{
 			"bof", "deploy_module", "delete_module", "delete_script", "save_script",
 			"upload_cert", "generate_delivery",
 		},
-		Prefixes: []string{"file_", "bof_", "script_", "plugin_", "packer_", "module_", "upload_", "download_", "generate_", "stager_"},
+		Prefixes: []string{"file_", "bof_", "script_", "plugin_", "packer_", "module_", "upload_", "download_", "generate_", "stager_", "chat_"},
 	},
 	{
 		ID:       "infrastructure",

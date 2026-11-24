@@ -165,4 +165,40 @@ describe("TasksPageContent error surfaces", () => {
 
     await waitFor(() => expect(errorToast).toHaveBeenCalledWith("locked by admin"));
   });
+  it("shows the safe @cred reference and server label instead of a resolved secret", async () => {
+    getMock.mockImplementation(async (path: unknown) => {
+      if (String(path).includes("pageSize=50")) {
+        return {
+          tasks: [{
+            ...TASK,
+            type: "cred_check",
+            command: "@cred:7",
+            credential_id: 7,
+            credential_label: "CORP\\alice",
+          }],
+          total: 1,
+        };
+      }
+      return {};
+    });
+    render(
+      <MemoryRouter>
+        <TasksPageContent />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("@cred:7 · CORP\\alice")).toBeTruthy();
+    expect(screen.queryByText(/P@ssw0rd/)).toBeNull();
+  });
+  it("passes the credential_id query filter from the vault row link to the task API", async () => {
+    render(
+      <MemoryRouter initialEntries={["/events?tab=tasks&credential_id=7"]}>
+        <TasksPageContent />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("button", { name: "tasks.cancel" });
+    const taskRequest = getMock.mock.calls.find(([path]) => String(path).includes("pageSize=50"))?.[0] as string;
+    expect(taskRequest).toContain("credential_id=7");
+  });
 });

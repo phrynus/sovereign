@@ -260,6 +260,7 @@ func (s *Server) Run() error {
 	// otherwise every restart under-counts until the first 5-minute tick,
 	// wrongly admitting tasks past MaxPendingTasksPerAgent.
 	s.reconcilePendingTaskCounts()
+	s.reconcileFileTransfers()
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -282,6 +283,7 @@ func (s *Server) Run() error {
 					s.failStaleAcknowledgedTasks()
 					s.rejectExpiredApprovals()
 					s.reconcilePendingTaskCounts()
+					s.reconcileFileTransfers()
 					s.updateTaskBacklogMetrics()
 					s.reapOrphanedRelayChildren()
 				}()

@@ -370,26 +370,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{id}/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Push a file onto the implant
-         * @description Operator-to-implant push. Multipart file is written on the next beacon. Use target_path (path is accepted as an alias).
-         */
-        post: operations["uploadFile"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/agents/{id}/download": {
         parameters: {
             query?: never;
@@ -401,7 +381,7 @@ export interface paths {
         put?: never;
         /**
          * Instruct the implant to fetch a URL
-         * @description Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil 鈥?use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
+         * @description Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil; use POST /agents/{id}/transfers for resumable pushes and pulls.
          */
         post: operations["downloadFile"];
         delete?: never;
@@ -3537,7 +3517,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Operator chat history */
+        /** Operator chat history (engagement scoped) */
         get: operations["chatHistory"];
         put?: never;
         post?: never;
@@ -3554,10 +3534,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Chat channels */
+        /** Chat channels with unread counts */
         get: operations["chatChannels"];
         put?: never;
-        post?: never;
+        /** Create a custom channel */
+        post: operations["createChatChannel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7335,77 +7316,6 @@ export interface paths {
         put?: never;
         /** POST /agents/{id}/execute_assembly */
         post: operations["post_agents_id_execute_assembly"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{id}/files/push": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Push a file onto the implant (alias of POST /upload) */
-        post: operations["post_agents_id_files_push"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{id}/files/pull": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Queue implant-to-server exfil (alias of POST /files/upload) */
-        post: operations["post_agents_id_files_pull"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{id}/files/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Queue implant-to-server exfil
-         * @description Path only. Do not attach a file. The implant reads the remote path and the chunk is saved under data/uploads/{id}/. Then GET /agents/{id}/files/exfil/{filename}.
-         */
-        post: operations["post_agents_id_files_upload"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{id}/files/exfil/{filename}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download a previously exfiltrated file */
-        get: operations["get_agents_id_files_exfil"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11195,6 +11105,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mitre/navigator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ATT&CK Navigator layer export */
+        get: operations["getMitreNavigator"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generate/toolchain": {
         parameters: {
             query?: never;
@@ -11648,6 +11575,262 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/credentials/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault picker options
+         * @description Redacted credential list for task references. Never returns passwords or hashes.
+         */
+        get: operations["credentialOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tasks (REST v1) */
+        get: operations["listTasksV1"];
+        put?: never;
+        /** Create a task (REST v1) */
+        post: operations["createTaskV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one task (REST v1) */
+        get: operations["getTaskV1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/files/write": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue an optimistic-concurrency text edit */
+        post: operations["writeAgentFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/files/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Text file revision history */
+        get: operations["agentFileHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/files/revisions/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One file revision snapshot */
+        get: operations["agentFileRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List durable transfers for an agent */
+        get: operations["listTransfers"];
+        put?: never;
+        /** Create a resumable push or pull transfer */
+        post: operations["createTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/transfers/{transfer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one transfer */
+        get: operations["getTransfer"];
+        put?: never;
+        post?: never;
+        /** Cancel a transfer */
+        delete: operations["cancelTransfer"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/transfers/{transfer_id}/chunk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Push one acknowledged 2 MiB chunk */
+        put: operations["pushTransferChunk"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/transfers/{transfer_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/transfers/{transfer_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pauseTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{id}/transfers/{transfer_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a completed pull (supports Range) */
+        get: operations["downloadTransfer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/channels/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["archiveChatChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/channels/{id}/mute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["muteChatChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/channels/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markChatRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11949,6 +12132,28 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        CredentialOption: {
+            id?: number;
+            label?: string;
+            domain?: string;
+            username?: string;
+            type?: string;
+            subtype?: string;
+            /** @enum {string} */
+            expiry_state?: "unknown" | "expired" | "expiring" | "valid";
+            /** Format: date-time */
+            expires_at?: string | null;
+        };
+        /** @description Non-sensitive inputs for a vault-backed task; secret material is resolved server-side */
+        CredentialTaskParams: {
+            dc?: string;
+            delay_ms?: string;
+            usernames?: string;
+            logon_type?: string;
+            target?: string;
+            method?: string;
+            command?: string;
+        };
         Task: {
             id?: number;
             /** Format: uuid */
@@ -11997,6 +12202,20 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
             tenant_id?: string;
+            /** @description Vault credential reference; the command is the safe @cred:<id> template and the resolved secret is never returned */
+            credential_id?: number | null;
+            /** @description Redacted vault label (DOMAIN\user, subtype) */
+            credential_label?: string;
+            /** @description Durable file transfer session id */
+            transfer_id?: number | null;
+            /** @enum {string} */
+            direction?: "push" | "pull";
+            final?: boolean;
+            result_sha256?: string;
+            expected_sha256?: string;
+            base_task_id?: number | null;
+            /** Format: int64 */
+            result_mtime?: number;
         };
         Listener: {
             id?: number;
@@ -12069,11 +12288,23 @@ export interface components {
             /** @example mimikatz */
             source?: string;
             /** @enum {string} */
-            type?: "cleartext" | "ntlm" | "aes" | "kerberos";
+            type?: "cleartext" | "ntlm" | "aes" | "kerberos" | "jwt";
+            /**
+             * @description Automatically parsed credential format, such as jwt or ccache.
+             * @example jwt
+             */
+            subtype?: string;
             notes?: string;
             tags?: string;
             /** Format: date-time */
             expires_at?: string;
+            /** Format: date-time */
+            renew_until?: string;
+            /**
+             * @description Server-computed expiry state, independent of browser clock and timezone.
+             * @enum {string}
+             */
+            expiry_state?: "unknown" | "expired" | "expiring" | "valid";
             confirmed?: boolean;
             task_id?: number;
             /** Format: date-time */
@@ -13106,41 +13337,6 @@ export interface operations {
             };
         };
     };
-    uploadFile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    /** @description Destination file path on the implant */
-                    target_path?: string;
-                    /** @description Alias for target_path */
-                    path?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Upload task created */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SuccessResponse"] & {
-                        data: components["schemas"]["TaskResponse"];
-                    };
-                };
-            };
-        };
-    };
     downloadFile: {
         parameters: {
             query?: never;
@@ -13570,7 +13766,10 @@ export interface operations {
     };
     getCredentialsPage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by vault expiry state. Entries with unknown expiry do not match expired or expiring. */
+                expiry?: "all" | "expired" | "expiring" | "valid";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -14700,7 +14899,7 @@ export interface operations {
                 engagement?: string;
                 /** @description csv (default) or json. The JSON variant carries the same rows, the same redaction and the same column truncation, so a script and a spreadsheet never disagree about what a cell held; the format is part of the ETag, so a revalidated CSV cannot answer a JSON request with 304. */
                 format?: "csv" | "json";
-                /** @description Comma-separated columns, in the order wanted: time, agent, type, command, result, error, status, task_id, engagement, agent_id, retry_count, late_result. Three presets cover the common requests: `minimal` (task_id, agent, type, status), `default` (the historical set, format-aware) and `full` (every column, including agent_id). A preset must be the whole value - `minimal,time` is a 400 rather than a guess - and an unknown name is a 400 naming the valid fields and presets. Absent means the default, and the resolved selection is part of the ETag because two column sets are two documents. */
+                /** @description Comma-separated columns, in the order wanted: time, agent, type, command, result, error, status, task_id, engagement, operator, agent_id, retry_count, late_result. Three presets cover the common requests: `minimal` (task_id, agent, type, status), `default` (the historical set, format-aware) and `full` (every column, including agent_id and operator). A preset must be the whole value - `minimal,time` is a 400 rather than a guess - and an unknown name is a 400 naming the valid fields and presets. Absent means the default, and the resolved selection is part of the ETag because two column sets are two documents. */
                 fields?: string;
             };
             header?: never;
@@ -18380,15 +18579,28 @@ export interface operations {
     };
     chatHistory: {
         parameters: {
-            query?: never;
+            query: {
+                engagement_id: number;
+                channel_id?: number;
+                before_id?: number;
+                limit?: number;
+                q?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Messages */
+            /** @description Keyset page of messages */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query too broad */
+            420: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18398,7 +18610,9 @@ export interface operations {
     };
     chatChannels: {
         parameters: {
-            query?: never;
+            query: {
+                engagement_id: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -18414,6 +18628,32 @@ export interface operations {
             };
         };
     };
+    createChatChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    engagement_id: number;
+                    name: string;
+                    slug?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created channel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     chatSend: {
         parameters: {
             query?: never;
@@ -18421,9 +18661,17 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    engagement_id: number;
+                    channel_id: number;
+                    message: string;
+                };
+            };
+        };
         responses: {
-            /** @description Sent */
+            /** @description Sent message id */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -23281,114 +23529,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    post_agents_id_files_push: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    target_path?: string;
-                    path?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Push task queued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    post_agents_id_files_pull: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": {
-                    path: string;
-                    offset?: string;
-                    size?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Exfil task queued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    post_agents_id_files_upload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": {
-                    path: string;
-                    offset?: string;
-                    size?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Exfil task queued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_agents_id_files_exfil: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                filename: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Saved exfil blob */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/octet-stream": string;
-                };
             };
         };
     };
@@ -28767,6 +28907,27 @@ export interface operations {
             };
         };
     };
+    getMitreNavigator: {
+        parameters: {
+            query?: {
+                /** @description Optional beacon id; omit to cover the whole deployment */
+                agent_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Navigator layer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     buildToolchain: {
         parameters: {
             query?: never;
@@ -29736,6 +29897,466 @@ export interface operations {
             };
             /** @description Invalid since or limit */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    credentialOptions: {
+        parameters: {
+            query?: {
+                /** @description Username */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        data?: {
+                            options?: components["schemas"]["CredentialOption"][];
+                        };
+                    };
+                };
+            };
+            /** @description Missing credentials.read */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listTasksV1: {
+        parameters: {
+            query?: {
+                agent_id?: string;
+                type?: string;
+                status?: string;
+                /** @description Only tasks referencing this vault entry */
+                credential_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createTaskV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    agent_id: string;
+                    type: string;
+                    command?: string;
+                    shell?: string;
+                    path?: string;
+                    data?: string;
+                    encrypt_result?: boolean;
+                    /** @description Vault reference; inline secret fields must be omitted */
+                    credential_id?: number | null;
+                    credential_params?: components["schemas"]["CredentialTaskParams"];
+                };
+            };
+        };
+        responses: {
+            /** @description Created task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getTaskV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    writeAgentFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    path: string;
+                    /** @description UTF-8 text or base64 when encoding=base64 */
+                    content: string;
+                    content_base64?: string;
+                    /** @enum {string} */
+                    encoding?: "text" | "base64";
+                    base_task_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Edit task queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No completed read/write baseline for this path */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentFileHistory: {
+        parameters: {
+            query: {
+                path: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revision metadata list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    agentFileRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Base64 content and hash metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listTransfers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transfer list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    direction: "push" | "pull";
+                    path: string;
+                    /**
+                     * Format: int64
+                     * @description Required for push; 0 means unknown for pull
+                     */
+                    total_size?: number;
+                    /** @description 64-hex digest */
+                    sha256?: string;
+                    filename?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Transfer session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transfer session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    pushTransferChunk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    offset: number;
+                    data_base64: string;
+                    final?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Task and updated transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resumeTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task and updated transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    pauseTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paused transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archiveChatChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived channel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    muteChatChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    muted: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated preference */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markChatRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    message_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated preference */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

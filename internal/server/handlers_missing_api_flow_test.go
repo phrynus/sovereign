@@ -1,10 +1,12 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	forgecrypto "github.com/r0si/sovereign/internal/crypto"
@@ -149,51 +151,64 @@ func TestAPIPrivescTimelineChat(t *testing.T) {
 		t.Fatalf("privesc results = %+v", privesc.Results)
 	}
 
-	// Chat: send, history filter, channel aggregation.
-	c, w = missingAPICtx(http.MethodPost, "/api/chat/send", `{"message":"hello team","channel":"opsec"}`, nil)
+	// Chat: engagement-scoped send and history in the general room.
+	eng := db.Engagement{TenantID: 1, Name: "chat-flow", CreatedBy: "admin",
+		StartsAt: time.Now().Add(-time.Hour), EndsAt: time.Now().Add(time.Hour)}
+	if err := s.db.Create(&eng).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureChatChannels(s.db, 1, eng.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	var channel db.ChatChannel
+	if err := s.db.Where("tenant_id = ? AND engagement_id = ? AND slug = ?", 1, eng.ID, "general").First(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	chatPath := fmt.Sprintf("/api/chat/send?engagement_id=%d&channel_id=%d", eng.ID, channel.ID)
+	sendBody := fmt.Sprintf(`{"engagement_id":%d,"channel_id":%d,"message":"hello team"}`, eng.ID, channel.ID)
+	c, w = missingAPICtx(http.MethodPost, chatPath, sendBody, nil)
 	s.handleAPISendChatMessage(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("send chat = %d %s", w.Code, w.Body.String())
 	}
-	c, w = missingAPICtx(http.MethodPost, "/api/chat/send", `{"message":""}`, nil)
+	c, w = missingAPICtx(http.MethodPost, chatPath, `{"message":""}`, nil)
 	s.handleAPISendChatMessage(c)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("empty message = %d", w.Code)
 	}
-	s.db.Create(&db.ChatMessage{Username: "admin", Message: "general chatter", Channel: "general"})
-
-	c, w = missingAPICtx(http.MethodGet, "/api/chat/history?channel=opsec", "", nil)
+	historyPath := fmt.Sprintf("/api/chat/history?engagement_id=%d&channel_id=%d", eng.ID, channel.ID)
+	c, w = missingAPICtx(http.MethodGet, historyPath, "", nil)
 	s.handleAPIChatHistory(c)
 	var history struct {
 		Messages []struct {
 			Message string `json:"message"`
-			Channel string `json:"channel"`
+			Kind    string `json:"kind"`
 		} `json:"messages"`
 	}
 	unmarshalData(t, w.Body.Bytes(), &history)
-	if len(history.Messages) != 1 || history.Messages[0].Channel != "opsec" {
-		t.Fatalf("channel filter = %+v", history.Messages)
+	if len(history.Messages) != 1 || history.Messages[0].Message != "hello team" || history.Messages[0].Kind != "user" {
+		t.Fatalf("history = %+v", history.Messages)
 	}
 
-	c, w = missingAPICtx(http.MethodGet, "/api/chat/channels", "", nil)
+	c, w = missingAPICtx(http.MethodGet, fmt.Sprintf("/api/chat/channels?engagement_id=%d", eng.ID), "", nil)
 	s.handleAPIChatChannels(c)
 	var channels struct {
 		Channels []struct {
-			Channel      string `json:"channel"`
-			MessageCount int    `json:"message_count"`
-			LastMessage  string `json:"last_message"`
+			Slug string `json:"slug"`
 		} `json:"channels"`
 	}
 	unmarshalData(t, w.Body.Bytes(), &channels)
-	if len(channels.Channels) != 2 {
+	if len(channels.Channels) != 3 {
 		t.Fatalf("channels = %+v", channels.Channels)
 	}
-	byChannel := map[string]int{}
+	found := false
 	for _, ch := range channels.Channels {
-		byChannel[ch.Channel] = ch.MessageCount
+		if ch.Slug == "general" {
+			found = true
+		}
 	}
-	if byChannel["opsec"] != 1 || byChannel["general"] != 1 {
-		t.Fatalf("channel counts = %+v", byChannel)
+	if !found {
+		t.Fatalf("general channel missing: %+v", channels.Channels)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // WorkflowEngine handles conditional workflow execution with branching support.
@@ -153,7 +154,22 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 		}
 	}
 
-	task, err := we.server.createTask(agentID, step.TaskType, step.Command, step.Shell, "", "", 0, 0)
+	opts := []TaskOption{}
+	if step.CredentialID != nil && *step.CredentialID != 0 {
+		allowed, permErr := middleware.UserHasPermission(we.server.db, wf.CreatedBy, db.PermCredsRead)
+		if permErr != nil || !allowed {
+			denyErr := fmt.Errorf("workflow creator %q no longer has credentials.read", wf.CreatedBy)
+			slog.Warn("Workflow step refused", "workflow", wf.ID, "step", step.StepOrder, "err", denyErr)
+			finish("failed", denyErr.Error(), "", "")
+			if step.StopOnFailure {
+				return 0, "", true
+			}
+			return 0, "", false
+		}
+		params, _ := decodeCredentialParams(step.CredentialParams)
+		opts = append(opts, WithCredentialReference(*step.CredentialID, params))
+	}
+	task, err := we.server.createTask(agentID, step.TaskType, step.Command, step.Shell, "", "", 0, 0, opts...)
 	if err != nil {
 		slog.Error("Workflow: failed to create task", "step", step.StepOrder, "agent", agentID, "error", err)
 		finish("failed", err.Error(), "", "")

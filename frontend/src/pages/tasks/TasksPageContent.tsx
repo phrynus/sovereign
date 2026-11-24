@@ -1,8 +1,10 @@
 import { registerFragment } from "@/lib/i18n";
 import { enAI } from "@/lib/i18n/fragments/en.ai";
 import { enTasks } from "@/lib/i18n/fragments/en.tasks";
+import { enCred } from "@/lib/i18n/fragments/en.cred";
 registerFragment(enAI);
 registerFragment(enTasks);
+registerFragment(enCred);
 
 import { PageContainer } from "@/components/ui/page-container";
 import { AgentLoadError } from "@/components/AgentLoadError";
@@ -64,6 +66,19 @@ import AIAnalysisButton from "./components/AIAnalysisPanel";
 import NLQueryDialog from "./components/NLQueryDialog";
 
 type SortKey = "created_at" | "type" | "command" | "status";
+type CredentialTask = Task & { credential_id?: number | null; credential_label?: string };
+
+/**
+ * Vault-referenced tasks carry a safe `@cred:<id>` command from the API. Only
+ * show that command and the server-provided label — never reconstruct a
+ * resolved command or surface a secret.
+ */
+function safeTaskCommand(task: Task): string {
+  const command = String(task.command ?? "").trim();
+  if (!/^@cred:\d+$/.test(command)) return task.command || "-";
+  const label = (task as CredentialTask).credential_label;
+  return label ? `${command} · ${label}` : command;
+}
 
 /** Tailwind sm = 640px; cards replace the table below that breakpoint. */
 const NARROW_MQ = "(max-width: 639px)";
@@ -99,6 +114,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState(searchParams.get("agent_id") || "");
+  const credentialFilter = searchParams.get("credential_id") || "";
   const [typeFilter, setTypeFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const searchQuery = useDebounce(searchInput, 300);
@@ -152,6 +168,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     if (typeFilter) params.set("type", typeFilter);
     if (searchQuery) params.set("q", searchQuery);
     if (claimedFilter) params.set("claimed_by", claimedFilter);
+    if (credentialFilter) params.set("credential_id", credentialFilter);
     api.get(paths.tasks.list(params.toString()), { signal: ac.signal })
       .then((data: Record<string, unknown>) => {
         if (ac.signal.aborted) return;
@@ -181,7 +198,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       .finally(() => {
         if (!ac.signal.aborted) setLoading(false);
       });
-  }, [page, statusFilter, agentFilter, typeFilter, searchQuery, claimedFilter, t]);
+  }, [page, statusFilter, agentFilter, typeFilter, searchQuery, claimedFilter, credentialFilter, t]);
 
   useEffect(() => {
     loadTasks();
@@ -759,7 +776,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, selected, onToggleSelect
             onClick={(e) => { e.stopPropagation(); onDetail(task); }}
             className="font-mono text-xs text-muted-foreground hover:text-foreground p-0 h-auto justify-start max-w-full truncate"
           >
-            {task.command || "-"}
+            {safeTaskCommand(task)}
           </Button>
         </TableCell>
         <TableCell className="max-sm:hidden py-3 px-4 max-w-sm">
@@ -868,7 +885,7 @@ const TaskCard = memo(function TaskCard({ task, expanded, selected, onToggleSele
             </span>
           </div>
           <div className="mt-1.5 font-mono text-xs text-muted-foreground break-all">
-            {task.command || "-"}
+            {safeTaskCommand(task)}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="font-mono">{calcDuration(task.created_at, task.updated_at)}</span>
@@ -1026,7 +1043,7 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
         <div className="overflow-y-auto flex-1">
           <div className="mb-4">
             <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("tasks.detail_command")}</h3>
-            <code className="block bg-muted border border-border rounded-lg p-3 text-sm font-mono text-foreground">{task.command || "-"}</code>
+            <code className="block bg-muted border border-border rounded-lg p-3 text-sm font-mono text-foreground">{safeTaskCommand(task)}</code>
           </div>
           {task.late_result && (
             <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3" role="status">

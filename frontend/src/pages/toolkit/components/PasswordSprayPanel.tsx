@@ -1,19 +1,20 @@
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { useState } from "react";
 import { paths } from "@/lib/api-paths";
-import { useI18n } from "@/lib/i18n";
+import { registerFragment, useI18n } from "@/lib/i18n";
+import { enCred } from "@/lib/i18n/fragments/en.cred";
+registerFragment(enCred);
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
 import { Spinner } from "@/components/ui/spinner";
 import { Banner } from "@/components/ui/banner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import CredentialPicker from "@/pages/credentials/components/CredentialPicker";
 import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock, Database, Key } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,10 +50,8 @@ function parseSprayOutput(raw: string): SprayOutput | null {
 export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: string }) {
   const { t } = useI18n();
   const [password, setPassword] = useState("");
-  const [pickedVault, setPickedVault] = useState("");
-  const [vaultPasswords, setVaultPasswords] = useState<{ id: number; label: string; password: string; domain: string }[]>([]);
-  const [vaultLoading, setVaultLoading] = useState(true);
-  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"manual" | "vault">("manual");
+  const [vaultCredentialId, setVaultCredentialId] = useState<number | null>(null);
   const [domain, setDomain] = useState("");
   const [dc, setDc] = useState("");
   const [delayMs, setDelayMs] = useState("500");
@@ -65,55 +64,31 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
   } | null>(null);
   const live = useLiveTaskResult({ timeoutMs: 600_000 });
 
-  useEffect(() => {
-    let alive = true;
-    setVaultLoading(true);
-    api
-      .get<{ vault_entries: { id: number; domain: string; username: string; password: string }[] }>(paths.credentials.list())
-      .then((d) => {
-        if (!alive) return;
-        const seen = new Set<string>();
-        const opts: { id: number; label: string; password: string; domain: string }[] = [];
-        for (const e of d.vault_entries ?? []) {
-          if (!e.password || /^\?+$/.test(e.password)) continue;
-          const key = `${e.domain || ""}\\${e.username || ""}:${e.password}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          opts.push({ id: e.id, label: `${e.domain ? `${e.domain}\\` : ""}${e.username || ""}`, password: e.password, domain: e.domain });
-        }
-        setVaultPasswords(opts.slice(0, 50));
-        setVaultError(null);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setVaultError(t("spray.vault_load_failed"));
-        toast.error(t("spray.vault_load_failed"));
-      })
-      .finally(() => {
-        if (alive) setVaultLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [t]);
 
   // Agent selection comes from the Toolkit page header; this panel no longer
   // fetches its own agent list.
   const usernameList = usernames.split("\n").filter((u) => u.trim());
   const running = live.running;
-  const canSubmit = selectedAgent && password && domain && usernameList.length > 0 && !running;
+  const canSubmit = selectedAgent && usernameList.length > 0 && !running && (
+    mode === "vault" ? !!vaultCredentialId : !!password && !!domain
+  );
 
   async function handleSpray() {
     if (!canSubmit) return;
     setLastResult(null);
     toast.success(t("spray.task_sent"));
-    const final = await live.run(selectedAgent, paths.agents.cmd(selectedAgent, "password_spray"), {
-      password,
-      domain,
+    const body: Record<string, string> = {
       dc,
       delay_ms: delayMs,
       usernames: usernames.trim(),
-    });
+    };
+    if (mode === "vault" && vaultCredentialId !== null) {
+      body.credential_id = String(vaultCredentialId);
+    } else {
+      body.password = password;
+      body.domain = domain;
+    }
+    const final = await live.run(selectedAgent, paths.agents.cmd(selectedAgent, "password_spray"), body);
     if (!final) {
       toast.error(t("spray.send_failed") + ": " + live.error);
       return;
@@ -148,60 +123,63 @@ export default function PasswordSprayPanel({ selectedAgent }: { selectedAgent: s
             {t("spray.config_title")}
           </h3>
 
+          <div role="group" aria-label={t("cred.mode.label")} className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              data-testid="spray-mode-manual"
+              aria-pressed={mode === "manual"}
+              variant={mode === "manual" ? "default" : "outline"}
+              onClick={() => setMode("manual")}
+            >
+              {t("cred.mode.manual")}
+            </Button>
+            <Button
+              type="button"
+              data-testid="spray-mode-vault"
+              aria-pressed={mode === "vault"}
+              variant={mode === "vault" ? "default" : "outline"}
+              onClick={() => setMode("vault")}
+            >
+              {t("cred.mode.vault")}
+            </Button>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>{t("spray.domain")} *</Label>
-              <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="CORP" />
-            </div>
+            {mode === "manual" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="spray-domain">{t("spray.domain")} *</Label>
+                <Input id="spray-domain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="CORP" />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="spray-dc-ip">{t("spray.dc_ip")}</Label>
               <Input id="spray-dc-ip" value={dc} onChange={(e) => setDc(e.target.value)} placeholder={t("spray.dc_hint")} />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              <Key className="size-3.5" />
-              {t("spray.vault_pick")}
-            </Label>
-            <Select
-              value={pickedVault}
-              onValueChange={(v) => {
-                const opt = vaultPasswords.find((o) => String(o.id) === v);
-                if (!opt) return;
-                setPickedVault(v ?? "");
-                setPassword(opt.password);
-                if (!domain && opt.domain) setDomain(opt.domain.split(".")[0].toUpperCase());
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("spray.vault_pick")} />
-              </SelectTrigger>
-              <SelectContent>
-                {vaultLoading ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("common.loading")}</div>
-                ) : vaultError ? (
-                  <div className="px-2 py-1.5 text-sm text-destructive-ink">{t("spray.vault_load_failed")}</div>
-                ) : vaultPasswords.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("spray.vault_empty")}</div>
-                ) : (
-                  vaultPasswords.map((o) => (
-                    <SelectItem key={o.id} value={String(o.id)}>{o.label}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {mode === "vault" ? (
+            <div className="space-y-1.5">
+              <CredentialPicker
+                id="spray-credential-picker"
+                selectedId={vaultCredentialId}
+                onSelect={setVaultCredentialId}
+                allowedTypes={["password", "cleartext"]}
+              />
+              <p className="text-xs text-muted-foreground" data-testid="spray-vault-hint">{t("spray.vault_mode_hint")}</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label htmlFor="spray-password" className="flex items-center gap-1.5">
+                <Key className="size-3.5" />
+                {t("spray.password")} *
+              </Label>
+              <Input id="spray-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("spray.password_placeholder")} />
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>{t("spray.password")} *</Label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("spray.password_placeholder")} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="spray-delay-ms">{t("spray.delay_ms")}</Label>
-              <Input id="spray-delay-ms" type="number" value={delayMs} onChange={(e) => setDelayMs(e.target.value)} min="0" max="30000" />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="spray-delay-ms">{t("spray.delay_ms")}</Label>
+            <Input id="spray-delay-ms" type="number" value={delayMs} onChange={(e) => setDelayMs(e.target.value)} min="0" max="30000" />
           </div>
 
           <div className="space-y-1.5">

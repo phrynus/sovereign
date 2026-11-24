@@ -35,15 +35,18 @@ describe("normalizeLootData", () => {
       keylog_tasks: [{ id: "a" }],
       download_tasks: [{ id: "b" }],
       keylogs: [{ id: "ignored" }],
+      completed_transfers: [{ id: 5, transfer_id: 5, agent_id: "c", filename: "loot.bin", size: 12 }],
     });
     expect(r.keylog_tasks[0]).toMatchObject({ id: "a" });
     expect(r.download_tasks[0]).toMatchObject({ id: "b" });
+    expect(r.completed_transfers[0]).toMatchObject({ id: "transfer:5", transfer_id: 5, filename: "loot.bin", size: 12 });
   });
 });
 
 describe("lootDeleteId", () => {
   it("prefixes task ids for bulk delete", () => {
     expect(lootDeleteId("download", { id: "12" })).toBe("download:12");
+    expect(lootDeleteId("download", { id: "transfer:5" })).toBe("download:transfer:5");
     expect(lootDeleteId("download", { id: "download:12" })).toBe("download:12");
     expect(lootDeleteId("screenshot", { id: "x", agent_id: "a", filename: "f.png" })).toBe("screenshot:a:f.png");
   });
@@ -59,10 +62,12 @@ describe("lootExfilFilename", () => {
 });
 
 describe("lootExfilBytes / canDownloadLootExfil", () => {
-  it("parses the chunk size and only offers a blob for completed pulls", () => {
-    expect(lootExfilBytes("File chunk saved: loot.bin offset 0 (12 bytes)")).toBe(12);
-    expect(canDownloadLootExfil({ status: "completed", command: "C:\\secret.txt" })).toBe(true);
-    expect(canDownloadLootExfil({ status: "pending", command: "C:\\secret.txt" })).toBe(false);
-    expect(canDownloadLootExfil({ status: "completed", command: "https://evil/stage.bin" })).toBe(false);
+  it("uses durable transfer size and only offers a blob for completed sessions", () => {
+    expect(lootExfilBytes({ result: "File chunk saved: loot.bin offset 0 (12 bytes)" })).toBe(12);
+    expect(lootExfilBytes({ size: 21 })).toBe(21);
+    expect(canDownloadLootExfil({ status: "completed", command: "C:\\secret.txt", transfer_id: 5 })).toBe(true);
+    expect(canDownloadLootExfil({ status: "completed", command: "C:\\secret.txt" })).toBe(false);
+    expect(canDownloadLootExfil({ status: "pending", command: "C:\\secret.txt", transfer_id: 5 })).toBe(false);
+    expect(canDownloadLootExfil({ status: "completed", command: "https://evil/stage.bin", transfer_id: 5 })).toBe(false);
   });
 });

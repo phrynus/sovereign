@@ -8,10 +8,13 @@ export interface VaultEntry {
   source: string;
   tags: string;
   expires_at: string;
+  renew_until?: string;
+  expiry_state?: "expired" | "expiring" | "valid" | "unknown";
   confirmed: boolean;
   agent_id: string;
   notes: string;
   lifecycle?: string;
+  subtype?: string;
 }
 
 export interface CredentialData {
@@ -20,7 +23,7 @@ export interface CredentialData {
   AllTags: string[];
 }
 
-export const CRED_TYPES = ["all", "password", "hash", "token", "key", "ntlm", "kerberos", "krb_tgs", "krb_asrep", "cleartext"];
+export const CRED_TYPES = ["all", "password", "hash", "token", "key", "ntlm", "kerberos", "krb_tgs", "krb_asrep", "cleartext", "jwt"];
 
 export const TYPE_BADGE_VARIANT: Record<string, "success" | "warning" | "outline"> = {
   cleartext: "success",
@@ -28,6 +31,7 @@ export const TYPE_BADGE_VARIANT: Record<string, "success" | "warning" | "outline
   ntlm: "warning",
   hash: "warning",
   token: "outline",
+  jwt: "outline",
   key: "outline",
   kerberos: "outline",
   krb_tgs: "warning",

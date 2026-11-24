@@ -122,6 +122,7 @@ const (
 	TaskTypeDelete           = "delete"
 	TaskTypeRead             = "read"
 	TaskTypeDownload         = "download"
+	TaskTypeWrite            = "write"
 	TaskTypeUpload           = "upload"
 	TaskTypeMkdir            = "mkdir"
 	TaskTypeRename           = "rename"
@@ -368,6 +369,7 @@ func AllTaskTypes() []string {
 		TaskTypeLS,
 		TaskTypeDelete,
 		TaskTypeRead,
+		TaskTypeWrite,
 		TaskTypeDownload,
 		TaskTypeUpload,
 		TaskTypeMkdir,

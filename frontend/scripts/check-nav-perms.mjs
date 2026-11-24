@@ -88,7 +88,7 @@ const PAGE_DATA_ROUTES = {
   "/payload-generator": ["/api/listeners", "/api/generate/profiles"], // listeners.read + genRead agents.read
   "/privilege-escalation": ["/api/privesc/history/:id"], // privesc history, reconRead agents.read
   "/bloodhound": ["/bloodhound/list"], // intel.read
-  "/attack": ["/mitre/phases"], // campaigns.read
+  "/attack": ["/mitre/phases", "/api/mitre/navigator"], // campaigns.read
   "/campaign": ["/campaigns"], // campaigns.read
   "/chat": ["/chat/history"], // extRead agents.read
   "/asset-management": ["/groups"], // groups.read

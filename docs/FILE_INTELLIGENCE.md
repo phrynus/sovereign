@@ -225,19 +225,19 @@ per-item error collapsed into a non-blocking banner.
 
 ### Playback
 
-Audio and video hits expose a **Play** button. Playback uses the existing
-chunked pull path: the server asks the Beacon for 4 MiB ranges, stages the
-complete file under the normal per-agent upload cache, and the browser then
-plays it through `GET /agents/:id/files/exfil/:filename`. That endpoint uses
-the same range-capable file server as other downloads, so seeking and browser
-buffering work without a custom media server.
+Audio and video hits expose a **Play** button. Playback creates a durable pull
+transfer: the server asks the Beacon for 2 MiB ranges, advances only on
+acknowledged bytes, and resumes from the committed offset after a refresh or
+restart. Once the session is `completed`, the browser plays it through
+`GET /agents/:id/transfers/:transfer_id/file`, which supports HTTP Range so
+seeking and browser buffering work without a custom media server.
 
 - Files must have a known size between 1 byte and **50 MiB**. Unknown/zero
   sizes and larger files are refused before any task is queued, rather than
   producing a corrupt partial media file.
-- Staging shows bounded progress and can be cancelled. Closing the playback
-  dialog does not delete the staged file; it is removed by the existing upload
-  cache cleanup.
+- Staging shows server-confirmed progress and can be paused or cancelled.
+  Closing the playback dialog does not delete the completed transfer; it is
+  removed by the existing transfer cleanup after 30 days.
 - Browser codec support still decides whether a particular container/codec can
   play. A format the browser cannot decode fails in the player; it is not
   transcoded server-side.

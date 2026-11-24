@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -56,12 +57,22 @@ func (s *Server) handlePasswordSpray(c *gin.Context) {
 	dc := c.PostForm("dc")
 	delayMs := c.PostForm("delay_ms")
 	usernames := c.PostForm("usernames")
+	var credentialID *uint
+	if raw := strings.TrimSpace(c.PostForm("credential_id")); raw != "" {
+		id64, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || id64 == 0 {
+			respondError(c, http.StatusBadRequest, "credential_id must be a positive integer")
+			return
+		}
+		credID := uint(id64)
+		credentialID = &credID
+	}
 
-	if password == "" {
+	if credentialID == nil && password == "" {
 		respondError(c, http.StatusBadRequest, "password is required")
 		return
 	}
-	if domain == "" {
+	if credentialID == nil && domain == "" {
 		respondError(c, http.StatusBadRequest, "domain is required")
 		return
 	}
@@ -69,12 +80,16 @@ func (s *Server) handlePasswordSpray(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "usernames list is required")
 		return
 	}
+	if credentialID != nil && (password != "" || domain != "") {
+		respondError(c, http.StatusBadRequest, "credential reference tasks must not carry inline secrets")
+		return
+	}
 	// The wire format is password|domain|dc|delay, and the implant splits it on
 	// '|'. A separator inside any one field shifts the rest: a password such as
 	// "pa|ss" makes the implant read the domain as "ss" and spray the WRONG
 	// domain, which can lock out accounts in it. Refuse instead of building a
 	// task that silently means something else.
-	if credentialCommandHasSeparator(password, domain, dc, delayMs) {
+	if credentialID == nil && credentialCommandHasSeparator(password, domain, dc, delayMs) {
 		respondError(c, http.StatusBadRequest, "password, domain, dc and delay_ms must not contain the '|' separator")
 		return
 	}
@@ -84,7 +99,13 @@ func (s *Server) handlePasswordSpray(c *gin.Context) {
 	}
 
 	cmd := password + "|" + domain + "|" + dc + "|" + delayMs
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "password_spray", Command: cmd, Data: usernames})
+	spec := TaskSpec{Type: "password_spray", Command: cmd, Data: usernames}
+	if credentialID != nil {
+		spec = TaskSpec{Type: "password_spray", CredentialID: credentialID, CredentialParams: CredentialTaskParams{
+			DC: dc, DelayMS: delayMs, Usernames: usernames,
+		}}
+	}
+	task := s.issueAgentTask(c, id, spec)
 	if task == nil {
 		return
 	}
@@ -115,16 +136,30 @@ func (s *Server) handleCredCheck(c *gin.Context) {
 	domain := strings.TrimSpace(c.PostForm("domain"))
 	password := c.PostForm("password")
 	dc := strings.TrimSpace(c.PostForm("dc"))
+	var credentialID *uint
+	if raw := strings.TrimSpace(c.PostForm("credential_id")); raw != "" {
+		id64, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || id64 == 0 {
+			respondError(c, http.StatusBadRequest, "credential_id must be a positive integer")
+			return
+		}
+		credID := uint(id64)
+		credentialID = &credID
+	}
 
-	if user == "" || domain == "" || password == "" {
+	if credentialID == nil && (user == "" || domain == "" || password == "") {
 		respondError(c, http.StatusBadRequest, "user, domain and password are required")
+		return
+	}
+	if credentialID != nil && (user != "" || domain != "" || password != "") {
+		respondError(c, http.StatusBadRequest, "credential reference tasks must not carry inline secrets")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	if s.credCheckFuse.tripped(id, domain) {
+	if credentialID == nil && s.credCheckFuse.tripped(id, domain) {
 		slog.Warn("Credential check blocked by fuse", "agent_id", id, "domain", domain)
 		respondError(c, http.StatusTooManyRequests, "fuse_tripped")
 		return
@@ -134,18 +169,25 @@ func (s *Server) handleCredCheck(c *gin.Context) {
 	// fuse keys on the domain the server parsed, so a "|" that shifts the fields
 	// would make the implant check a different account than the fuse accounts
 	// for. Refuse rather than build a task that means something else.
-	if credentialCommandHasSeparator(user, domain, password, dc) {
+	if credentialID == nil && credentialCommandHasSeparator(user, domain, password, dc) {
 		respondError(c, http.StatusBadRequest, "user, domain, password and dc must not contain the '|' separator")
 		return
 	}
 	cmd := user + "|" + domain + "|" + password + "|" + dc
-	task := s.issueAgentTask(c, id, TaskSpec{Type: "cred_check", Command: cmd})
+	spec := TaskSpec{Type: "cred_check", Command: cmd}
+	if credentialID != nil {
+		spec = TaskSpec{Type: "cred_check", CredentialID: credentialID, CredentialParams: CredentialTaskParams{DC: dc}}
+	}
+	task := s.issueAgentTask(c, id, spec)
 	if task == nil {
 		return
 	}
 
 	detail := fmt.Sprintf("Credential check: %s@%s", user, domain)
-	slog.Info("Credential check requested", "agent_id", id, "user", user, "domain", domain)
+	if task.CredentialID != nil {
+		detail = "Credential check: " + task.CredentialLabel
+	}
+	slog.Info("Credential check requested", "agent_id", id, "detail", detail)
 	s.LogAuditRecord(c, "cred_check", "agent", id, detail, true, nil)
 	s.dispatchTask(c, task, "cred_check", detail)
 }

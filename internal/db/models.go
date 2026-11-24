@@ -281,7 +281,27 @@ type Task struct {
 	// TaskKey is the operator-issued per-task AES-256-GCM key (base64) used to
 	// seal this task's result independently of the session key (P2). Empty when
 	// the task uses the normal channel encryption.
-	TaskKey string `gorm:"column:task_key" json:"task_key,omitempty"`
+	TaskKey string `gorm:"column:task_key" json:"-"`
+	// Credential-backed tasking: the operator submits a vault id and only
+	// non-sensitive parameters. The secret material is resolved server-side
+	// into the wire fields below, which are encrypted at rest and never
+	// projected to operator-facing APIs.
+	CredentialID          *uint  `gorm:"index" json:"credential_id,omitempty"`
+	CredentialFingerprint string `gorm:"size:64;index" json:"-"`
+	CredentialLabel       string `gorm:"size:255" json:"credential_label,omitempty"`
+	CredentialParams      string `gorm:"type:text" json:"-"`
+	ResolvedCommand       string `gorm:"type:text" json:"-"`
+	ResolvedShell         string `gorm:"type:text" json:"-"`
+	// Durable file transfer identity. TransferID ties the chunk task to a
+	// persisted session whose committed offset survives a server restart.
+	TransferID   *uint  `gorm:"index" json:"transfer_id,omitempty"`
+	Direction    string `gorm:"size:8" json:"direction,omitempty"`
+	Final        bool   `json:"final,omitempty"`
+	ResultSHA256 string `gorm:"size:64" json:"result_sha256,omitempty"`
+	// Optimistic-concurrency baseline for text-file edits.
+	BaseTaskID     *uint  `gorm:"index" json:"base_task_id,omitempty"`
+	ExpectedSHA256 string `gorm:"size:64" json:"expected_sha256,omitempty"`
+	ResultModTime  int64  `json:"result_mtime,omitempty"`
 	// RetryCount is how many times this task has been re-issued because a READ-ONLY task failed. Automatic retries are
 	// deliberately limited to enumerations (see autoRetryableTaskTypes): re-running a command that changes state on a
 	// timeout is how one action becomes two.
@@ -352,6 +372,8 @@ var SensitiveTaskTypes = map[string]bool{
 	"inject": true, "spawn": true, "shinject": true, "shspawn": true,
 	"powerpick": true, "reg_set": true, "clipboard_set": true,
 	"wechat_history": true,
+	// File bytes and editor drafts are operator content: encrypt at rest.
+	"upload": true, "write": true,
 	// screen_webrtc_start carries the one-shot signaling token and TURN
 	// credentials in Data; encrypt it at rest and on the wire.
 	"screen_webrtc_start": true,
@@ -400,6 +422,12 @@ func (t *Task) AfterFind(_ *gorm.DB) error {
 			}
 		}
 	}
+	// Resolved credential wire arguments are encrypted for EVERY task type:
+	// a task may start as an inline task and later be re-issued from a vault
+	// reference, so Type is not a reliable signal here.
+	for _, field := range []*string{&t.CredentialParams, &t.ResolvedCommand, &t.ResolvedShell} {
+		decryptField(field)
+	}
 	return nil
 }
 
@@ -439,6 +467,11 @@ func (t *Task) encryptSensitiveFields() error {
 	}
 	if SensitiveShellTypes[t.Type] {
 		if err := reencryptField(&t.Shell); err != nil {
+			return err
+		}
+	}
+	for _, field := range []*string{&t.CredentialParams, &t.ResolvedCommand, &t.ResolvedShell} {
+		if err := reencryptField(field); err != nil {
 			return err
 		}
 	}
@@ -806,23 +839,29 @@ type Tenant struct {
 // CredentialEntry stores a parsed credential harvested from an agent.
 // Auto-populated when "creds" task results arrive, or manually added.
 type CredentialEntry struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	TenantID uint   `gorm:"index" json:"tenant_id"`
-	AgentID  string `gorm:"index" json:"agent_id"`
-	Domain   string `json:"domain"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Hash     string `json:"hash"`   // NTLM / SHA etc.
-	Source   string `json:"source"` // lsass, sam, mimikatz, manual
-	Type     string `json:"type"`   // cleartext, ntlm, aes, kerberos
-	Notes    string `json:"notes"`
-	Tags     string `json:"tags"` // comma separated tags
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	TenantID   uint       `gorm:"index" json:"tenant_id"`
+	AgentID    string     `gorm:"index" json:"agent_id"`
+	Domain     string     `json:"domain"`
+	Username   string     `json:"username"`
+	Password   string     `json:"password"`
+	Hash       string     `json:"hash"`   // NTLM / SHA etc.
+	Source     string     `json:"source"` // lsass, sam, mimikatz, manual
+	Type       string     `json:"type"`   // cleartext, ntlm, aes, kerberos, jwt
+	Subtype    string     `gorm:"size:32;index" json:"subtype"`
+	RenewUntil *time.Time `json:"renew_until,omitempty"`
+	Notes      string     `json:"notes"`
+	Tags       string     `json:"tags"` // comma separated tags
 	// Lifecycle: VerifyStatus "" (never checked) / "pending" / "valid" / "invalid".
 	VerifyStatus   string     `gorm:"size:16;default:'';index" json:"verify_status"`
 	LastVerifiedAt *time.Time `json:"last_verified_at,omitempty"`
 	ExpiresAt      time.Time  `gorm:"index" json:"expires_at"`
-	Confirmed      bool       `json:"confirmed"` // whether credential has been verified
-	TaskID         uint       `json:"task_id"`   // originating task (0 = manual)
+	// ExpiryKnown distinguishes a real expiry parsed from a JWT/ccache or set
+	// by an operator from the 30-day review horizon applied by BeforeCreate.
+	// Only known expiries can make a credential expired or expiring.
+	ExpiryKnown bool `gorm:"index;default:false" json:"expiry_known"`
+	Confirmed   bool `json:"confirmed"` // whether credential has been verified
+	TaskID      uint `json:"task_id"`   // originating task (0 = manual)
 	// DedupKey is a stable digest of the plaintext credential identity
 	// (agent|domain|username|password|hash), computed before encryption at
 	// insert. AES-GCM ciphertext is randomized per write and cannot be
@@ -879,7 +918,7 @@ func (CredentialUsage) TableName() string { return "credential_usages" }
 //   - used     — last action was a successful spray/lateral
 //   - stale    — expired or last action was a failure
 func CredentialLifecycle(entry CredentialEntry, latestUsage *CredentialUsage, now time.Time) string {
-	if !entry.ExpiresAt.IsZero() && entry.ExpiresAt.Before(now) {
+	if entry.ExpiryKnown && !entry.ExpiresAt.IsZero() && !entry.ExpiresAt.After(now) {
 		return "stale"
 	}
 	if latestUsage == nil {
@@ -1155,6 +1194,10 @@ type OneShotTask struct {
 	CreatedBy  string     `gorm:"size:100" json:"created_by"`
 	CreatedAt  time.Time  `gorm:"index:idx_one_shot_agent_created,priority:2" json:"created_at"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// Credential-backed execution: only the reference and non-sensitive
+	// parameters are stored; the secret is resolved again at execution time.
+	CredentialID     *uint  `gorm:"index" json:"credential_id,omitempty"`
+	CredentialParams string `gorm:"type:text" json:"-"`
 }
 
 func (OneShotTask) TableName() string { return "one_shot_tasks" }
@@ -1636,21 +1679,23 @@ type Workflow struct {
 func (Workflow) TableName() string { return "workflows" }
 
 type WorkflowStep struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	WorkflowID    string    `gorm:"size:36;index;not null" json:"workflow_id"`
-	StepOrder     int       `gorm:"not null" json:"step_order"`
-	TaskType      string    `gorm:"size:50;not null" json:"task_type"`
-	Command       string    `gorm:"type:text" json:"command"`
-	Shell         string    `gorm:"size:20;default:'cmd'" json:"shell"`
-	TimeoutSec    int       `gorm:"default:60" json:"timeout_sec"`
-	RepeatCount   int       `gorm:"default:0" json:"repeat_count"`
-	RepeatDelay   int       `gorm:"default:0" json:"repeat_delay"`
-	StopOnFailure bool      `gorm:"default:true" json:"stop_on_failure"`
-	ConditionExpr string    `gorm:"type:text" json:"condition_expr"` // JSON condition for previous step output
-	Condition     string    `gorm:"type:text" json:"condition"`      // condition expression e.g. "contains('success')"
-	OnSuccess     string    `gorm:"size:255" json:"on_success"`      // "continue", or step ID to jump to
-	OnFailure     string    `gorm:"size:255" json:"on_failure"`      // "abort", "continue", or step ID to jump to
-	CreatedAt     time.Time `json:"created_at"`
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	WorkflowID       string    `gorm:"size:36;index;not null" json:"workflow_id"`
+	StepOrder        int       `gorm:"not null" json:"step_order"`
+	TaskType         string    `gorm:"size:50;not null" json:"task_type"`
+	Command          string    `gorm:"type:text" json:"command"`
+	Shell            string    `gorm:"size:20;default:'cmd'" json:"shell"`
+	TimeoutSec       int       `gorm:"default:60" json:"timeout_sec"`
+	RepeatCount      int       `gorm:"default:0" json:"repeat_count"`
+	RepeatDelay      int       `gorm:"default:0" json:"repeat_delay"`
+	StopOnFailure    bool      `gorm:"default:true" json:"stop_on_failure"`
+	ConditionExpr    string    `gorm:"type:text" json:"condition_expr"` // JSON condition for previous step output
+	Condition        string    `gorm:"type:text" json:"condition"`      // condition expression e.g. "contains('success')"
+	OnSuccess        string    `gorm:"size:255" json:"on_success"`      // "continue", or step ID to jump to
+	OnFailure        string    `gorm:"size:255" json:"on_failure"`      // "abort", "continue", or step ID to jump to
+	CreatedAt        time.Time `json:"created_at"`
+	CredentialID     *uint     `gorm:"index" json:"credential_id,omitempty"`
+	CredentialParams string    `gorm:"type:text" json:"-"`
 }
 
 func (WorkflowStep) TableName() string { return "workflow_steps" }
@@ -1681,16 +1726,101 @@ type ExecutionLog struct {
 
 func (ExecutionLog) TableName() string { return "execution_logs" }
 
-// ChatMessage — multi-operator chat message
-type ChatMessage struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Username  string    `gorm:"size:100;not null" json:"username"`
-	Message   string    `gorm:"type:text;not null" json:"message"`
-	Channel   string    `gorm:"size:50;default:'general'" json:"channel"`
-	CreatedAt time.Time `json:"created_at"`
+// ChatChannel is an engagement-scoped room. Kind is one of general,
+// approvals, system or custom. System rooms are created with the engagement.
+type ChatChannel struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	TenantID     uint       `gorm:"index;uniqueIndex:uidx_chat_channel,priority:1" json:"tenant_id"`
+	EngagementID *uint      `gorm:"index;uniqueIndex:uidx_chat_channel,priority:2" json:"engagement_id,omitempty"`
+	Name         string     `gorm:"size:64;not null" json:"name"`
+	Slug         string     `gorm:"size:64;not null;uniqueIndex:uidx_chat_channel,priority:3" json:"slug"`
+	Kind         string     `gorm:"size:16;not null" json:"kind"`
+	ArchivedAt   *time.Time `json:"archived_at,omitempty"`
+	CreatedBy    string     `gorm:"size:100" json:"created_by"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
+func (ChatChannel) TableName() string { return "chat_channels" }
+
+// ChatChannelPreference holds per-operator mute and read state.
+type ChatChannelPreference struct {
+	ID                uint      `gorm:"primaryKey" json:"id"`
+	UserID            uint      `gorm:"index;uniqueIndex:uidx_chat_pref,priority:1;not null" json:"user_id"`
+	ChannelID         uint      `gorm:"index;uniqueIndex:uidx_chat_pref,priority:2;not null" json:"channel_id"`
+	Muted             bool      `json:"muted"`
+	LastReadMessageID uint      `json:"last_read_message_id"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+func (ChatChannelPreference) TableName() string { return "chat_channel_preferences" }
+
+// ChatMessage is an operator message in an engagement channel. Message is
+// encrypted at rest; the legacy Channel column remains in the schema for old
+// rows but is neither written nor read by the service layer.
+type ChatMessage struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	TenantID     uint      `gorm:"index" json:"tenant_id"`
+	EngagementID *uint     `gorm:"index" json:"engagement_id,omitempty"`
+	ChannelID    *uint     `gorm:"index" json:"channel_id,omitempty"`
+	UserID       uint      `gorm:"index" json:"user_id"`
+	Username     string    `gorm:"size:100;not null" json:"username"`
+	Message      string    `gorm:"type:text;not null" json:"message"`
+	Kind         string    `gorm:"size:16;default:'user'" json:"kind"`
+	TaskID       *uint     `gorm:"index" json:"task_id,omitempty"`
+	Metadata     string    `gorm:"type:text" json:"metadata,omitempty"`
+	CreatedAt    time.Time `gorm:"index" json:"created_at"`
+}
+
+func (m *ChatMessage) BeforeCreate(_ *gorm.DB) error { return encryptField(&m.Message) }
+func (m *ChatMessage) BeforeUpdate(_ *gorm.DB) error { return encryptField(&m.Message) }
+func (m *ChatMessage) AfterFind(_ *gorm.DB) error    { return decryptField(&m.Message) }
+
 func (ChatMessage) TableName() string { return "chat_messages" }
+
+// FileTransfer is the durable state of one push or pull. The committed offset
+// is the only progress value clients may display; it advances only after the
+// agent's ACK has been validated and the bytes (for a pull) are on disk.
+type FileTransfer struct {
+	ID                   uint       `gorm:"primaryKey" json:"id"`
+	TenantID             uint       `gorm:"index;index:idx_transfers_tenant_status,priority:1" json:"tenant_id"`
+	AgentID              string     `gorm:"size:64;index;index:idx_transfers_agent_status,priority:1;index:uidx_transfer_active_path,priority:1" json:"agent_id"`
+	CreatedBy            string     `gorm:"size:100" json:"created_by"`
+	Direction            string     `gorm:"size:8;not null" json:"direction"`
+	RemotePath           string     `gorm:"type:text;not null" json:"remote_path"`
+	PathKey              string     `gorm:"size:64;index;index:uidx_transfer_active_path,priority:2" json:"path_key"`
+	Filename             string     `gorm:"size:255" json:"filename"`
+	TotalSize            int64      `json:"total_size"`
+	CommittedOffset      int64      `json:"committed_offset"`
+	ChunkSize            int        `json:"chunk_size"`
+	SHA256               string     `gorm:"size:64" json:"sha256,omitempty"`
+	PrevMAC              string     `gorm:"size:64" json:"-"`
+	Status               string     `gorm:"size:16;index;index:idx_transfers_agent_status,priority:2;index:idx_transfers_tenant_status,priority:2" json:"status"`
+	Error                string     `gorm:"type:text" json:"error,omitempty"`
+	CurrentTaskID        *uint      `gorm:"index" json:"current_task_id,omitempty"`
+	ReservationToken     string     `gorm:"size:64" json:"-"`
+	ReservationExpiresAt *time.Time `json:"-"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	ExpiresAt            time.Time  `gorm:"index" json:"expires_at"`
+	CompletedAt          *time.Time `json:"completed_at,omitempty"`
+}
+
+func (FileTransfer) TableName() string { return "file_transfers" }
+
+// FileTransferChunk is the append-only ledger of acknowledged chunks.
+type FileTransferChunk struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	TransferID uint      `gorm:"index;uniqueIndex:uidx_transfer_chunk,priority:1;not null" json:"transfer_id"`
+	Offset     int64     `gorm:"uniqueIndex:uidx_transfer_chunk,priority:2" json:"offset"`
+	Size       int64     `json:"size"`
+	SHA256     string    `gorm:"size:64" json:"sha256"`
+	MAC        string    `gorm:"size:64" json:"mac"`
+	ResultID   string    `gorm:"size:64" json:"result_id,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func (FileTransferChunk) TableName() string { return "file_transfer_chunks" }
 
 // AIChatSession — a persisted AI assistant conversation
 type AIChatSession struct {

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,7 +44,18 @@ const (
 	maxDownloadChunkSize = 4 << 20   // per-chunk cap for offset-based file pulls
 	maxURLDownloadSize   = 256 << 20 // agent-side HTTP download cap
 	maxUploadPushSize    = 50 << 20  // single push-chunk decode cap (mirrors server MaxUploadSize)
+	transferChunkSize    = 2 << 20   // durable transfer raw chunk (server FileTransferChunkSize)
+	maxEditorFileSize    = 1 << 20   // remote text editor write cap
 )
+
+// errFileConflict is the stable result error for a failed compare-and-swap.
+// The server and the editor UI key off this exact string.
+var errFileConflict = errors.New("file_conflict")
+
+// fileWritePreCommitHook is a no-op in production. Tests inject a callback
+// that mutates the target after the temp file is written to exercise the
+// re-hash conflict path (and confirm the temp file is removed).
+var fileWritePreCommitHook func()
 
 // file-chain integrity key, derived per agent from its registration key so it
 // mirrors the server's crypto.DeriveFileChainKey (same HKDF parameters).
@@ -103,6 +115,69 @@ func verifyFileChunk(taskID uint, expectedHexHex string, chunkData []byte) error
 		return nil
 	}
 	return fmt.Errorf("chunk HMAC mismatch (tampered/reordered data)")
+}
+
+// fileHashStream hashes a file without loading it into memory and returns its
+// metadata. Empty files hash to the SHA-256 of the empty byte string.
+func fileHashStream(path string) (string, os.FileInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return "", nil, err
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", nil, err
+	}
+	return hex.EncodeToString(h.Sum(nil)), fi, nil
+}
+
+// decodeTransferPrevMAC resolves the durable session's previous chain link.
+// An empty predecessor means the all-zero seed; a malformed value is an error
+// so a forged task cannot silently downgrade the chain.
+func decodeTransferPrevMAC(prevMACHex string) ([]byte, error) {
+	if prevMACHex == "" {
+		return make([]byte, 32), nil
+	}
+	prev, err := hex.DecodeString(prevMACHex)
+	if err != nil || len(prev) != 32 {
+		return nil, fmt.Errorf("invalid previous chain MAC")
+	}
+	return prev, nil
+}
+
+// writeChunkAt writes one raw transfer chunk at an explicit offset. Unlike
+// uploadFileChunk it never consults the per-task chain map: durable transfers
+// are always seeded from the session PrevMAC carried in the task.
+func writeChunkAt(path string, offset int64, data []byte) error {
+	cleanPath, err := sanitizeWritePath(path)
+	if err != nil {
+		return err
+	}
+	flags := os.O_CREATE | os.O_WRONLY
+	if offset == 0 {
+		flags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(cleanPath, flags, 0644)
+	if err != nil {
+		return fmt.Errorf("open file for write failed: %w", err)
+	}
+	defer f.Close()
+	if offset > 0 {
+		if _, err := f.Seek(offset, 0); err != nil {
+			return err
+		}
+	}
+	if len(data) > 0 {
+		if _, err := f.Write(data); err != nil {
+			return err
+		}
+	}
+	return f.Sync()
 }
 
 // deleteFileOrDir removes file or directory (recursive)

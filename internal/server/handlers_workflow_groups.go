@@ -102,6 +102,9 @@ func (s *Server) handleAPICreateWorkflow(c *gin.Context) {
 	if req.ScopeType == "" {
 		req.ScopeType = "all"
 	}
+	if !s.validateCredentialStepReferences(c, req.Steps) {
+		return
+	}
 	wf := db.Workflow{
 		ID:          fmt.Sprintf("%d", time.Now().UnixNano()),
 		Name:        req.Name,
@@ -151,6 +154,9 @@ func (s *Server) handleAPIUpdateWorkflow(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if !s.validateCredentialStepReferences(c, req.Steps) {
 		return
 	}
 	if req.Name != "" {

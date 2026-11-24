@@ -54,6 +54,54 @@ export function deleteLooksConfirmed(kind: "queued" | "deleted"): boolean {
 export const EXFIL_CHUNK = 4 * 1024 * 1024;
 export const EXFIL_CAP = 50 * 1024 * 1024;
 
+// Durable transfer sessions use one 2 MiB raw chunk so the agent's base64
+// result stays inside its response cap. The 50 MiB ceiling is unchanged.
+export const FILE_TRANSFER_CHUNK_SIZE = 2 * 1024 * 1024;
+export const FILE_TRANSFER_MAX_BYTES = 50 * 1024 * 1024;
+export const EDITOR_MAX_BYTES = 1 * 1024 * 1024;
+
+/** Base64 without spreading a whole chunk into one Function argument list. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + step));
+  }
+  return btoa(binary);
+}
+
+export function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+export function utf8ToBase64(text: string): string {
+  return bytesToBase64(new TextEncoder().encode(text));
+}
+
+export function base64ToUtf8(value: string): string {
+  const candidate = value.trim();
+  if (!candidate || candidate.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(candidate)) return value;
+  try {
+    const bytes = base64ToBytes(candidate);
+    if (bytesToBase64(bytes) !== candidate) return value;
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return value;
+  }
+}
+
+export function isFileConflictError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  let status: number | undefined;
+  let message: string | undefined;
+  if ("status" in err && typeof err.status === "number") status = err.status;
+  if ("message" in err && typeof err.message === "string") message = err.message;
+  return status === 409 || (message?.includes("file_conflict") ?? false);
+}
+
 export function exfilBasename(remotePath: string): string {
   const parts = remotePath.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] || "file.bin";

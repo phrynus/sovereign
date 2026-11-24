@@ -54,6 +54,9 @@ export const en: Record<string, string> = {
     "attack.all_agents": "All Beacons",
     "attack.coverage": "coverage",
     "attack.fetch_failed": "Failed to fetch coverage",
+    "attack.export_navigator": "Export Navigator layer",
+    "attack.export_navigator_done": "Navigator layer exported",
+    "attack.export_navigator_failed": "Navigator layer could not be exported",
     "attack.honesty_desc": "Shows which ATT&CK techniques map to task types that have been run — not full kill-chain automation, EDR evasion quality, or campaign success. Many mapped tasks are scripted or platform-limited.",
     "attack.honesty_title": "Coverage map, not proof of compromise",
     "attack.kill_chain_subtitle": "Campaign coverage across all 14 MITRE ATT&CK phases",
@@ -1522,5 +1525,6 @@ export const en: Record<string, string> = {
     "spray.vault_empty": "No cleartext passwords in the vault",
     "spray.vault_pick": "Pick from vault",
     "spray.waiting_result": "Task queued — check the task output for results",
+    "spray.vault_mode_hint": "Vault mode sends only the credential ID, domain controller, delay and usernames. The password is resolved on the server.",
 };
 

@@ -32,6 +32,7 @@ func TestTaskExportFieldSelection(t *testing.T) {
 	if err := s.db.Create(&db.Task{
 		AgentID: "a-1", TenantID: 1, Type: "shell", Command: "whoami", Status: "completed",
 		Result: "NT AUTHORITY\\SYSTEM", CreatedAt: now, UpdatedAt: now,
+		CreatedBy: "alice",
 	}).Error; err != nil {
 		t.Fatalf("seed task: %v", err)
 	}
@@ -89,7 +90,27 @@ func TestTaskExportFieldSelection(t *testing.T) {
 		t.Fatalf("id-only header = %q", firstLine)
 	}
 
-	// 4. An unknown field is refused and the message says what is valid - a silently ignored column would look
+	// 4. The operator column names the account that signed the task, in both formats.
+	w = call("?fields=operator")
+	opRecords, err := csv.NewReader(strings.NewReader(w.Body.String())).ReadAll()
+	if err != nil {
+		t.Fatalf("operator csv: %v", err)
+	}
+	if len(opRecords) != 2 || opRecords[0][0] != "Operator" || opRecords[1][0] != "alice" {
+		t.Fatalf("operator csv = %v, want header Operator and row alice", opRecords)
+	}
+	w = call("?fields=operator&format=json")
+	var opBody struct {
+		Tasks []map[string]interface{} `json:"tasks"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &opBody); err != nil {
+		t.Fatalf("decode operator json: %v (%s)", err, w.Body.String())
+	}
+	if len(opBody.Tasks) != 1 || len(opBody.Tasks[0]) != 1 || opBody.Tasks[0]["operator"] != "alice" {
+		t.Fatalf("operator json = %v, want exactly one alice cell", opBody.Tasks)
+	}
+
+	// 5. An unknown field is refused and the message says what is valid - a silently ignored column would look
 	// like the field exists and was empty.
 	bad := call("?fields=status,bogus")
 	if bad.Code != http.StatusBadRequest {
@@ -99,18 +120,21 @@ func TestTaskExportFieldSelection(t *testing.T) {
 		t.Fatalf("the error does not name the bad field and the valid ones: %s", msg)
 	}
 
-	// 5. Two different selections are two different documents, so their tags must differ.
+	// 6. Two different selections are two different documents, so their tags must differ.
 	a := call("?fields=status")
 	b := call("?fields=type")
 	if a.Header().Get("ETag") == b.Header().Get("ETag") {
 		t.Fatalf("the ETag ignores the selection: %q", a.Header().Get("ETag"))
 	}
 
-	// 6. The default set is unchanged for CSV, and includes agent_id for JSON.
+	// 7. The default set is unchanged for CSV, and includes agent_id for JSON.
 	csvDefault := call("")
 	header := strings.Split(strings.TrimSpace(csvDefault.Body.String()), "\n")[0]
 	if strings.Contains(header, "Agent ID") {
 		t.Fatalf("the CSV default gained an Agent ID column: %q", header)
+	}
+	if strings.Contains(header, "Operator") {
+		t.Fatalf("the CSV default gained an Operator column: %q", header)
 	}
 	jsonDefault := call("?format=json")
 	if err := json.Unmarshal(jsonDefault.Body.Bytes(), &body); err != nil {
@@ -118,5 +142,8 @@ func TestTaskExportFieldSelection(t *testing.T) {
 	}
 	if _, ok := body.Tasks[0]["agent_id"]; !ok {
 		t.Fatalf("the JSON default lost agent_id: %v", body.Tasks[0])
+	}
+	if _, ok := body.Tasks[0]["operator"]; ok {
+		t.Fatalf("the JSON default gained an operator column: %v", body.Tasks[0])
 	}
 }

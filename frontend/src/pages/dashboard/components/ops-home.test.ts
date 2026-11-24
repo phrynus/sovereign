@@ -83,6 +83,7 @@ describe("flattenLoot", () => {
     screenshots: [{ id: "s1", agent_id: "a", filename: "desk.png", path: "", created_at: "2026-08-13T12:00:00Z" }],
     keylog_tasks: [{ id: "k1", agent_id: "a", result: "", error: "", status: "done", created_at: "2026-08-13T11:00:00Z" }],
     download_tasks: [{ id: "d1", agent_id: "b", command: "C:\\secret", result: "", status: "done", created_at: "2026-08-13T13:00:00Z" }],
+    completed_transfers: [],
   };
 
   it("sorts newest loot first", () => {

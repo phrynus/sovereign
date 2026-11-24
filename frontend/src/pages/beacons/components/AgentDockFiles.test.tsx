@@ -6,21 +6,25 @@ import { api } from "@/lib/api";
 import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
 import { AgentDockFiles } from "./AgentDockFiles";
 
+const { stableT } = vi.hoisted(() => ({ stableT: (key: string) => key }));
+
 vi.mock("@/lib/api", () => ({
-  api: { get: vi.fn(), post: vi.fn(), postJson: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), postJson: vi.fn(), del: vi.fn(), downloadGet: vi.fn() },
   pollTask: vi.fn(),
   getRateLimitRetryAfter: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/agent-files/file-transfer", () => ({
+  listTransfers: vi.fn(() => Promise.resolve([])),
+  pauseTransfer: vi.fn(),
+  cancelTransfer: vi.fn(),
+  downloadTransferFile: vi.fn(),
   pullRemoteFile: vi.fn(),
   pushLocalFile: vi.fn(),
 }));
 
-vi.mock("@/lib/i18n", () => {
-  const t = (key: string) => key;
-  return { getLocale: () => "en", useI18n: () => ({ t }) };
-});
+
+vi.mock("@/lib/i18n", () => ({ getLocale: () => "en", useI18n: () => ({ t: stableT }) }));
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),

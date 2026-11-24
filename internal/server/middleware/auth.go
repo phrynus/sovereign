@@ -754,6 +754,56 @@ func RequirePermission(permissions ...string) gin.HandlerFunc {
 	}
 }
 
+// HasPermission reports whether the current request carries permission
+// without writing a response. It mirrors RequirePermission exactly — scoped
+// API keys cannot exceed their owner's CURRENT role, and admin bypasses the
+// role check only for session callers — so a handler-level gate cannot be
+// weaker than the route middleware.
+func HasPermission(c *gin.Context, permission string) bool {
+	if c == nil {
+		return false
+	}
+	if set, isKey := apiKeyScopes(c); isKey && set != nil {
+		if !set[permission] {
+			return false
+		}
+		return hasRolePermission(c, c.GetString("user_role"), permission)
+	}
+	role, exists := c.Get("user_role")
+	if !exists {
+		return false
+	}
+	roleStr, ok := role.(string)
+	if !ok {
+		return false
+	}
+	if roleStr == db.RoleAdmin {
+		return true
+	}
+	return hasRolePermission(c, roleStr, permission)
+}
+
+// UserHasPermission resolves a username's CURRENT authority from the DB.
+// Background schedulers have no gin context: re-checking at execution time
+// (not at save time) is what makes a demotion or disabled operator stop
+// credential-backed work immediately.
+func UserHasPermission(database *gorm.DB, username, permission string) (bool, error) {
+	if database == nil || username == "" {
+		return false, nil
+	}
+	var user db.User
+	if err := database.Select("role, is_active").Where("username = ?", username).First(&user).Error; err != nil {
+		return false, err
+	}
+	if !user.IsActive {
+		return false, nil
+	}
+	if user.Role == db.RoleAdmin || db.RoleHasPermissionDB(database, user.Role, permission) {
+		return true, nil
+	}
+	return false, nil
+}
+
 func RequireAllPermissions(permissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get("user_role")

@@ -208,8 +208,6 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/rportfwd/stop", s.handleRPortFwdRelayStop)
 
 		agentCmd.POST("/download", s.handleDownload)
-		agentCmd.POST("/upload", s.handleUploadFile)
-		agentCmd.POST("/files/push", s.handleUploadFile)
 
 		agentCmd.POST("/files/ls", s.handleListDir)
 		agentCmd.POST("/files/search", s.handleFileSearch)
@@ -221,9 +219,14 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/files/mkdir", s.handleFileMkdir)
 		agentCmd.POST("/files/rename", s.handleFileRename)
 		agentCmd.POST("/files/chmod", s.handleFileChmod)
-		agentCmd.POST("/files/upload", s.handleFileUploadFromAgent)
-		agentCmd.POST("/files/pull", s.handleFileUploadFromAgent)
-		agentCmd.GET("/files/exfil/:filename", s.handleFileExfilGet)
+		agentCmd.POST("/files/write", s.handleFileWrite)
+		agentCmd.GET("/files/history", s.handleFileHistory)
+		agentCmd.GET("/files/revisions/:taskId", s.handleFileRevision)
+		agentCmd.POST("/transfers", s.handleCreateTransfer)
+		agentCmd.PUT("/transfers/:transfer_id/chunk", s.handlePushTransferChunk)
+		agentCmd.POST("/transfers/:transfer_id/resume", s.handleResumeTransfer)
+		agentCmd.POST("/transfers/:transfer_id/pause", s.handlePauseTransfer)
+		agentCmd.DELETE("/transfers/:transfer_id", s.handleCancelTransfer)
 
 		agentCmd.POST("/screen/start", s.handleStartScreenMonitor)
 		agentCmd.POST("/screen/stop", s.handleStopScreenMonitor)
@@ -251,6 +254,16 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/coerce/:type", s.handleCoerce)
 		agentCmd.POST("/relay/start", s.handleNTLMRelayStart)
 		agentCmd.POST("/relay/stop", s.handleNTLMRelayStop)
+	}
+
+	// Listing and downloading transfers only needs agents.read; the mutating
+	// transfer routes above stay on agents.write.
+	agentRead := auth.Group("/agents/:id")
+	agentRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+	{
+		agentRead.GET("/transfers", s.handleListTransfers)
+		agentRead.GET("/transfers/:transfer_id", s.handleGetTransfer)
+		agentRead.GET("/transfers/:transfer_id/file", s.handleGetTransferFile)
 	}
 }
 

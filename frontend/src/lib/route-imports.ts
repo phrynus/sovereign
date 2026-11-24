@@ -18,6 +18,7 @@ export const ROUTE_PAGE_IMPORTS: Record<string, () => Promise<{ default: unknown
   bloodhound: () => import("@/pages/bloodhound/BloodHoundPage"),
   bof: () => import("@/pages/bof/BOFPage"),
   campaign: () => import("@/pages/campaign/CampaignPageContent"),
+  chat: () => import("@/pages/chat/ChatPage"),
   "proxy-chains": () => import("@/pages/proxy-chains/ProxyChainsPage"),
   "circuit-breaker": () => import("@/pages/circuit-breaker/CircuitBreakerPage"),
   cloud: () => import("@/pages/cloud/CloudPage"),

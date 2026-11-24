@@ -3,16 +3,16 @@
 > **Generated** from `pkg/protocol/taskspec_data.go` by
 > `node scripts/gen-command-reference.mjs`. Do not edit by hand.
 
-- **Task types:** 230
-- **Constants in tasks.go:** 231
+- **Task types:** 231
+- **Constants in tasks.go:** 232
 - **Aliases:** 3
 - **Approval-gated:** 62
-- **Parameters (total):** 83
+- **Parameters (total):** 86
 - **Constants without specs:** shell_output (intentional: RESULT-type only, not dispatchable — see pkg/protocol/tasks.go)
 
 ## Categories
 
-- [Execution](#execution) (30)
+- [Execution](#execution) (31)
 - [Discovery](#discovery) (36)
 - [Collection](#collection) (18)
 - [Credential Access](#credential-access) (40)
@@ -57,6 +57,7 @@
 | `suspend` | Suspend Process | no | — | command:int* | Suspend a process by PID |
 | `upload` | Upload File | no | — | command:string* | Upload a file to the agent |
 | `window_close` | Window Close | no | — | command:string* | Close a window by HWND or title substring |
+| `write` | Write Text File | no | — | command:string*, data:string, expected_sha256:string* | Atomically replace an existing text file with optimistic-concurrency hash checking (SHA-256 compare-and-swap) |
 
 ## Discovery
 

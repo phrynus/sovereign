@@ -33,6 +33,7 @@ const TABLE_RULES = new Map([
   ["AgentTag", ["tenantScope"]],
   ["AgentGroup", ["tenantScope"]],
   ["AutoTagRule", ["tenantScope"]],
+  ["ChatChannelPreference", ["findVisibleChatChannel"]],
 ]);
 
 // Handlers that legitimately work on the whole installation, with the reason.
@@ -54,6 +55,7 @@ const SCOPES = [
   "auditTenantScope",
   "aiTenantScope",
   "findTenantOrFail",
+  "findVisibleChatChannel",
 ];
 
 function walk(dir, out = []) {

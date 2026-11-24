@@ -72,22 +72,29 @@ type taskResult struct {
 	// MAC is the agent's file-transfer integrity chain link (hex).
 	MAC string `json:"mac,omitempty"`
 	// EncryptedWithTaskKey flags that Output was sealed with the per-task key.
-	EncryptedWithTaskKey bool `json:"etk,omitempty"`
+	EncryptedWithTaskKey bool   `json:"etk,omitempty"`
+	Final                bool   `json:"final,omitempty"`
+	SHA256               string `json:"sha256,omitempty"`
+	Mtime                int64  `json:"mtime,omitempty"`
 }
 
 type task struct {
-	ID        uint   `json:"id"`
-	Type      string `json:"type"`
-	Command   string `json:"command"`
-	Encrypted bool   `json:"enc,omitempty"`
-	Shell     string `json:"shell"`
-	Path      string `json:"path,omitempty"`
-	Data      string `json:"data,omitempty"`
-	Offset    int64  `json:"offset,omitempty"`
-	Size      int64  `json:"size,omitempty"`
-	PrevMAC   string `json:"prev_mac,omitempty"`
-	MAC       string `json:"mac,omitempty"`
-	Key       string `json:"key,omitempty"`
+	ID             uint   `json:"id"`
+	Type           string `json:"type"`
+	Command        string `json:"command"`
+	Encrypted      bool   `json:"enc,omitempty"`
+	Shell          string `json:"shell"`
+	Path           string `json:"path,omitempty"`
+	Data           string `json:"data,omitempty"`
+	Offset         int64  `json:"offset,omitempty"`
+	Size           int64  `json:"size,omitempty"`
+	PrevMAC        string `json:"prev_mac,omitempty"`
+	MAC            string `json:"mac,omitempty"`
+	Key            string `json:"key,omitempty"`
+	TransferID     *uint  `json:"transfer_id,omitempty"`
+	Direction      string `json:"direction,omitempty"`
+	Final          bool   `json:"final,omitempty"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
 }
 
 type relayedTask struct {

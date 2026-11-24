@@ -104,7 +104,9 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		// IdempotencyKey deduplicates retried batches: an agent already
 		// holding a live task with the key is skipped (same semantics as
 		// the single-task WithIdempotencyKey path).
-		IdempotencyKey string `json:"idempotency_key"`
+		IdempotencyKey   string               `json:"idempotency_key"`
+		CredentialID     *uint                `json:"credential_id,omitempty"`
+		CredentialParams CredentialTaskParams `json:"credential_params,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -127,6 +129,20 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 
 	if req.TaskType == "" {
 		req.TaskType = "shell"
+	}
+	if req.CredentialID != nil && *req.CredentialID != 0 {
+		if !requireCredentialReferencePermission(c, req.CredentialID) {
+			respondError(c, http.StatusForbidden, "credentials.read is required to reference vault entries")
+			return
+		}
+		if !credentialReferenceTaskTypes(req.TaskType) {
+			respondError(c, http.StatusBadRequest, "credential references are not supported for task type "+req.TaskType)
+			return
+		}
+		if req.Command != "" || req.Shell != "" || req.File != "" || req.Args != "" {
+			respondError(c, http.StatusBadRequest, "credential reference tasks must not carry inline secret parameters")
+			return
+		}
 	}
 
 	// Operator identity for audit attribution on every batched task.
@@ -168,13 +184,41 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		tenantByAgent[a.ID] = a.TenantID
 		agentsByID[a.ID] = a
 	}
+	var batchRef credentialTaskReference
+	if req.CredentialID != nil && *req.CredentialID != 0 {
+		if len(existingAgents) == 0 {
+			respondError(c, http.StatusNotFound, "agent not found")
+			return
+		}
+		// A vault row belongs to one tenant. Refuse an entire mixed-tenant
+		// batch before any task is inserted instead of tasking a subset.
+		firstTenant := existingAgents[0].TenantID
+		for _, a := range existingAgents {
+			if a.TenantID != firstTenant {
+				respondError(c, http.StatusBadRequest, "credential reference cannot span multiple tenants")
+				return
+			}
+		}
+		resolved, rc, rp, rd, fingerprint, label, err := s.prepareCredentialTask(
+			existingAgents[0].ID, req.TaskType,
+			credentialTaskReference{ID: *req.CredentialID, Params: encodeCredentialParams(req.CredentialParams)})
+		if err != nil {
+			respondError(c, http.StatusBadRequest, sanitizeError(err, "invalid credential reference"))
+			return
+		}
+		batchRef = credentialTaskReference{
+			ID: *req.CredentialID, Command: resolved, Shell: rc, Path: rp, Data: rd,
+			Fingerprint: fingerprint, Label: label,
+			Params: encodeCredentialParams(req.CredentialParams),
+		}
+	}
 
 	// Build all tasks first, then batch-insert in a single DB call.
 	// Apply the same gates as createTask (command length + per-agent pending
 	// depth). The single-task path rejects new tasks once an agent has
 	// MaxPendingTasksPerAgent outstanding; the bulk path must not silently
 	// bypass that ceiling by inserting straight into the DB.
-	if len(req.Command) > MaxCommandLength {
+	if len(batchRef.Command) > MaxCommandLength || (batchRef.ID == 0 && len(req.Command) > MaxCommandLength) {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("command too long (max %d characters)", MaxCommandLength))
 		return
 	}
@@ -188,6 +232,9 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	// Bulk set_sleep commands pass through the same OPSEC floors as every
 	// other entry point (clamped, never rejected, so older consoles work).
 	command := req.Command
+	if batchRef.ID != 0 {
+		command = batchRef.Command
+	}
 	if req.TaskType == "set_sleep" {
 		if clamped, changed := func() (string, bool) {
 			minInterval, minJitter := s.sleepMinimums()
@@ -257,7 +304,11 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		// Validation reuses the batch's own agent load for the RoE gate —
 		// no per-agent point SELECTs under the single-writer pool.
 		preloaded := agentsByID[agentID]
-		if err := s.validateTaskCreationWithAgent(c, agentID, req.TaskType, command, req.Args, req.File, callerUID, &preloaded); err != nil {
+		validateData, validatePath := req.Args, req.File
+		if batchRef.ID != 0 {
+			validateData, validatePath = batchRef.Data, batchRef.Path
+		}
+		if err := s.validateTaskCreationWithAgent(c, agentID, req.TaskType, command, validateData, validatePath, callerUID, &preloaded); err != nil {
 			slog.Warn("Batch command: validation failed", "agent_id", agentID, "err", err)
 			continue
 		}
@@ -285,7 +336,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		}
 		s.agentPendingTasks[cand.agentID]++
 
-		status := s.resolveInitialTaskStatus(req.TaskType)
+		status := s.resolveInitialTaskStatusFor(req.TaskType, req.CredentialID)
 		row := db.Task{
 			AgentID:        cand.agentID,
 			Type:           req.TaskType,
@@ -296,9 +347,20 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			Status:         status,
 			CreatedBy:      operator,
 			IdempotencyKey: idempotencyKey,
-			// Same tenant inheritance as createTask, or tenant-scoped
-			// single-task reads 404 on batched rows.
-			TenantID: tenantByAgent[cand.agentID],
+			TenantID:       tenantByAgent[cand.agentID],
+		}
+		if batchRef.ID != 0 {
+			id := batchRef.ID
+			row.Command = fmt.Sprintf("@cred:%d", id)
+			row.Shell = ""
+			row.Path = ""
+			row.Data = batchRef.Data
+			row.CredentialID = &id
+			row.CredentialFingerprint = batchRef.Fingerprint
+			row.CredentialLabel = batchRef.Label
+			row.CredentialParams = batchRef.Params
+			row.ResolvedCommand = batchRef.Command
+			row.ResolvedShell = batchRef.Shell
 		}
 		// Approval-gated bulk tasks carry the same expiry as single creates
 		// so the sweeper treats both paths identically.

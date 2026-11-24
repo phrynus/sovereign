@@ -32,7 +32,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	filterAgent := c.Query("agent")
 	filterQuery := c.Query("q")
 	filterClaimed := c.Query("claimed_by")
-
+	filterCredential := c.Query("credential_id")
 	// Build query with filters
 	query := s.db.Model(&db.Task{}).
 		Where("type NOT IN ?", taskListSilentTypes)
@@ -64,6 +64,9 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		}
 		query = query.Where("operator_claimed_by = ?", claimant)
 	}
+	if filterCredential != "" {
+		query = query.Where("credential_id = ?", filterCredential)
+	}
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -76,6 +79,9 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query tasks")
 		return
+	}
+	for i := range tasks {
+		tasks[i] = taskForOperator(tasks[i])
 	}
 
 	// Distinct task types for the filter dropdown: cached per tenant (the
@@ -199,7 +205,7 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 		Preload("Agent", func(db *gorm.DB) *gorm.DB {
 			return db.Select("id, hostname")
 		}).
-		Select("tasks.id, tasks.agent_id, tasks.type, tasks.command, tasks.result, tasks.error, tasks.status, tasks.late_result, tasks.late_result_status, tasks.created_at").
+		Select("tasks.id, tasks.agent_id, tasks.type, tasks.command, tasks.result, tasks.error, tasks.status, tasks.late_result, tasks.late_result_status, tasks.created_at, tasks.created_by").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
 	query = s.tenantScope(query, c)
 	if hasSince {

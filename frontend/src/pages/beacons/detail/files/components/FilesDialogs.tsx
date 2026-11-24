@@ -266,7 +266,8 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showPreview && !!previewContent} onOpenChange={setShowPreview}>
+      {/* showPreview is set only after a successful read: an empty string is a valid file. */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent size="2xl" className="flex max-h-[80vh] flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2">

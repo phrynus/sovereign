@@ -21,10 +21,15 @@ export interface DownloadTask {
   result: string;
   status: string;
   created_at: string;
+  transfer_id?: number;
+  filename?: string;
+  sha256?: string;
+  size?: number;
 }
 
 export interface LootData {
   screenshots: Screenshot[];
   keylog_tasks: KeylogTask[];
   download_tasks: DownloadTask[];
+  completed_transfers: DownloadTask[];
 }

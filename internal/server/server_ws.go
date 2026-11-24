@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -550,8 +551,11 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 // Never expose that at-rest representation through REST or WebSocket APIs.
 func taskForOperator(task db.Task) db.Task {
 	for fieldName, field := range map[string]*string{
-		"result": &task.Result,
-		"error":  &task.Error,
+		"result":  &task.Result,
+		"error":   &task.Error,
+		"command": &task.Command,
+		"shell":   &task.Shell,
+		"data":    &task.Data,
 	} {
 		if !strings.HasPrefix(*field, "FC2ENC:") {
 			continue
@@ -563,6 +567,22 @@ func taskForOperator(task db.Task) db.Task {
 			continue
 		}
 		*field = plain
+	}
+	// A referenced task's real arguments never leave the server. The safe
+	// template and the human-readable vault label are the only public fields.
+	if task.CredentialID != nil && *task.CredentialID != 0 {
+		task.Command = fmt.Sprintf("@cred:%d", *task.CredentialID)
+		task.Shell = ""
+		task.Data = ""
+		return task
+	}
+	// File bytes and editor drafts are held in Data at rest; the dedicated
+	// revisions endpoint is the only place that may return them.
+	if task.Type == "upload" || task.Type == "write" {
+		task.Data = ""
+	}
+	if db.SensitiveShellTypes[task.Type] {
+		task.Shell = ""
 	}
 	return task
 }

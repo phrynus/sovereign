@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "crypto_cng.h"
+#include <time.h>
 #include "curve25519.h"
 
 #pragma comment(lib, "bcrypt.lib")
@@ -308,4 +309,138 @@ BYTE *b64dec(const char *in, DWORD *outlen) {
     }
     *outlen = (DWORD)o;
     return out;
+}
+
+/* --- file-backed crypto helpers (durable transfer + CAS editor) --- */
+
+static void cng_file_err(char *err, size_t errcap, const char *msg) {
+    if (err && errcap) _snprintf(err, errcap, "%s", msg);
+}
+
+int cng_file_mtime(const char *path, long long *out) {
+    HANDLE h;
+    FILETIME ft;
+    ULARGE_INTEGER u;
+    if (!out) return -1;
+    h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    if (!GetFileTime(h, NULL, NULL, &ft)) { CloseHandle(h); return -1; }
+    CloseHandle(h);
+    u.LowPart = ft.dwLowDateTime;
+    u.HighPart = ft.dwHighDateTime;
+    if (u.QuadPart < 116444736000000000ULL) { *out = 0; return 0; }
+    *out = (long long)((u.QuadPart - 116444736000000000ULL) / 10000000ULL);
+    return 0;
+}
+
+int cng_sha256_file(const char *path, BYTE out[32]) {
+    HANDLE h;
+    BCRYPT_ALG_HANDLE ah = NULL;
+    BCRYPT_HASH_HANDLE hh = NULL;
+    BYTE buf[65536];
+    DWORD rd = 0;
+    NTSTATUS st;
+    int rc = -1;
+    if (!path || !path[0]) return -1;
+    h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    st = BCryptOpenAlgorithmProvider(&ah, BCRYPT_SHA256_ALGORITHM, NULL, 0);
+    if (!BCRYPT_SUCCESS(st)) { CloseHandle(h); return -1; }
+    st = BCryptCreateHash(ah, &hh, NULL, 0, NULL, 0, 0);
+    if (!BCRYPT_SUCCESS(st)) goto done;
+    for (;;) {
+        if (!ReadFile(h, buf, sizeof(buf), &rd, NULL)) {
+            if (rd == 0 && GetLastError() == ERROR_HANDLE_EOF) break;
+            goto done;
+        }
+        if (rd == 0) break;
+        st = BCryptHashData(hh, buf, rd, 0);
+        if (!BCRYPT_SUCCESS(st)) goto done;
+    }
+    st = BCryptFinishHash(hh, out, 32, 0);
+    rc = BCRYPT_SUCCESS(st) ? 0 : -1;
+done:
+    cng_wipe(buf, sizeof(buf));
+    if (hh) BCryptDestroyHash(hh);
+    if (ah) BCryptCloseAlgorithmProvider(ah, 0);
+    CloseHandle(h);
+    return rc;
+}
+
+/* Reject ".." components before any replace; mirrors beacon.c path_is_safe. */
+static int cng_cas_path_is_safe(const char *p) {
+    const char *s = p;
+    char comp[16];
+    size_t cl = 0;
+    if (!p || !p[0]) return 0;
+    for (;;) {
+        char c = *s;
+        if (c == '/' || c == '\\' || c == '\0') {
+            if (cl == 2 && comp[0] == '.' && comp[1] == '.') return 0;
+            cl = 0;
+            if (c == '\0') break;
+        } else if (cl < sizeof(comp)) {
+            comp[cl++] = c;
+        }
+        s++;
+    }
+    return 1;
+}
+
+int cng_cas_write_file(const char *path, const BYTE *data, DWORD datalen,
+                       const BYTE expected[32], BYTE newsha[32],
+                       long long *mtime, char *err, size_t errcap) {
+    BYTE current[32];
+    char tmp[MAX_PATH * 2];
+    HANDLE ht = INVALID_HANDLE_VALUE;
+    DWORD attr, wr = 0;
+    int attempt, rc = -1, replaced = 0;
+    if (!path || !path[0]) { cng_file_err(err, errcap, "path required"); return -1; }
+    if (!cng_cas_path_is_safe(path)) { cng_file_err(err, errcap, "path traversal rejected"); return -1; }
+    if (datalen > 1024u * 1024u) { cng_file_err(err, errcap, "file too large"); return -1; }
+    if (cng_sha256_file(path, current) != 0) {
+        cng_file_err(err, errcap, "cannot read existing file"); return -1;
+    }
+    if (memcmp(current, expected, 32) != 0) return 1;
+    if (cng_sha256(data, datalen, newsha) != 0) {
+        cng_file_err(err, errcap, "hash failed"); return -1;
+    }
+    attr = GetFileAttributesA(path);
+    tmp[0] = '\0';
+    for (attempt = 0; attempt < 64 && ht == INVALID_HANDLE_VALUE; attempt++) {
+        _snprintf(tmp, sizeof(tmp), "%s.fc2tmp.%lu.%d", path,
+                  (unsigned long)GetCurrentProcessId(), attempt);
+        ht = CreateFileA(tmp, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_NEW,
+                         FILE_ATTRIBUTE_NORMAL, NULL);
+    }
+    if (ht == INVALID_HANDLE_VALUE) {
+        cng_file_err(err, errcap, "cannot create temp file"); goto done;
+    }
+    if (datalen && (!WriteFile(ht, data, datalen, &wr, NULL) || wr != datalen)) {
+        cng_file_err(err, errcap, "temp write failed"); goto done;
+    }
+    if (!FlushFileBuffers(ht)) {
+        cng_file_err(err, errcap, "temp flush failed"); goto done;
+    }
+    CloseHandle(ht);
+    ht = INVALID_HANDLE_VALUE;
+    if (attr != INVALID_FILE_ATTRIBUTES)
+        SetFileAttributesA(tmp, attr & ~FILE_ATTRIBUTE_READONLY);
+    if (cng_sha256_file(path, current) != 0) {
+        cng_file_err(err, errcap, "cannot re-read existing file"); goto done;
+    }
+    if (memcmp(current, expected, 32) != 0) { rc = 1; goto done; }
+    if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        cng_file_err(err, errcap, "replace failed"); goto done;
+    }
+    replaced = 1;
+    if (cng_file_mtime(path, mtime) != 0) *mtime = (long long)time(NULL);
+    rc = 0;
+done:
+    if (ht != INVALID_HANDLE_VALUE) CloseHandle(ht);
+    if (!replaced && tmp[0]) DeleteFileA(tmp);
+    cng_wipe(current, 32);
+    return rc;
 }

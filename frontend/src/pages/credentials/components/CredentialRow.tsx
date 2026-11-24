@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   PenLine,
+  History,
   Pencil,
   Shield,
   ShieldCheck,
@@ -58,15 +59,19 @@ function CredentialRowInner({  entry,
   toggleHashVisibility,
   t,
 }: CredentialRowProps) {
+  const expiryState = entry.expiry_state || "unknown";
   return (
     <TableRow className="hover:bg-muted/50 transition-colors">
       <TableCell className="py-3 px-2">
         <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(entry.id)} aria-label={t("cred.select_entry")} />
       </TableCell>
       <TableCell className="py-3 px-4">
-        <Badge variant={TYPE_BADGE_VARIANT[entry.type] || "outline"}>
-          {entry.type || "unknown"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={TYPE_BADGE_VARIANT[entry.type] || "outline"}>
+            {entry.type || "unknown"}
+          </Badge>
+          {entry.subtype && <span className="text-xs text-muted-foreground">{entry.subtype}</span>}
+        </div>
       </TableCell>
       <TableCell className="py-3 px-4 font-medium text-foreground">{entry.username}</TableCell>
       <TableCell className="py-3 px-4 font-mono text-xs">
@@ -156,6 +161,23 @@ function CredentialRowInner({  entry,
         )}
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4">
+        <Badge variant={
+          entry.expiry_state === "expired" ? "destructive" :
+          expiryState === "expiring" ? "warning" :
+          expiryState === "valid" ? "success" : "outline"
+        }>
+          {t(`cred.expiry_${expiryState}`)}
+        </Badge>
+        {expiryState !== "unknown" && entry.expires_at && (
+          <div className="mt-1 text-xs text-muted-foreground">{entry.expires_at.slice(0, 10)}</div>
+        )}
+        {expiryState !== "unknown" && entry.renew_until && (
+          <div className="text-xs text-muted-foreground">
+            {t("cred.renew_until_label")}{entry.renew_until.slice(0, 10)}
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="max-sm:hidden py-3 px-4">
         {entry.tags ? (
           <div className="flex flex-wrap gap-1">
             {entry.tags.split(",").map(tag => (
@@ -194,6 +216,12 @@ function CredentialRowInner({  entry,
             <Trash2 className="size-4" />
           </TooltipTrigger>
           <TooltipContent>{t("common.delete")}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger render={<a href={`/events?tab=tasks&credential_id=${encodeURIComponent(entry.id)}`} data-testid={`credential-tasks-link-${entry.id}`} aria-label={t("cred.view_related_tasks")} className="inline-flex items-center justify-center size-7 rounded-md hover:bg-muted" />}>
+            <History className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{t("cred.view_related_tasks")}</TooltipContent>
         </Tooltip>
       </TableCell>
     </TableRow>

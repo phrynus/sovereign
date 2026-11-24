@@ -68,18 +68,26 @@ func (s *Server) handleCreateEngagement(c *gin.Context) {
 	}
 
 	tenantID := s.currentTenantID(c)
-	// Overlap check: an interval [starts, ends) that intersects an open engagement's interval. Closed
-	// engagements are history and never block a new one.
+	// The overlap check and the three system channels are part of the same
+	// transaction: two concurrent creates must not both win the same window
+	// or leave an engagement with no chat rooms.
+	tx := s.db.WithContext(s.ctx).Begin()
+	if tx.Error != nil {
+		handleQueryError(c, tx.Error, "Failed to create the engagement")
+		return
+	}
 	var overlaps int64
-	if err := s.db.WithContext(s.ctx).Model(&db.Engagement{}).
+	if err := tx.Model(&db.Engagement{}).
 		Where("tenant_id = ?", tenantID).
 		Where("closed_at IS NULL").
 		Where("starts_at < ? AND ends_at > ?", ends, starts).
 		Count(&overlaps).Error; err != nil {
+		tx.Rollback()
 		handleQueryError(c, err, "Failed to check for overlapping engagements")
 		return
 	}
 	if overlaps > 0 {
+		tx.Rollback()
 		respondError(c, http.StatusConflict, "this window overlaps an existing open engagement for this tenant; close it or choose another window")
 		return
 	}
@@ -92,7 +100,17 @@ func (s *Server) handleCreateEngagement(c *gin.Context) {
 		StartsAt:  starts.UTC(),
 		EndsAt:    ends.UTC(),
 	}
-	if err := s.db.WithContext(s.ctx).Create(&engagement).Error; err != nil {
+	if err := tx.Create(&engagement).Error; err != nil {
+		tx.Rollback()
+		handleQueryError(c, err, "Failed to create the engagement")
+		return
+	}
+	if err := ensureChatChannels(tx, tenantID, engagement.ID, engagement.CreatedBy); err != nil {
+		tx.Rollback()
+		handleQueryError(c, err, "Failed to create the engagement")
+		return
+	}
+	if err := tx.Commit().Error; err != nil {
 		handleQueryError(c, err, "Failed to create the engagement")
 		return
 	}

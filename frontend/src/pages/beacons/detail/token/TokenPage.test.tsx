@@ -65,7 +65,23 @@ beforeEach(() => {
   vi.clearAllMocks();
   currentAgentId = "a1";
   confirmMock.mockResolvedValue(true);
-  vi.mocked(api.get).mockResolvedValue([{ id: 1, username: "alice", domain: "CORP", active: true }]);
+  vi.mocked(api.get).mockImplementation(async (path: unknown) => {
+    if (String(path).includes("/api/credentials/options")) {
+      return {
+        options: [{
+          id: 7,
+          label: "CORP\\alice",
+          domain: "CORP",
+          username: "alice",
+          type: "cleartext",
+          subtype: "",
+          expiry_state: "unknown",
+          expires_at: null,
+        }],
+      };
+    }
+    return [{ id: 1, username: "alice", domain: "CORP", active: true }];
+  });
   vi.mocked(api.post).mockImplementation((path: string) => {
     if (String(path) === paths.agents.tokenListProcs(currentAgentId)) return Promise.resolve({ processes: PROCESSES });
     return Promise.resolve({ success: true });
@@ -176,5 +192,24 @@ describe("AgentTokenPage", () => {
     expect(infoToast).not.toHaveBeenCalledWith("agents.token_task_queued");
     // …and the PID draft from the old agent must be gone (submit disabled).
     await waitFor(() => expect((stealButton() as HTMLButtonElement).disabled).toBe(true));
+  });
+  it("sends only a vault credential reference in Vault mode", async () => {
+    render(<AgentTokenPage />);
+    await screen.findByRole("combobox");
+    fireEvent.click(screen.getByTestId("token-mode-vault"));
+    fireEvent.focus(screen.getByTestId("credential-picker-search"));
+    await screen.findByTestId("credential-picker-option-7");
+    fireEvent.change(screen.getByTestId("credential-picker-select"), { target: { value: "7" } });
+
+    expect(screen.queryByLabelText("agents.token_password")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "agents.token_make" }));
+    });
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(paths.agents.tokenMake("a1"), { credential_id: "7" }));
+    const body = vi.mocked(api.post).mock.calls.find(([p]) => String(p) === paths.agents.tokenMake("a1"))?.[1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty("password");
+    expect(body).not.toHaveProperty("user");
+    expect(body).not.toHaveProperty("domain");
   });
 });

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 )
 
@@ -15,10 +16,12 @@ import (
 // automation rules — single execution, operator-facing, no rule machinery.
 
 type oneShotRequest struct {
-	AgentID string `json:"agent_id" binding:"required"`
-	Command string `json:"command" binding:"required"`
-	RunAt   string `json:"run_at"` // RFC3339; empty = ASAP
-	Type    string `json:"type"`   // default "shell"
+	AgentID          string               `json:"agent_id"`
+	Command          string               `json:"command"`
+	RunAt            string               `json:"run_at"` // RFC3339; empty = ASAP
+	Type             string               `json:"type"`   // default "shell"
+	CredentialID     *uint                `json:"credential_id,omitempty"`
+	CredentialParams CredentialTaskParams `json:"credential_params,omitempty"`
 }
 
 func (s *Server) handleListOneShotTasks(c *gin.Context) {
@@ -64,6 +67,21 @@ func (s *Server) handleCreateOneShotTask(c *gin.Context) {
 	if taskType == "" {
 		taskType = "shell"
 	}
+	if req.CredentialID != nil {
+		if !requireCredentialReferencePermission(c, req.CredentialID) {
+			respondError(c, http.StatusForbidden, "credentials.read is required to reference vault entries")
+			return
+		}
+		if !credentialReferenceTaskTypes(taskType) || req.Command != "" {
+			respondError(c, http.StatusBadRequest, "invalid credential reference schedule")
+			return
+		}
+		if _, _, _, _, _, _, err := s.prepareCredentialTask(req.AgentID, taskType,
+			credentialTaskReference{ID: *req.CredentialID, Params: encodeCredentialParams(req.CredentialParams)}); err != nil {
+			respondError(c, http.StatusBadRequest, sanitizeError(err, "invalid credential reference"))
+			return
+		}
+	}
 	var runAt time.Time
 	if req.RunAt != "" {
 		var err error
@@ -80,6 +98,10 @@ func (s *Server) handleCreateOneShotTask(c *gin.Context) {
 		Command:   req.Command,
 		Status:    "pending",
 		CreatedBy: username,
+	}
+	row.CredentialID = req.CredentialID
+	if req.CredentialID != nil {
+		row.CredentialParams = encodeCredentialParams(req.CredentialParams)
 	}
 	if !runAt.IsZero() {
 		row.RunAt = runAt
@@ -158,7 +180,22 @@ func (s *Server) dispatchDueOneShotTasks() {
 			continue
 		}
 
-		task, err := s.createTask(st.AgentID, st.Type, st.Command, "", "", "", 0, 0)
+		opts := []TaskOption{}
+		if st.CredentialID != nil && *st.CredentialID != 0 {
+			allowed, permErr := middleware.UserHasPermission(s.db, st.CreatedBy, db.PermCredsRead)
+			if permErr != nil || !allowed {
+				slog.Warn("OneShot dispatch refused: creator lost credentials.read",
+					"id", st.ID, "creator", st.CreatedBy, "err", permErr)
+				now := time.Now()
+				_ = s.db.Model(&db.OneShotTask{}).Where("id = ?", st.ID).Updates(map[string]interface{}{
+					"status": "error", "finished_at": &now,
+				}).Error
+				continue
+			}
+			params, _ := decodeCredentialParams(st.CredentialParams)
+			opts = append(opts, WithCredentialReference(*st.CredentialID, params))
+		}
+		task, err := s.createTask(st.AgentID, st.Type, st.Command, "", "", "", 0, 0, opts...)
 		now := time.Now()
 		if err != nil {
 			slog.Warn("OneShot dispatch failed", "id", st.ID, "agent_id", st.AgentID, "err", err)

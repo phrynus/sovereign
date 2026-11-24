@@ -83,6 +83,11 @@ type TaskResult struct {
 	// per-result confidentiality independent of the beacon channel. The server
 	// decrypts using the key it generated for this task.
 	EncryptedWithTaskKey bool `json:"etk,omitempty"`
+	// Final marks the last chunk of a durable transfer. SHA256 is the digest
+	// of the acknowledged bytes; Mtime is the remote file's modification time.
+	Final  bool   `json:"final,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+	Mtime  int64  `json:"mtime,omitempty"`
 }
 
 // TransportMigration asks an implant to switch its beacon transport on the
@@ -175,6 +180,13 @@ type Task struct {
 	// seal this task's result independently of the session key (P2: per-task
 	// encryption). Empty means the result travels under the normal channel key.
 	Key string `json:"key,omitempty"`
+	// TransferID identifies a durable transfer session; Direction is "push"
+	// (teamserver -> agent) or "pull" (agent -> teamserver). Final marks the
+	// last chunk of that transfer.
+	TransferID     *uint  `json:"transfer_id,omitempty"`
+	Direction      string `json:"direction,omitempty"`
+	Final          bool   `json:"final,omitempty"`
+	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
 }
 
 // SocksFrame carries SOCKS5 proxy relay data between agent and server.

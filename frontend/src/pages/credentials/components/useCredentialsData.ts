@@ -11,7 +11,7 @@ import { normalizeCredentialData, type CredentialData } from "./types";
 // emits a credential_update per row.
 const CREDENTIAL_RELOAD_THROTTLE_MS = 750;
 
-export function useCredentialsData() {
+export function useCredentialsData(expiryFilter = "all") {
   const { t } = useI18n();
   const { subscribe } = useWS();
   const [data, setData] = useState<CredentialData | null>(null);
@@ -24,26 +24,38 @@ export function useCredentialsData() {
   // response overwriting fresher vault data. Callers now join the same
   // in-flight fetch instead.
   const inflightRef = useRef<Promise<void> | null>(null);
+  const requestGenerationRef = useRef(0);
   // A WebSocket-driven refresh must not swap the populated vault for a
   // skeleton, and a failed refresh must not wipe the rows already on screen.
   const { beginRefresh, markLoaded } = useRefreshGate();
 
   const loadData = useCallback(async (signal?: AbortSignal) => {
+    if (signal) {
+      // The effect request represents a new filter generation. An older WS
+      // request may still be pending, but it must no longer block refreshes
+      // for the newly selected filter.
+      inflightRef.current = null;
+    }
     if (!signal && inflightRef.current) return inflightRef.current;
+    const generation = ++requestGenerationRef.current;
     const run = (async () => {
       if (!signal && beginRefresh()) setLoading(true);
       setError(null);
       try {
-        const result = await api.get(paths.credentials.list("format=json"), { signal });
+        const query = expiryFilter === "all"
+          ? "format=json"
+          : `format=json&expiry=${encodeURIComponent(expiryFilter)}`;
+        const result = await api.get(paths.credentials.list(query), { signal });
+        if (signal?.aborted || generation !== requestGenerationRef.current) return;
         setData(normalizeCredentialData(result as Parameters<typeof normalizeCredentialData>[0]));
         markLoaded();
       } catch (e) {
-        if (signal?.aborted) return;
+        if (signal?.aborted || generation !== requestGenerationRef.current) return;
         const msg = e instanceof Error ? e.message : t("cred.toast.load_failed");
         setError(msg);
         toast.error(msg);
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (!signal?.aborted && generation === requestGenerationRef.current) setLoading(false);
       }
     })();
     if (!signal) {
@@ -58,7 +70,7 @@ export function useCredentialsData() {
       inflightRef.current = tracked;
     }
     return run;
-  }, [t, beginRefresh, markLoaded]);
+  }, [expiryFilter, t, beginRefresh, markLoaded]);
 
   useEffect(() => {
     const controller = new AbortController();

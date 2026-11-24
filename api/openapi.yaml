@@ -854,55 +854,11 @@ paths:
                     properties:
                       data:
                         $ref: '#/components/schemas/TaskResponse'
-  /agents/{id}/upload:
-    post:
-      tags: [Files, Agents]
-      summary: Push a file onto the implant
-      description: Operator-to-implant push. Multipart file is written on the next beacon. Use target_path (path is accepted as an alias).
-      operationId: uploadFile
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                target_path:
-                  type: string
-                  description: Destination file path on the implant
-                path:
-                  type: string
-                  description: Alias for target_path
-      responses:
-        '200':
-          description: Upload task created
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/SuccessResponse'
-                  - type: object
-                    required: [data]
-                    properties:
-                      data:
-                        $ref: '#/components/schemas/TaskResponse'
   /agents/{id}/download:
     post:
       tags: [Files, Agents]
       summary: Instruct the implant to fetch a URL
-      description: Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil 鈥?use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
+      description: Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil; use POST /agents/{id}/transfers for resumable pushes and pulls.
       operationId: downloadFile
       security:
         - SessionCookie: []
@@ -1428,6 +1384,15 @@ paths:
       operationId: getCredentialsPage
       security:
         - SessionCookie: []
+      parameters:
+        - name: expiry
+          in: query
+          required: false
+          description: Filter by vault expiry state. Entries with unknown expiry do not match expired or expiring.
+          schema:
+            type: string
+            enum: [all, expired, expiring, valid]
+            default: all
       responses:
         '200':
           description: Credentials page
@@ -2771,9 +2736,9 @@ paths:
           in: query
           description: >-
             Comma-separated columns, in the order wanted: time, agent, type, command, result, error, status,
-            task_id, engagement, agent_id, retry_count, late_result. Three presets cover the common requests: `minimal`
+            task_id, engagement, operator, agent_id, retry_count, late_result. Three presets cover the common requests: `minimal`
             (task_id, agent, type, status), `default` (the historical set, format-aware) and `full` (every
-            column, including agent_id). A preset must be the whole value - `minimal,time` is a 400 rather than a
+            column, including agent_id and operator). A preset must be the whole value - `minimal,time` is a 400 rather than a
             guess - and an unknown name is a 400 naming the valid fields and presets. Absent means the default,
             and the resolved selection is part of the ETag because two column sets are two documents.
           schema: {type: string}
@@ -6473,23 +6438,48 @@ paths:
   /chat/history:
     get:
       tags: [Chat]
-      summary: Operator chat history
+      summary: Operator chat history (engagement scoped)
       operationId: chatHistory
       security:
         - SessionCookie: []
+      parameters:
+        - {name: engagement_id, in: query, required: true, schema: {type: integer}}
+        - {name: channel_id, in: query, schema: {type: integer}}
+        - {name: before_id, in: query, schema: {type: integer}}
+        - {name: limit, in: query, schema: {type: integer, default: 50, maximum: 200}}
+        - {name: q, in: query, schema: {type: string}}
       responses:
-        '200':
-          description: Messages
+        '200': {description: Keyset page of messages}
+        '420': {description: Query too broad}
   /chat/channels:
     get:
       tags: [Chat]
-      summary: Chat channels
+      summary: Chat channels with unread counts
       operationId: chatChannels
       security:
         - SessionCookie: []
+      parameters: [{name: engagement_id, in: query, required: true, schema: {type: integer}}]
       responses:
-        '200':
-          description: Channels
+        '200': {description: Channels}
+    post:
+      tags: [Chat]
+      summary: Create a custom channel
+      operationId: createChatChannel
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [engagement_id, name]
+              properties:
+                engagement_id: {type: integer}
+                name: {type: string}
+                slug: {type: string}
+      responses:
+        '200': {description: Created channel}
   /chat/send:
     post:
       tags: [Chat]
@@ -6497,9 +6487,19 @@ paths:
       operationId: chatSend
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [engagement_id, channel_id, message]
+              properties:
+                engagement_id: {type: integer}
+                channel_id: {type: integer}
+                message: {type: string, maxLength: 8192}
       responses:
-        '200':
-          description: Sent
+        '200': {description: Sent message id}
   /extc2/channels:
     get:
       tags: [Integrations]
@@ -10025,108 +10025,6 @@ paths:
       responses:
         '200':
           description: OK
-
-  /agents/{id}/files/push:
-    post:
-      tags: [Files, Agents]
-      summary: Push a file onto the implant (alias of POST /upload)
-      operationId: post_agents_id_files_push
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file: { type: string, format: binary }
-                target_path: { type: string }
-                path: { type: string }
-      responses:
-        '200':
-          description: Push task queued
-
-  /agents/{id}/files/pull:
-    post:
-      tags: [Files, Agents]
-      summary: Queue implant-to-server exfil (alias of POST /files/upload)
-      operationId: post_agents_id_files_pull
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required: [path]
-              properties:
-                path: { type: string }
-                offset: { type: string }
-                size: { type: string }
-      responses:
-        '200':
-          description: Exfil task queued
-
-  /agents/{id}/files/upload:
-    post:
-      tags: [Files, Agents]
-      summary: Queue implant-to-server exfil
-      description: Path only. Do not attach a file. The implant reads the remote path and the chunk is saved under data/uploads/{id}/. Then GET /agents/{id}/files/exfil/{filename}.
-      operationId: post_agents_id_files_upload
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required: [path]
-              properties:
-                path: { type: string }
-                offset: { type: string }
-                size: { type: string }
-      responses:
-        '200':
-          description: Exfil task queued
-
-  /agents/{id}/files/exfil/{filename}:
-    get:
-      tags: [Files, Agents]
-      summary: Download a previously exfiltrated file
-      operationId: get_agents_id_files_exfil
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-        - name: filename
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Saved exfil blob
-          content:
-            application/octet-stream:
-              schema: { type: string, format: binary }
 
   /agents/{id}/find:
     post:
@@ -13858,6 +13756,19 @@ paths:
       security: [{SessionCookie: []}]
       responses:
         '200': {description: Heatmap rows}
+  /api/mitre/navigator:
+    get:
+      tags: [Report]
+      summary: ATT&CK Navigator layer export
+      operationId: getMitreNavigator
+      parameters:
+        - name: agent_id
+          in: query
+          description: Optional beacon id; omit to cover the whole deployment
+          schema: {type: string}
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Navigator layer}
   /api/generate/toolchain:
     get:
       tags: [Builds]
@@ -14796,6 +14707,286 @@ paths:
         '400':
           description: Invalid since or limit
 
+  /api/credentials/options:
+    get:
+      tags: [Credentials]
+      summary: Vault picker options
+      description: Redacted credential list for task references. Never returns passwords or hashes.
+      operationId: credentialOptions
+      security:
+        - SessionCookie: []
+      parameters:
+        - {name: q, in: query, schema: {type: string}, description: Username, domain or subtype filter}
+        - {name: limit, in: query, schema: {type: integer, default: 100, maximum: 500}}
+      responses:
+        '200':
+          description: Redacted options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean}
+                  data:
+                    type: object
+                    properties:
+                      options:
+                        type: array
+                        items: {$ref: '#/components/schemas/CredentialOption'}
+        '403':
+          description: Missing credentials.read
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks (REST v1)
+      operationId: listTasksV1
+      security:
+        - SessionCookie: []
+      parameters:
+        - {name: agent_id, in: query, schema: {type: string}}
+        - {name: type, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+        - {name: credential_id, in: query, schema: {type: integer}, description: Only tasks referencing this vault entry}
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: Task list
+    post:
+      tags: [Tasks]
+      summary: Create a task (REST v1)
+      operationId: createTaskV1
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, type]
+              properties:
+                agent_id: {type: string}
+                type: {type: string}
+                command: {type: string}
+                shell: {type: string}
+                path: {type: string}
+                data: {type: string}
+                encrypt_result: {type: boolean}
+                credential_id: {type: integer, nullable: true, description: Vault reference; inline secret fields must be omitted}
+                credential_params: {$ref: '#/components/schemas/CredentialTaskParams'}
+      responses:
+        '200':
+          description: Created task
+
+  /api/tasks/{id}:
+    get:
+      tags: [Tasks]
+      summary: Get one task (REST v1)
+      operationId: getTaskV1
+      security:
+        - SessionCookie: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          description: Task detail
+
+  /api/agents/{id}/files/write:
+    post:
+      tags: [Files]
+      summary: Queue an optimistic-concurrency text edit
+      operationId: writeAgentFile
+      security:
+        - SessionCookie: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [path, content, base_task_id]
+              properties:
+                path: {type: string}
+                content: {type: string, description: UTF-8 text or base64 when encoding=base64}
+                content_base64: {type: string}
+                encoding: {type: string, enum: [text, base64]}
+                base_task_id: {type: integer}
+      responses:
+        '200':
+          description: Edit task queued
+        '404':
+          description: No completed read/write baseline for this path
+
+  /api/agents/{id}/files/history:
+    get:
+      tags: [Files]
+      summary: Text file revision history
+      operationId: agentFileHistory
+      security:
+        - SessionCookie: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: path, in: query, required: true, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, default: 50, maximum: 50}}
+      responses:
+        '200':
+          description: Revision metadata list
+
+  /api/agents/{id}/files/revisions/{taskId}:
+    get:
+      tags: [Files]
+      summary: One file revision snapshot
+      operationId: agentFileRevision
+      security:
+        - SessionCookie: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: taskId, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200':
+          description: Base64 content and hash metadata
+
+  /api/agents/{id}/transfers:
+    get:
+      tags: [Files]
+      summary: List durable transfers for an agent
+      operationId: listTransfers
+      security: [{SessionCookie: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses: {'200': {description: Transfer list}}
+    post:
+      tags: [Files]
+      summary: Create a resumable push or pull transfer
+      operationId: createTransfer
+      security: [{SessionCookie: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [direction, path]
+              properties:
+                direction: {type: string, enum: [push, pull]}
+                path: {type: string}
+                total_size: {type: integer, format: int64, description: Required for push; 0 means unknown for pull}
+                sha256: {type: string, description: 64-hex digest, required for push}
+                filename: {type: string}
+      responses: {'200': {description: Transfer session}}
+
+  /api/agents/{id}/transfers/{transfer_id}:
+    get:
+      tags: [Files]
+      summary: Get one transfer
+      operationId: getTransfer
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: transfer_id, in: path, required: true, schema: {type: integer}}
+      responses: {'200': {description: Transfer session}}
+    delete:
+      tags: [Files]
+      summary: Cancel a transfer
+      operationId: cancelTransfer
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: transfer_id, in: path, required: true, schema: {type: integer}}
+      responses: {'200': {description: Cancelled transfer}}
+
+  /api/agents/{id}/transfers/{transfer_id}/chunk:
+    put:
+      tags: [Files]
+      summary: Push one acknowledged 2 MiB chunk
+      operationId: pushTransferChunk
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: transfer_id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [offset, data_base64]
+              properties:
+                offset: {type: integer, format: int64}
+                data_base64: {type: string}
+                final: {type: boolean}
+      responses: {'200': {description: Task and updated transfer}}
+
+  /api/agents/{id}/transfers/{transfer_id}/resume:
+    post:
+      tags: [Files]
+      operationId: resumeTransfer
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: transfer_id, in: path, required: true, schema: {type: integer}}
+      responses: {'200': {description: Task and updated transfer}}
+
+  /api/agents/{id}/transfers/{transfer_id}/pause:
+    post:
+      tags: [Files]
+      operationId: pauseTransfer
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: transfer_id, in: path, required: true, schema: {type: integer}}
+      responses: {'200': {description: Paused transfer}}
+
+  /api/agents/{id}/transfers/{transfer_id}/file:
+    get:
+      tags: [Files]
+      summary: Download a completed pull (supports Range)
+      operationId: downloadTransfer
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: transfer_id, in: path, required: true, schema: {type: integer}}
+      responses: {'200': {description: File bytes}}
+
+
+  /chat/channels/{id}/archive:
+    post:
+      tags: [Chat]
+      operationId: archiveChatChannel
+      security: [{SessionCookie: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      responses: {'200': {description: Archived channel}}
+
+  /chat/channels/{id}/mute:
+    post:
+      tags: [Chat]
+      operationId: muteChatChannel
+      security: [{SessionCookie: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [muted], properties: {muted: {type: boolean}}}
+      responses: {'200': {description: Updated preference}}
+
+  /chat/channels/{id}/read:
+    post:
+      tags: [Chat]
+      operationId: markChatRead
+      security: [{SessionCookie: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [message_id], properties: {message_id: {type: integer}}}
+      responses: {'200': {description: Updated preference}}
+
+
 components:
   securitySchemes:
     SessionCookie:
@@ -15299,6 +15490,30 @@ components:
           type: string
           format: date-time
 
+    CredentialOption:
+      type: object
+      properties:
+        id: {type: integer}
+        label: {type: string}
+        domain: {type: string}
+        username: {type: string}
+        type: {type: string}
+        subtype: {type: string}
+        expiry_state: {type: string, enum: [unknown, expired, expiring, valid]}
+        expires_at: {type: string, format: date-time, nullable: true}
+
+    CredentialTaskParams:
+      type: object
+      description: Non-sensitive inputs for a vault-backed task; secret material is resolved server-side
+      properties:
+        dc: {type: string}
+        delay_ms: {type: string}
+        usernames: {type: string}
+        logon_type: {type: string}
+        target: {type: string}
+        method: {type: string}
+        command: {type: string}
+
     Task:
       type: object
       properties:
@@ -15373,6 +15588,32 @@ components:
           format: date-time
         tenant_id:
           type: string
+        credential_id:
+          type: integer
+          nullable: true
+          description: Vault credential reference; the command is the safe @cred:<id> template and the resolved secret is never returned
+        credential_label:
+          type: string
+          description: Redacted vault label (DOMAIN\user, subtype)
+        transfer_id:
+          type: integer
+          nullable: true
+          description: Durable file transfer session id
+        direction:
+          type: string
+          enum: [push, pull]
+        final:
+          type: boolean
+        result_sha256:
+          type: string
+        expected_sha256:
+          type: string
+        base_task_id:
+          type: integer
+          nullable: true
+        result_mtime:
+          type: integer
+          format: int64
 
     Listener:
       type: object
@@ -15487,7 +15728,11 @@ components:
           example: mimikatz
         type:
           type: string
-          enum: [cleartext, ntlm, aes, kerberos]
+          enum: [cleartext, ntlm, aes, kerberos, jwt]
+        subtype:
+          type: string
+          description: Automatically parsed credential format, such as jwt or ccache.
+          example: jwt
         notes:
           type: string
         tags:
@@ -15495,6 +15740,13 @@ components:
         expires_at:
           type: string
           format: date-time
+        renew_until:
+          type: string
+          format: date-time
+        expiry_state:
+          type: string
+          enum: [unknown, expired, expiring, valid]
+          description: Server-computed expiry state, independent of browser clock and timezone.
         confirmed:
           type: boolean
         task_id:

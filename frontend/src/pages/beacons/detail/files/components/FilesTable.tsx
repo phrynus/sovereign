@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, Download, Eye, File, Folder, ImageIcon, Lock, Pencil, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, Eye, File, FilePenLine, Folder, ImageIcon, Lock, Pencil, Trash2, X } from "lucide-react";
+import { EDITOR_MAX_BYTES } from "@/lib/agent-files/file-task";
 import { formatBytes, formatTimestamp, isImageFile, type FileEntry } from "@/lib/agent-files/types";
 import type { FileSortKey } from "./useFilesView";
 
@@ -24,6 +25,7 @@ interface FilesTableProps {
   batchBusy: boolean;
   pullName: string | null;
   onFileClick: (entry: FileEntry) => void;
+  onEdit: (name: string) => void;
   onPreview: (name: string) => void;
   onDownload: (name: string) => void;
   onRename: (name: string) => void;
@@ -43,7 +45,7 @@ export default memo(function FilesTable(props: FilesTableProps) {
   const {
     t, sortedEntries, selected, allSelected, toggleSelect, selectAll, clearSelection,
     sortKey, sortDir, toggleSort, selectedFile, batchBusy, pullName,
-    onFileClick, onPreview, onDownload, onRename, onChmod, onDelete,
+    onFileClick, onEdit, onPreview, onDownload, onRename, onChmod, onDelete,
     onBatchPull, onBatchDelete, onCancelBatch,
     dragOver, onDragOver, onDragLeave, onDrop,
   } = props;
@@ -145,6 +147,16 @@ export default memo(function FilesTable(props: FilesTableProps) {
                   <div className="flex items-center justify-end gap-1">
                     {!entry.is_dir && (
                       <>
+                        {entry.size <= EDITOR_MAX_BYTES && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onEdit(entry.name)}
+                            aria-label={t("agents.files_edit")}
+                          >
+                            <FilePenLine className="size-4" /> {t("agents.files_edit")}
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => onPreview(entry.name)}>
                           <Eye className="size-4" /> {t("agents.files_preview_btn")}
                         </Button>

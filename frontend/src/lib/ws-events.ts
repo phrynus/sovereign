@@ -108,6 +108,22 @@ interface ServerRestartingEvent {
   version?: string;
 }
 
+/** Engagement-scoped chat frame broadcast by the operator WebSocket hub. */
+interface ChatEvent {
+  id?: number | string;
+  tenant_id?: number | string;
+  engagement_id?: number | string;
+  channel_id?: number | string;
+  channel_slug?: string;
+  user_id?: number | string;
+  username?: string;
+  message?: string;
+  kind?: string;
+  task_id?: number | string;
+  metadata?: string;
+  created_at?: string;
+}
+
 /** Payloads not yet modeled: widen as consumers migrate to typed access. */
 interface UnmodeledEvent {
   [key: string]: unknown;
@@ -131,7 +147,7 @@ export interface WSEventMap {
   build_update: UnmodeledEvent;
   listener_update: UnmodeledEvent;
   credential_update: UnmodeledEvent;
-  chat: UnmodeledEvent;
+  chat: ChatEvent;
   notes_update: UnmodeledEvent;
   sleep_update: UnmodeledEvent;
 }

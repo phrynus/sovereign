@@ -25,9 +25,6 @@ describe("api paths", () => {
     expect(paths.agents.filesThumbGet("x", "abc")).toBe("/agents/x/files/thumb/abc");
     expect(paths.agents.cmd("x", "shell")).toBe("/agents/x/shell");
     expect(paths.agents.cmd("x", "/files/ls")).toBe("/agents/x/files/ls");
-    expect(paths.agents.filesPush("x")).toBe("/agents/x/files/push");
-    expect(paths.agents.filesExfil("x")).toBe("/agents/x/files/pull");
-    expect(paths.agents.filesExfilGet("x", "secret.txt")).toBe("/agents/x/files/exfil/secret.txt");
     expect(paths.agents.tokenList("x")).toBe("/agents/x/token/list?format=json");
     expect(paths.agents.socksRelayStart("x")).toBe("/agents/x/socks_relay/start");
     expect(paths.agents.socksRelayStatus("x")).toBe("/agents/x/socks_relay/status");
@@ -83,6 +80,7 @@ describe("api paths", () => {
     expect(paths.credentials.add).toBe("/credentials/add");
     expect(paths.credentials.one(9)).toBe("/credentials/9");
     expect(paths.credentials.batchTags).toBe("/credentials/batch/tags");
+    expect(paths.credentials.options).toBe("/api/credentials/options");
   });
   it("listeners enable/disable under /api/listeners", () => {
     expect(paths.listeners.enable("1")).toBe("/api/listeners/1/enable");
@@ -103,6 +101,7 @@ describe("api paths", () => {
     expect(paths.bloodhound.list).toBe("/bloodhound/list");
     expect(paths.chat.history("ops")).toBe("/chat/history?channel=ops");
     expect(paths.mitre.phases).toBe("/mitre/phases");
+    expect(paths.mitre.navigator).toBe("/api/mitre/navigator");
   });
   it("circuit breaker detail/events live on the dual-use prefix", () => {
     expect(paths.circuitBreaker.detail).toBe("/circuit-breaker/detail");
