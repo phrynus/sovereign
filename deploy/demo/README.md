@@ -18,7 +18,7 @@ database, one HTTP listener, and **no** beacon transport.
 
 | layer | detail |
 |---|---|
-| backend | container `sovereign-demo` from the published image — **canonical pin `sha256:f1dac31f…`** (the multi-arch `edge` build of `c23a9479d`; the manifest lists **linux/amd64 and linux/arm64** and the demo runs the amd64 leg). The mirror stalled on the new digest, so the host used the documented GHCR fallback: the same canonical image is loaded and runs under the local tag `sovereign:f1dac31f`; `verify-image.sh` proves the running image is the pinned one by content. `network_mode: host`, `read_only`, `working_dir: /data`, binds `127.0.0.1:18000` only |
+| backend | container `sovereign-demo` from the published image — **canonical pin `sha256:5d4e3920…`** (the multi-arch `edge` build of `97717b8c7`; the manifest lists **linux/amd64 and linux/arm64** and the demo runs the amd64 leg). The read-only mirror served the digest directly, so the host pins `ghcr.nju.edu.cn/r0si/sovereign@sha256:5d4e3920…`; `verify-image.sh` proves the running image is content-identical to the canonical GHCR manifest. `network_mode: host`, `read_only`, `working_dir: /data`, binds `127.0.0.1:18000` only |
 | database | PostgreSQL 18 on the host (`127.0.0.1:5432`, role `sovereign`, db `sovereign`) |
 | edge | standalone nginx (`deploy/demo/nginx.conf`) listening on `0.0.0.0:8000`, proxying everything to the backend |
 | state | `/opt/sovereign-demo/container-data` (uid/gid 65532), config mounted read-only from `/opt/sovereign-demo/compose/config.yaml` |
@@ -75,7 +75,7 @@ Requirements specific to this host and documented rather than hidden:
 
 - **GHCR is not reachable directly.** The image is pulled through a read-only
   mirror serving the identical manifest (`ghcr.nju.edu.cn/r0si/sovereign`, pulled
-  by digest `sha256:f1dac31f…`). Set `FORGEC2_IMAGE` to the mirror, tag or
+  by digest `sha256:5d4e3920…`). Set `FORGEC2_IMAGE` to the mirror, tag or
   digest, in `.env`. When the mirror rejects a new digest with 502, pull it
   from GHCR on a reachable host, `docker load` the saved image, and point the
   demo at the local tag until the mirror catches up - the pin stays checkable
@@ -163,8 +163,8 @@ therefore be *proved* to be the canonical one:
 
 ```bash
 bash deploy/demo/verify-image.sh
-# OK: sovereign:f1dac31f is content-identical to the
-# canonical manifest sha256:f1dac31f6c53e123bb0c1346420a5ee9c866849fe8a024c379960cadcb5904a1
+# OK: ghcr.nju.edu.cn/r0si/sovereign@sha256:5d4e3920… is content-identical to the
+# canonical manifest sha256:5d4e3920a6fd3e06f3cce1a21c1a790cae14f84acc0b57ac059b1504dfcb0453
 ```
 
 A backup is only real once it has been restored somewhere. `restore-drill.sh`restores the newest dump into a scratch database on the same cluster and
