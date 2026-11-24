@@ -2664,7 +2664,7 @@ paths:
                             type: boolean
                           anchor_recorded:
                             type: boolean
-  /tasks/specs:
+  /api/tasks/specs:
     get:
       tags: [Tasks]
       summary: Task specification catalog
@@ -11246,6 +11246,12 @@ paths:
       operationId: apiV1ListTasks
       security:
         - SessionCookie: []
+      parameters:
+        - {name: agent_id, in: query, schema: {type: string}}
+        - {name: type, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+        - {name: credential_id, in: query, schema: {type: integer}}
+        - {name: limit, in: query, schema: {type: integer}}
       responses:
         '200':
           description: Task list
@@ -11283,6 +11289,12 @@ paths:
                 agent_id: { type: string }
                 type: { type: string }
                 command: { type: string }
+                shell: { type: string }
+                path: { type: string }
+                data: { type: string }
+                encrypt_result: { type: boolean }
+                credential_id: { type: integer, nullable: true }
+                credential_params: {$ref: '#/components/schemas/CredentialTaskParams'}
       responses:
         '200':
           description: Task created
@@ -14748,71 +14760,6 @@ paths:
       responses:
         '200': {description: Redacted options}
         '403': {description: Missing credentials.read}
-
-  /api/tasks/specs:
-    get:
-      tags: [Tasks]
-      summary: Dispatchable task specification catalogue
-      operationId: listTaskSpecs
-      security: [{SessionCookie: []}]
-      responses:
-        '200': {description: Protocol task specifications}
-
-  /api/tasks:
-    get:
-      tags: [Tasks]
-      summary: List tasks (REST v1)
-      operationId: listTasksV1
-      security:
-        - SessionCookie: []
-      parameters:
-        - {name: agent_id, in: query, schema: {type: string}}
-        - {name: type, in: query, schema: {type: string}}
-        - {name: status, in: query, schema: {type: string}}
-        - {name: credential_id, in: query, schema: {type: integer}, description: Only tasks referencing this vault entry}
-        - {name: limit, in: query, schema: {type: integer}}
-      responses:
-        '200':
-          description: Task list
-    post:
-      tags: [Tasks]
-      summary: Create a task (REST v1)
-      operationId: createTaskV1
-      security:
-        - SessionCookie: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [agent_id, type]
-              properties:
-                agent_id: {type: string}
-                type: {type: string}
-                command: {type: string}
-                shell: {type: string}
-                path: {type: string}
-                data: {type: string}
-                encrypt_result: {type: boolean}
-                credential_id: {type: integer, nullable: true, description: Vault reference; inline secret fields must be omitted}
-                credential_params: {$ref: '#/components/schemas/CredentialTaskParams'}
-      responses:
-        '200':
-          description: Created task
-
-  /api/tasks/{id}:
-    get:
-      tags: [Tasks]
-      summary: Get one task (REST v1)
-      operationId: getTaskV1
-      security:
-        - SessionCookie: []
-      parameters:
-        - {name: id, in: path, required: true, schema: {type: integer}}
-      responses:
-        '200':
-          description: Task detail
 
   /agents/{id}/files/write:
     post:

@@ -1,6 +1,8 @@
 
 import { registerFragment, useI18n } from "@/lib/i18n";
+import { enLateral } from "@/lib/i18n/fragments/en.lateral";
 import { enCred } from "@/lib/i18n/fragments/en.cred";
+registerFragment(enLateral);
 registerFragment(enCred);
 
 import { useState } from "react";

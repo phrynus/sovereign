@@ -1330,7 +1330,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tasks/specs": {
+    "/api/tasks/specs": {
         parameters: {
             query?: never;
             header?: never;
@@ -11604,58 +11604,6 @@ export interface paths {
         };
         /** Vault picker options (dual-use alias) */
         get: operations["credentialOptionsAlias"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/specs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Dispatchable task specification catalogue */
-        get: operations["listTaskSpecs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List tasks (REST v1) */
-        get: operations["listTasksV1"];
-        put?: never;
-        /** Create a task (REST v1) */
-        post: operations["createTaskV1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get one task (REST v1) */
-        get: operations["getTaskV1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -25275,7 +25223,13 @@ export interface operations {
     };
     apiV1ListTasks: {
         parameters: {
-            query?: never;
+            query?: {
+                agent_id?: string;
+                type?: string;
+                status?: string;
+                credential_id?: number;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -25313,6 +25267,12 @@ export interface operations {
                     agent_id?: string;
                     type?: string;
                     command?: string;
+                    shell?: string;
+                    path?: string;
+                    data?: string;
+                    encrypt_result?: boolean;
+                    credential_id?: number | null;
+                    credential_params?: components["schemas"]["CredentialTaskParams"];
                 };
             };
         };
@@ -29995,102 +29955,6 @@ export interface operations {
             };
             /** @description Missing credentials.read */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    listTaskSpecs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Protocol task specifications */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    listTasksV1: {
-        parameters: {
-            query?: {
-                agent_id?: string;
-                type?: string;
-                status?: string;
-                /** @description Only tasks referencing this vault entry */
-                credential_id?: number;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Task list */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    createTaskV1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    agent_id: string;
-                    type: string;
-                    command?: string;
-                    shell?: string;
-                    path?: string;
-                    data?: string;
-                    encrypt_result?: boolean;
-                    /** @description Vault reference; inline secret fields must be omitted */
-                    credential_id?: number | null;
-                    credential_params?: components["schemas"]["CredentialTaskParams"];
-                };
-            };
-        };
-        responses: {
-            /** @description Created task */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    getTaskV1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Task detail */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };

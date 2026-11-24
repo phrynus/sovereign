@@ -378,6 +378,8 @@ test.describe("route transitions", () => {
     // would not call router.navigate()).
     await page.goto("/dashboard.html");
     await expect(page.locator("main h1").first()).toBeAttached({ timeout: 15_000 });
+    const menu = page.getByRole("button", { name: /toggle menu/i });
+    if (await menu.isVisible().catch(() => false)) await menu.click();
     await page.locator('a[href="/chat"], a[href="/chat.html"]').first().click();
     await page.waitForURL(/\/chat/);
   }
