@@ -339,7 +339,7 @@ func credentialReferenceOptionsStatus(cred db.CredentialEntry, now time.Time) st
 	if !cred.ExpiryKnown || cred.ExpiresAt.IsZero() {
 		return "unknown"
 	}
-	if !cred.ExpiresAt.After(now) {
+	if cred.ExpiresAt.Before(now) {
 		return "expired"
 	}
 	if !cred.ExpiresAt.After(now.Add(7 * 24 * time.Hour)) {

@@ -52,7 +52,7 @@ func TestCredentialLifecycle(t *testing.T) {
 	if got := db.CredentialLifecycle(confirmed, nil, now); got != "verified" {
 		t.Fatalf("verified: got %q", got)
 	}
-	expired := db.CredentialEntry{ExpiresAt: now.Add(-time.Hour)}
+	expired := db.CredentialEntry{ExpiresAt: now.Add(-time.Hour), ExpiryKnown: true}
 	if got := db.CredentialLifecycle(expired, nil, now); got != "stale" {
 		t.Fatalf("stale expired: got %q", got)
 	}

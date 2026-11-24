@@ -2,6 +2,8 @@ package server
 
 import (
 	"log/slog"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -109,30 +111,41 @@ var attackTacticMap = []struct {
 	},
 }
 
+// taskTypesInUse reports the distinct task types observed across the whole
+// deployment (agentID == "") or for one agent. A database error is returned
+// to the caller: a Navigator layer must fail rather than claim zero coverage
+// when the census could not be read.
+func (s *Server) taskTypesInUse(agentID string) (map[string]bool, error) {
+	q := s.db.Table("tasks").Select("DISTINCT type")
+	if agentID != "" {
+		q = q.Where("agent_id = ?", agentID)
+	}
+	var types []string
+	if err := q.Pluck("type", &types).Error; err != nil {
+		return nil, err
+	}
+	used := make(map[string]bool, len(types))
+	for _, taskType := range types {
+		used[taskType] = true
+	}
+	return used, nil
+}
+
 // handleAttackCoverage returns MITRE ATT&CK technique coverage for an agent.
 // GET /attack/coverage?agent_id=
 func (s *Server) handleAttackCoverage(c *gin.Context) {
 	agentID := c.Query("agent_id")
 
-	used := map[string]bool{}
-	if agentID != "" {
-		var types []string
-		if err := s.db.Table("tasks").Select("DISTINCT type").Where("agent_id = ?", agentID).Pluck("type", &types).Error; err != nil {
+	used, err := s.taskTypesInUse(agentID)
+	if err != nil {
+		// This page has always degraded to an empty census with a log line;
+		// keep that behaviour. The Navigator export fails loudly instead.
+		if agentID != "" {
 			slog.Error("Failed to pluck task types for agent", "agent_id", agentID, "err", err)
-			types = []string{}
-		}
-		for _, t := range types {
-			used[t] = true
-		}
-	} else {
-		var types []string
-		if err := s.db.Table("tasks").Select("DISTINCT type").Pluck("type", &types).Error; err != nil {
+		} else {
 			slog.Error("Failed to pluck task types", "err", err)
-			types = []string{}
 		}
-		for _, t := range types {
-			used[t] = true
-		}
+		used = map[string]bool{}
 	}
 
 	usedTaskTypes := make([]string, 0, len(used))
@@ -181,6 +194,96 @@ func (s *Server) handleAttackCoverage(c *gin.Context) {
 		"total":           total,
 		"used_task_types": usedTaskTypes,
 	})
+}
+
+// navigatorTacticSlugs maps the display names in attackTacticMap to the short
+// tactic names ATT&CK Navigator expects in a layer.
+var navigatorTacticSlugs = map[string]string{
+	"Execution":            "execution",
+	"Persistence":          "persistence",
+	"Privilege Escalation": "privilege-escalation",
+	"Defense Evasion":      "defense-evasion",
+	"Credential Access":    "credential-access",
+	"Discovery":            "discovery",
+	"Collection":           "collection",
+	"Lateral Movement":     "lateral-movement",
+	"Command and Control":  "command-and-control",
+}
+
+// handleMitreNavigator exports the same coverage catalogue as an ATT&CK
+// Navigator layer. GET /api/mitre/navigator?agent_id=
+func (s *Server) handleMitreNavigator(c *gin.Context) {
+	agentID := c.Query("agent_id")
+	used, err := s.taskTypesInUse(agentID)
+	if err != nil {
+		slog.Error("Failed to load task types for Navigator layer", "agent_id", agentID, "err", err)
+		handleQueryError(c, err, "Failed to build ATT&CK Navigator layer")
+		return
+	}
+
+	type layerTechnique struct {
+		TechniqueID string              `json:"techniqueID"`
+		Tactic      string              `json:"tactic"`
+		Color       string              `json:"color"`
+		Enabled     bool                `json:"enabled"`
+		Comment     string              `json:"comment"`
+		Metadata    []map[string]string `json:"metadata"`
+		taskTypes   []string
+	}
+	techniques := make([]layerTechnique, 0, len(attackTacticMap)*3)
+	index := make(map[string]int, len(attackTacticMap)*3)
+	for _, grp := range attackTacticMap {
+		slug, ok := navigatorTacticSlugs[grp.Tactic]
+		if !ok {
+			continue
+		}
+		for _, tech := range grp.Techniques {
+			key := tech.ID + "\x00" + slug
+			if i, exists := index[key]; exists {
+				techniques[i].taskTypes = append(techniques[i].taskTypes, tech.TaskTypes...)
+				continue
+			}
+			index[key] = len(techniques)
+			techniques = append(techniques, layerTechnique{
+				TechniqueID: tech.ID,
+				Tactic:      slug,
+				Enabled:     true,
+				taskTypes:   append([]string(nil), tech.TaskTypes...),
+			})
+		}
+	}
+
+	for i := range techniques {
+		sort.Strings(techniques[i].taskTypes)
+		value := strings.Join(techniques[i].taskTypes, ", ")
+		covered := false
+		for _, taskType := range techniques[i].taskTypes {
+			if used[taskType] {
+				covered = true
+				break
+			}
+		}
+		if covered {
+			techniques[i].Color = "#2f8f46"
+			techniques[i].Comment = "Covered by: " + value
+		} else {
+			techniques[i].Color = "#c7c7c7"
+			techniques[i].Comment = "No dispatchable task type mapped"
+		}
+		techniques[i].Metadata = []map[string]string{{"name": "task_types", "value": value}}
+	}
+
+	layer := map[string]interface{}{
+		"name":                          "Sovereign ATT&CK coverage",
+		"versions":                      map[string]string{"attack": "14", "navigator": "4.5"},
+		"domain":                        "enterprise-attack",
+		"description":                   "Generated from the Sovereign dispatchable task catalogue and observed task types",
+		"showTacticRowBackground":       true,
+		"tacticRowBackground":           "#dddddd",
+		"selectTechniquesAcrossTactics": true,
+		"techniques":                    techniques,
+	}
+	respond(c, gin.H{"layer": layer})
 }
 
 // handleMitrePhases returns kill-chain phase coverage across all campaigns.

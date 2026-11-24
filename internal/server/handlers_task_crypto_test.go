@@ -92,7 +92,7 @@ func TestSensitiveTaskTypesDerivedFromAtRestSet(t *testing.T) {
 	for _, k := range []string{
 		"password_spray", "cred_check", "token_make", "lateral", "mimikatz", "creds",
 		"dcsync", "execute_assembly", "bof", "peloader", "inject", "spawn",
-		"shinject", "shspawn", "powerpick", "reg_set", "clipboard_set",
+		"shinject", "shspawn", "powerpick", "reg_set", "clipboard_set", "upload", "write",
 	} {
 		if !db.SensitiveTaskTypes[k] {
 			t.Errorf("at-rest set missing %q", k)
@@ -101,7 +101,7 @@ func TestSensitiveTaskTypesDerivedFromAtRestSet(t *testing.T) {
 			t.Errorf("wire set must cover at-rest type %q", k)
 		}
 	}
-	for _, k := range []string{"shell", "ps", "upload", "download_url",
+	for _, k := range []string{"shell", "ps", "download_url",
 		"kerberoast", "lsa_bypass", "cookie_export", "vpn_creds", "wifi_creds"} {
 		if !sensitiveTaskTypes[k] {
 			t.Errorf("wire set missing %q", k)

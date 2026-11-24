@@ -710,7 +710,7 @@ func createChatCustomChannel(database *gorm.DB, engagement db.Engagement, name, 
 	if err := database.Model(&db.ChatChannel{}).
 		Where("tenant_id = ? AND engagement_id = ? AND kind = ?", engagement.TenantID, engagement.ID, "custom").
 		Count(&count).Error; err != nil {
-		return channel, http.StatusInternalServerError, errors.New("Failed to query chat channels")
+		return channel, http.StatusInternalServerError, errors.New("failed to query chat channels")
 	}
 	if count >= chatCustomChannelMax {
 		return channel, http.StatusBadRequest, fmt.Errorf("at most %d custom channels are allowed per engagement", chatCustomChannelMax)
@@ -719,7 +719,7 @@ func createChatCustomChannel(database *gorm.DB, engagement db.Engagement, name, 
 	if err := database.Model(&db.ChatChannel{}).
 		Where("tenant_id = ? AND engagement_id = ? AND slug = ?", engagement.TenantID, engagement.ID, slug).
 		Count(&existing).Error; err != nil {
-		return channel, http.StatusInternalServerError, errors.New("Failed to query chat channels")
+		return channel, http.StatusInternalServerError, errors.New("failed to query chat channels")
 	}
 	if existing > 0 {
 		return channel, http.StatusConflict, errors.New("channel slug already exists")
@@ -733,7 +733,7 @@ func createChatCustomChannel(database *gorm.DB, engagement db.Engagement, name, 
 		CreatedBy:    creator,
 	}
 	if err := database.Create(&channel).Error; err != nil {
-		return channel, http.StatusInternalServerError, errors.New("Failed to create chat channel")
+		return channel, http.StatusInternalServerError, errors.New("failed to create chat channel")
 	}
 	return channel, http.StatusOK, nil
 }

@@ -67,7 +67,6 @@ var initialSchemaIndexes = []struct{ sql, label string }{
 	{"CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)", "idx_tasks_status"},
 	{"CREATE INDEX IF NOT EXISTS idx_alerts_status_severity ON alerts(status, severity)", "idx_alerts_status_severity"},
 	{"CREATE INDEX IF NOT EXISTS idx_alerts_rule_source ON alerts(rule_id, source, status)", "idx_alerts_rule_source"},
-	{"CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel)", "idx_chat_messages_channel"},
 	{"CREATE INDEX IF NOT EXISTS idx_opsec_history_agent_created ON opsec_history(agent_id, created_at)", "idx_opsec_history_agent_created"},
 	{"CREATE INDEX IF NOT EXISTS idx_network_hosts_agent_ip ON network_hosts(agent_id, ip)", "idx_network_hosts_agent_ip"},
 	{"CREATE INDEX IF NOT EXISTS idx_phishing_events_type_created ON phishing_events(event_type, created_at)", "idx_phishing_events_type_created"},
@@ -1182,8 +1181,8 @@ var indexMigrations = []*gormigrate.Migration{
 			// (effectiveness report).
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_build_logs_platform_created ON build_logs(platform, created_at DESC)", "idx_build_logs_platform_created")
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_build_logs_status_created ON build_logs(status, created_at DESC)", "idx_build_logs_status_created")
-			// Chat history is one ascending window per channel.
-			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_chat_messages_channel_created ON chat_messages(channel, created_at)", "idx_chat_messages_channel_created")
+			// Chat history is one descending keyset window per scoped channel.
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_chat_messages_channel_created ON chat_messages(channel_id, created_at DESC, id DESC)", "idx_chat_messages_channel_created")
 			// Session and API-key lists: both are per-user and order by
 			// created_at DESC; only user_id was indexed.
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_user_created ON user_sessions(user_id, created_at DESC)", "idx_user_sessions_user_created")
@@ -1199,7 +1198,6 @@ var indexMigrations = []*gormigrate.Migration{
 				"idx_token_entries_agent_created",
 				"idx_build_logs_platform_created",
 				"idx_build_logs_status_created",
-				"idx_chat_messages_channel_created",
 				"idx_user_sessions_user_created",
 				"idx_api_keys_user_created",
 			} {

@@ -289,16 +289,13 @@ func TestAgentChainGraphAndCRUD(t *testing.T) {
 }
 
 func TestAPISendChatMessageTooLong(t *testing.T) {
-	s := mustTenantServer(t)
-	seedMissingAPIAdmin(t, s)
-	c, w := missingAPICtx(http.MethodPost, "/api/chat/send",
-		`{"message":"`+strings.Repeat("x", MaxChatMessageBytes+1)+`"}`, nil)
-	s.handleAPISendChatMessage(c)
+	f := newChatTestFixtures(t)
+	w := f.send(t, "op1", 1, "general", strings.Repeat("x", MaxChatMessageBytes+1))
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "too long") {
 		t.Fatalf("oversize message = %d %s", w.Code, w.Body.String())
 	}
 	var count int64
-	s.db.Model(&db.ChatMessage{}).Count(&count)
+	f.s.db.Model(&db.ChatMessage{}).Count(&count)
 	if count != 0 {
 		t.Fatalf("oversize message was stored: %d", count)
 	}

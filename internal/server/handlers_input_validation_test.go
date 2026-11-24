@@ -3,7 +3,6 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -12,15 +11,9 @@ import (
 )
 
 func TestHandleAPISendChatMessage_SizeLimit(t *testing.T) {
-	s := &Server{db: testutil.SetupTestDB(t)}
-
+	f := newChatTestFixtures(t)
 	send := func(msg string) *httptest.ResponseRecorder {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request, _ = http.NewRequest(http.MethodPost, "/api/chat/send",
-			strings.NewReader(`{"message":`+strconv.Quote(msg)+`,"channel":"general"}`))
-		s.handleAPISendChatMessage(c)
-		return w
+		return f.send(t, "op1", 1, "general", msg)
 	}
 
 	if w := send(strings.Repeat("a", MaxChatMessageBytes)); w.Code != http.StatusOK {

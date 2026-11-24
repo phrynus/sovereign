@@ -87,7 +87,7 @@ func TestHandleBatchVerifySkipsSeparatorEntries(t *testing.T) {
 	if err := s.db.Create(&bad).Error; err != nil {
 		t.Fatal(err)
 	}
-	good := db.CredentialEntry{AgentID: id, Username: "bob", Domain: "corp.local", Password: "Spring2026!", TenantID: 1}
+	good := db.CredentialEntry{AgentID: id, Username: "bob", Domain: "corp.local", Password: "Spring2026!", Type: "cleartext", TenantID: 1}
 	if err := s.db.Create(&good).Error; err != nil {
 		t.Fatal(err)
 	}

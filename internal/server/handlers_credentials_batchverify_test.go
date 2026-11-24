@@ -21,7 +21,7 @@ func seedCredEntry(t *testing.T, s *Server, agentID, domain, username, password 
 	entry := db.CredentialEntry{
 		AgentID:  agentID,
 		Domain:   domain,
-		Username: username,
+		Type:     "cleartext",
 		Password: password,
 		TenantID: tenantID,
 	}

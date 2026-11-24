@@ -539,11 +539,9 @@ func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw 
 		// A referenced check knows its source row. Never fall back to
 		// plaintext matching here: that could confirm a different credential
 		// with the same password and would overwrite the row's own source TaskID.
-		result := "unknown"
+		result := status
 		if status == "valid" {
 			result = "ok"
-		} else {
-			result = status
 		}
 		_ = s.recordCredentialUsageOnce(task, "verify", result, fmt.Sprintf("%s@%s", strings.TrimSpace(r.User), cmdDomain))
 		if status == "valid" {
@@ -788,7 +786,7 @@ func credentialExpiryState(cred db.CredentialEntry, now time.Time) string {
 	if !cred.ExpiryKnown || cred.ExpiresAt.IsZero() || cred.ExpiresAt.Year() <= 1 {
 		return "unknown"
 	}
-	if !cred.ExpiresAt.After(now) {
+	if cred.ExpiresAt.Before(now) {
 		return "expired"
 	}
 	if !cred.ExpiresAt.After(now.Add(credentialExpiringWindow)) {

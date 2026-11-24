@@ -426,7 +426,7 @@ func (t *Task) AfterFind(_ *gorm.DB) error {
 	// a task may start as an inline task and later be re-issued from a vault
 	// reference, so Type is not a reliable signal here.
 	for _, field := range []*string{&t.CredentialParams, &t.ResolvedCommand, &t.ResolvedShell} {
-		decryptField(field)
+		_ = decryptField(field)
 	}
 	return nil
 }
@@ -918,7 +918,7 @@ func (CredentialUsage) TableName() string { return "credential_usages" }
 //   - used     — last action was a successful spray/lateral
 //   - stale    — expired or last action was a failure
 func CredentialLifecycle(entry CredentialEntry, latestUsage *CredentialUsage, now time.Time) string {
-	if entry.ExpiryKnown && !entry.ExpiresAt.IsZero() && !entry.ExpiresAt.After(now) {
+	if entry.ExpiryKnown && !entry.ExpiresAt.IsZero() && entry.ExpiresAt.Before(now) {
 		return "stale"
 	}
 	if latestUsage == nil {

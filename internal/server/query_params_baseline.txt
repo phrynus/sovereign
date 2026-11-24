@@ -3,13 +3,11 @@
 before
 browser
 campaign_id
-channel
 claimed_by
 confirmed
 domain
 encrypt
 error
-expiry
 filter
 force
 include_private
@@ -19,9 +17,7 @@ lifecycle
 listener_id
 lport
 mime
-path
 platform
-q
 quality
 range
 read

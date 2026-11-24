@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { phaseColor } from "@/lib/chart-palette";
 import { PageSpinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
+import { downloadBlob } from "@/lib/download";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
@@ -100,6 +102,7 @@ export default function AttackPage() {
   const [loading, setLoading] = useState(true);
   const [coverageError, setCoverageError] = useState<string | null>(null);
   const [expandedTactic, setExpandedTactic] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchCoverage = useCallback(async (agentId: string, signal?: AbortSignal) => {
     setCoverageError(null);
@@ -117,6 +120,23 @@ export default function AttackPage() {
       if (!signal?.aborted) setLoading(false);
     }
   }, [t]);
+
+  const exportNavigator = useCallback(async () => {
+    setExporting(true);
+    try {
+      const query = selectedAgent ? `?agent_id=${encodeURIComponent(selectedAgent)}` : "";
+      const json = await api.get<{ layer: Record<string, unknown> }>(paths.mitre.navigator + query);
+      downloadBlob(
+        new Blob([JSON.stringify(json.layer, null, 2)], { type: "application/json" }),
+        "sovereign-attack-layer.json",
+      );
+      toast.success(t("attack.export_navigator_done"));
+    } catch {
+      toast.error(t("attack.export_navigator_failed"));
+    } finally {
+      setExporting(false);
+    }
+  }, [selectedAgent, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -170,6 +190,15 @@ export default function AttackPage() {
               ))}
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void exportNavigator()}
+          disabled={exporting}
+          aria-label={t("attack.export_navigator")}
+        >
+          {t("attack.export_navigator")}
+        </Button>
       </>}>
 
       <Banner tone="warning" className="items-start">

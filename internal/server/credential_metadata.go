@@ -68,7 +68,10 @@ func parseCCacheV4Metadata(data []byte) (parsedCredentialMetadata, bool) {
 
 	// Only the first credential is inspected. Its client/server principals and
 	// key precede the four big-endian uint32 timestamps.
-	if !skipCCachePrincipal(reader) || !skipCCachePrincipal(reader) {
+	if !skipCCachePrincipal(reader) {
+		return parsedCredentialMetadata{}, false
+	}
+	if !skipCCachePrincipal(reader) {
 		return parsedCredentialMetadata{}, false
 	}
 	var keyType, encryptionType, keyLen uint16

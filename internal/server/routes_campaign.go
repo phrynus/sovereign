@@ -17,6 +17,7 @@ func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 		campaignsRead.GET("/mitre/timeline", s.handleMitreTimeline)
 		campaignsRead.GET("/mitre/phases", s.handleMitrePhases)
 		campaignsRead.GET("/api/mitre/heatmap", s.handleMitreHeatmap)
+		campaignsRead.GET("/api/mitre/navigator", s.handleMitreNavigator)
 		campaignsRead.GET("/attack/coverage", s.handleAttackCoverage)
 	}
 	campaignsWrite := auth.Group("/")

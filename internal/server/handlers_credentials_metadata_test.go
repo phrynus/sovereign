@@ -335,9 +335,9 @@ func TestHandleCredentialsPageExpiryStateAndFilter(t *testing.T) {
 	crypto.InitLootEncryption(testStorageKeyHex)
 	now := time.Now()
 	entries := []db.CredentialEntry{
-		{Username: "expired-user", Type: "cleartext", ExpiresAt: now.Add(-time.Hour)},
-		{Username: "expiring-user", Type: "cleartext", ExpiresAt: now.Add(24 * time.Hour)},
-		{Username: "valid-user", Type: "cleartext", ExpiresAt: now.Add(30 * 24 * time.Hour)},
+		{Username: "expired-user", Type: "cleartext", ExpiresAt: now.Add(-time.Hour), ExpiryKnown: true},
+		{Username: "expiring-user", Type: "cleartext", ExpiresAt: now.Add(24 * time.Hour), ExpiryKnown: true},
+		{Username: "valid-user", Type: "cleartext", ExpiresAt: now.Add(30 * 24 * time.Hour), ExpiryKnown: true},
 	}
 	if err := s.db.Create(&entries).Error; err != nil {
 		t.Fatalf("seed credentials: %v", err)

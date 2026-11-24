@@ -122,24 +122,6 @@ func (f *chatTestFixtures) send(t *testing.T, username string, tenant uint, slug
 	return w
 }
 
-func chatHistoryOf(t *testing.T, body []byte) []struct {
-	ID      uint   `json:"id"`
-	Message string `json:"message"`
-	Kind    string `json:"kind"`
-} {
-	t.Helper()
-	var response struct {
-		Messages []struct {
-			ID      uint   `json:"id"`
-			Message string `json:"message"`
-			Kind    string `json:"kind"`
-		} `json:"messages"`
-		NextBeforeID uint `json:"next_before_id"`
-	}
-	unmarshalData(t, body, &response)
-	return response.Messages
-}
-
 func TestChatTenantIsolationAndForgedFields(t *testing.T) {
 	f := newChatTestFixtures(t)
 	eng1, eng2 := f.engs[1], f.engs[2]
