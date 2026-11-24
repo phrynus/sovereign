@@ -2699,6 +2699,17 @@ paths:
                             type: boolean
                           anchor_recorded:
                             type: boolean
+  /tasks/specs:
+    get:
+      tags: [Tasks]
+      summary: Task specification catalog
+      description: All dispatchable task specs from the shared protocol registry, with parameters and approval flags.
+      operationId: getTaskSpecs
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Task specs
   /tasks:
     get:
       tags: [Tasks]

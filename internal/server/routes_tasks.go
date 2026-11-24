@@ -11,6 +11,8 @@ func (s *Server) registerTaskRoutes(auth *gin.RouterGroup) {
 	tasksRead.Use(middleware.RequirePermission(db.PermTasksRead))
 	{
 		tasksRead.GET("/tasks", s.handleTaskHistory)
+		// The shared protocol registry, for console discovery and automation.
+		tasksRead.GET("/api/tasks/specs", s.handleTaskSpecs)
 		tasksRead.GET("/tasks/export", s.handleExportTasks)
 		// What the download surface accepts, derived from the code that enforces it.
 		tasksRead.GET("/api/exports/capabilities", s.handleExportCapabilities)

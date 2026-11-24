@@ -1350,6 +1350,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/specs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Task specification catalog
+         * @description All dispatchable task specs from the shared protocol registry, with parameters and approval flags.
+         */
+        get: operations["getTaskSpecs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks": {
         parameters: {
             query?: never;
@@ -14609,6 +14629,24 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    getTaskSpecs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task specs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
