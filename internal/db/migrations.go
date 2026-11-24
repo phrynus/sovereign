@@ -74,6 +74,16 @@ var initialSchemaIndexes = []struct{ sql, label string }{
 	{"CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(\"user\", created_at)", "idx_audit_user_created"},
 }
 
+// backfillCredentialExpiryKnown runs after expiry_known exists. Older
+// installations predate the subtype column entirely; AutoMigrate adds it
+// later, so there is nothing to backfill on that upgrade path.
+func backfillCredentialExpiryKnown(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable("credential_entries") || !tx.Migrator().HasColumn("credential_entries", "subtype") {
+		return nil
+	}
+	return tx.Exec("UPDATE credential_entries SET expiry_known = ? WHERE subtype IN (?, ?) AND expires_at IS NOT NULL", true, "jwt", "ccache").Error
+}
+
 // schemaMigrations mutate tables/columns/data and run BEFORE AutoMigrate.
 var schemaMigrations = []*gormigrate.Migration{
 	{
@@ -763,7 +773,7 @@ var schemaMigrations = []*gormigrate.Migration{
 			if !tx.Migrator().HasColumn("credential_entries", "expiry_known") {
 				return nil
 			}
-			return tx.Exec("UPDATE credential_entries SET expiry_known = ? WHERE subtype IN (?, ?) AND expires_at IS NOT NULL", true, "jwt", "ccache").Error
+			return backfillCredentialExpiryKnown(tx)
 		},
 		Rollback: func(tx *gorm.DB) error {
 			return nil
