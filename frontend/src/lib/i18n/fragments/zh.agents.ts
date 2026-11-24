@@ -84,19 +84,23 @@ export const zhAgents: Record<string, string> = {
   "agents.config_sleep_seconds": "休眠间隔 (秒)",
   "agents.config_user_agent": "用户代理",
   "agents.confirm_batch_delete_btn": "全部删除",
-  "agents.confirm_batch_delete_msg": "删除 {count} 个选中的 Beacon 及其任务历史？",
+  "agents.confirm_batch_delete_msg":
+    "删除 {count} 个选中的 Beacon 及其任务历史？",
   "agents.confirm_batch_delete_title": "批量删除",
   "agents.confirm_bulk_kill_btn": "全部终止",
-  "agents.confirm_bulk_kill_msg": "向 {count} 个选中的 Beacon 发送终止命令？它们将在下次回连时退出。",
+  "agents.confirm_bulk_kill_msg":
+    "向 {count} 个选中的 Beacon 发送终止命令？它们将在下次回连时退出。",
   "agents.confirm_bulk_kill_title": "批量终止",
   "agents.confirm_bulk_uninstall_btn": "全部卸载",
-  "agents.confirm_bulk_uninstall_msg": "永久卸载 {count} 个选中的 Beacon？这将从每台主机中移除 Beacon。",
+  "agents.confirm_bulk_uninstall_msg":
+    "永久卸载 {count} 个选中的 Beacon？这将从每台主机中移除 Beacon。",
   "agents.confirm_bulk_uninstall_title": "批量卸载",
   "agents.confirm_delete_btn": "删除",
   "agents.confirm_delete_msg": "永久删除 {name} 及其所有任务历史？",
   "agents.confirm_delete_title": "删除 Beacon",
   "agents.confirm_kill_btn": "断开",
-  "agents.confirm_kill_msg": "向 {name} 发送终止命令？Beacon 将在下次回连时退出。",
+  "agents.confirm_kill_msg":
+    "向 {name} 发送终止命令？Beacon 将在下次回连时退出。",
   "agents.confirm_kill_title": "断开 Beacon",
   "agents.confirm_screenshot_btn": "截取",
   "agents.confirm_screenshot_msg": "从 {count} 个 Beacon 截取屏幕？",
@@ -106,12 +110,14 @@ export const zhAgents: Record<string, string> = {
   "agents.context_open_details": "打开详情",
   "agents.copy_hostname": "复制主机名",
   "agents.copy_id": "复制 Beacon ID",
-  "agents.detail_process_snapshot_hint": "最近一次已完成的进程快照——可点击“采集”获取最新数据。",
+  "agents.detail_process_snapshot_hint":
+    "最近一次已完成的进程快照——可点击“采集”获取最新数据。",
   "agents.dock_diff_prev": "对比上次",
   "agents.dock_diff_same": "没有行变化",
   "agents.dock_diff_summary": "+{added} / −{removed}，相对 #{id}",
   "agents.dock_diff_unique": "按唯一行对比 — 输出太长，不做逐行顺序 diff",
-  "agents.dock_files_transfer_hint": "可拉取文件或推送到此目录 — 预览/删除仍在文件页",
+  "agents.dock_files_transfer_hint":
+    "可拉取文件或推送到此目录 — 预览/删除仍在文件页",
   "agents.dock_files_empty": "目录为空或列举失败",
   "agents.dock_files_path": "路径",
   "agents.dock_files_up": "上级目录",
@@ -146,6 +152,8 @@ export const zhAgents: Record<string, string> = {
   "agents.dock_cmd_sleep": "休眠",
   "agents.dock_cmd_sleep_invalid": "休眠需要间隔 ≥1、抖动 0–100",
   "agents.dock_cmd_socks": "SOCKS",
+  "agents.dock_keep_awake": "保持唤醒",
+  "agents.dock_keep_awake_invalid": "秒数必须是 0（释放）或 1-86400",
   "agents.dock_shot_alt": "最近截屏",
   "agents.dock_shot_failed": "无法加载截屏",
   "agents.dock_shot_stale": "截屏刷新失败。",
@@ -155,7 +163,8 @@ export const zhAgents: Record<string, string> = {
   "agents.dock_socks_stop": "停止 SOCKS",
   "agents.dock_socks_stopped": "SOCKS 中继已停止",
   "agents.dock_socks_unknown": "SOCKS ?",
-  "agents.dock_socks_status_unknown": "无法读取中继状态，因此已禁用启动/停止。中继可能仍在运行。",
+  "agents.dock_socks_status_unknown":
+    "无法读取中继状态，因此已禁用启动/停止。中继可能仍在运行。",
   "agents.dock_no_tasks": "暂无最近任务",
   "agents.dock_open_details": "完整详情",
   "agents.dock_tab_shell": "终端",
@@ -184,14 +193,20 @@ export const zhAgents: Record<string, string> = {
   "agents.detail_transport_title": "\u4f20\u8f93\u8fc1\u79fb",
   "agents.detail_transport_select": "\u76ee\u6807\u4f20\u8f93",
   "agents.detail_transport_url": "\u53ef\u9009 C2 \u5730\u5740",
-  "agents.detail_transport_url_hint": "tcp://host:4444\uff08\u7559\u7a7a\u5219\u4f7f\u7528\u5df2\u914d\u7f6e\u7684\u7aef\u70b9\uff09",
+  "agents.detail_transport_url_hint":
+    "tcp://host:4444\uff08\u7559\u7a7a\u5219\u4f7f\u7528\u5df2\u914d\u7f6e\u7684\u7aef\u70b9\uff09",
   "agents.detail_transport_queue": "\u961f\u5217\u8fc1\u79fb",
   "agents.detail_transport_busy": "\u961f\u5217\u4e2d\u2026",
-  "agents.detail_transport_queued": "\u5df2\u961f\u5217 \u2192 {target}\uff08\u4e0b\u4e00\u6b21\u5fc3\u8df3\u751f\u6548\uff0c5 \u5206\u949f\u540e\u8fc7\u671f\uff09",
-  "agents.detail_transport_offline": "\u4ee3\u7406\u79bb\u7ebf\u2014\u547d\u4ee4\u4f1a\u8fc7\u671f",
-  "agents.detail_transport_err_unsupported": "\u4e0d\u652f\u6301\u7684\u4f20\u8f93",
-  "agents.detail_transport_err_invalid": "\u8bf7\u8f93\u5165\u542b\u4e3b\u673a\u7684\u7edd\u5bf9 URL",
-  "agents.detail_transport_err_mismatch": "\u8be5 URL \u7684\u534f\u8bae\u4e0e\u6b64\u4f20\u8f93\u4e0d\u5339\u914d",
+  "agents.detail_transport_queued":
+    "\u5df2\u961f\u5217 \u2192 {target}\uff08\u4e0b\u4e00\u6b21\u5fc3\u8df3\u751f\u6548\uff0c5 \u5206\u949f\u540e\u8fc7\u671f\uff09",
+  "agents.detail_transport_offline":
+    "\u4ee3\u7406\u79bb\u7ebf\u2014\u547d\u4ee4\u4f1a\u8fc7\u671f",
+  "agents.detail_transport_err_unsupported":
+    "\u4e0d\u652f\u6301\u7684\u4f20\u8f93",
+  "agents.detail_transport_err_invalid":
+    "\u8bf7\u8f93\u5165\u542b\u4e3b\u673a\u7684\u7edd\u5bf9 URL",
+  "agents.detail_transport_err_mismatch":
+    "\u8be5 URL \u7684\u534f\u8bae\u4e0e\u6b64\u4f20\u8f93\u4e0d\u5339\u914d",
   "agents.detail_diagnose": "一键诊断",
   "agents.detail_diagnosing": "诊断中...",
   "agents.detail_diagnose_queued": "已下发诊断（{count} 个任务）",
@@ -204,11 +219,13 @@ export const zhAgents: Record<string, string> = {
   "agents.detail_tab_evasion": "规避",
   "agents.detail_tab_collect": "收集",
   "agents.detail_tab_timeline": "时间线",
-  "agents.detail_c_implant_notice": "C 版 Beacon 支持 shell / 进程 / 文件（含 mkdir/rename/delete/chmod）/ 主机信息 / 网络连接 / 用户 / 杀软——截图、键盘记录、注册表等需 Go 版 Beacon。",
+  "agents.detail_c_implant_notice":
+    "C 版 Beacon 支持 shell / 进程 / 文件（含 mkdir/rename/delete/chmod）/ 主机信息 / 网络连接 / 用户 / 杀软——截图、键盘记录、注册表等需 Go 版 Beacon。",
   "agents.detail_kill_date_countdown": "距自毁还有 {days} 天 — 到期将自动终止",
   "agents.detail_kill_date_expired": "自毁日期已过 — Beacon 应已终止",
   "agents.detail_kill_date_cleared": "终止日期已清除",
-  "agents.detail_kill_date_msg": "Beacon 将在此日期自动终止。日期过后需要重启。",
+  "agents.detail_kill_date_msg":
+    "Beacon 将在此日期自动终止。日期过后需要重启。",
   "agents.detail_kill_date_set": "终止日期已设置",
   "agents.detail_kill_date_set_failed": "设置终止日期失败",
   "agents.detail_kill_failed": "终止失败",
@@ -262,7 +279,8 @@ export const zhAgents: Record<string, string> = {
   "agents.evasion.protect_process": "保护进程",
   "agents.evasion.unhook_ntdll": "Unhook NTDLL",
   "agents.evasion_confirm": "再次点击确认执行",
-  "agents.evasion_confirm_msg": "确定在该 Beacon 上执行 {technique}？此操作可能不可逆。",
+  "agents.evasion_confirm_msg":
+    "确定在该 Beacon 上执行 {technique}？此操作可能不可逆。",
   "agents.evasion_desc": "运行防御绕过技术以绕过安全监控",
   "agents.evasion_execute": "执行",
   "agents.evasion_executing": "运行中...",
@@ -271,7 +289,8 @@ export const zhAgents: Record<string, string> = {
   "agents.evasion_sent": "{technique} 绕过技术已发送",
   "agents.evasion_title": "防御绕过技术",
   "agents.inject_title": "Shellcode 注入",
-  "agents.inject_desc": "向目标进程下发 shellcode 注入任务。shellcode 在浏览器内编码，不落操作员磁盘。",
+  "agents.inject_desc":
+    "向目标进程下发 shellcode 注入任务。shellcode 在浏览器内编码，不落操作员磁盘。",
   "agents.inject_pid": "目标 PID",
   "agents.inject_technique": "注入技术",
   "agents.inject_select_tech": "选择注入技术...",
@@ -284,7 +303,8 @@ export const zhAgents: Record<string, string> = {
   "agents.inject_failed": "注入任务下发失败",
   "agents.inject_sending": "下发中...",
   "agents.inject_execute": "注入",
-  "agents.inject_confirm_msg": "将向目标进程注入 shellcode，可能导致进程崩溃或触发 EDR。确认执行？",
+  "agents.inject_confirm_msg":
+    "将向目标进程注入 shellcode，可能导致进程崩溃或触发 EDR。确认执行？",
   "agents.timeline_title": "主机时间线",
   "agents.timeline_empty": "该 Beacon 尚无活动记录。",
   "agents.timeline_stale": "活动时间线刷新失败；显示上次已知内容。",
@@ -304,7 +324,8 @@ export const zhAgents: Record<string, string> = {
   "agents.failed_suffix": "失败",
   "agents.files.go_up": "返回上级",
   "agents.files.select_upload": "选择要上传的文件",
-  "agents.files_channel_hint": "上传是把文件推到 Beacon。拉取是等下次回连后把远端文件回传到本控制台。",
+  "agents.files_channel_hint":
+    "上传是把文件推到 Beacon。拉取是等下次回连后把远端文件回传到本控制台。",
   "agents.files_clear": "清除",
   "agents.files_col_modified": "修改时间",
   "agents.files_col_name": "名称",
@@ -314,7 +335,8 @@ export const zhAgents: Record<string, string> = {
   "agents.files_delete_queued": "已排队删除 {filename} — 等下次回连再确认",
   "agents.files_dest_file": "目标文件",
   "agents.files_detect_os_failed": "检测操作系统失败",
-  "agents.files_detect_os_unknown": "该 Beacon 未上报可识别的操作系统，已禁用文件浏览器 — 否则会错误地向其发送 Windows 路径和分隔符。",
+  "agents.files_detect_os_unknown":
+    "该 Beacon 未上报可识别的操作系统，已禁用文件浏览器 — 否则会错误地向其发送 Windows 路径和分隔符。",
   "agents.files_download": "下载",
   "agents.files_download_content": "下载内容",
   "agents.files_drives": "磁盘",
@@ -328,17 +350,21 @@ export const zhAgents: Record<string, string> = {
   "agents.files_find_placeholder": "例如 *.txt, *.doc, secret*",
   "agents.files_found_results": "找到 {n} 个结果",
   "agents.files_hunt": "狩猎",
-  "agents.files_hunt_hint": "从当前目录做有上限的递归列出（不是整盘回传）。可选下载小文件。",
+  "agents.files_hunt_hint":
+    "从当前目录做有上限的递归列出（不是整盘回传）。可选下载小文件。",
   "agents.files_tab_browse": "浏览",
   "agents.files_tab_media": "媒体",
   "agents.files_tab_scan": "敏感数据",
   "agents.files_scan_title": "敏感数据扫描",
-  "agents.files_scan_hint": "在当前文件夹的有限文本文件内检测敏感数据并显示原始命中值。不做 OCR 或文档解析。结果可能包含密码和个人信息；服务端仅加密存储，并在 AI、回调和导出中自动脱敏。",
+  "agents.files_scan_hint":
+    "在当前文件夹的有限文本文件内检测敏感数据并显示原始命中值。不做 OCR 或文档解析。结果可能包含密码和个人信息；服务端仅加密存储，并在 AI、回调和导出中自动脱敏。",
   "agents.files_scan_root": "根目录",
-  "agents.files_scan_raw_warning": "此视图显示原始值。请勿将其粘贴到工单、AI 对话、Webhook 或外部系统。",
+  "agents.files_scan_raw_warning":
+    "此视图显示原始值。请勿将其粘贴到工单、AI 对话、Webhook 或外部系统。",
   "agents.files_scan_rules": "检测规则",
   "agents.files_scan_default_badge": "默认",
-  "agents.files_scan_default_rules_hint": "默认启用邮箱、电话和银行卡；其他检测规则需手动勾选。",
+  "agents.files_scan_default_rules_hint":
+    "默认启用邮箱、电话和银行卡；其他检测规则需手动勾选。",
   "agents.files_scan_pick_rule": "请至少选择一条检测规则。",
   "agents.files_scan_pattern": "文件名通配",
   "agents.files_scan_max_depth": "最大深度",
@@ -353,15 +379,19 @@ export const zhAgents: Record<string, string> = {
   "agents.files_scan_bad_ack": "服务器未能提交敏感扫描",
   "agents.files_scan_failed": "敏感扫描失败",
   "agents.files_scan_bad_result": "Beacon 返回了无法解析的扫描结果",
-  "agents.files_scan_ready": "选择检测规则并扫描此目录。仅读取有限大小的文本文件；二进制和容器格式会被跳过。",
+  "agents.files_scan_ready":
+    "选择检测规则并扫描此目录。仅读取有限大小的文本文件；二进制和容器格式会被跳过。",
   "agents.files_scan_found": "{n} 条命中",
   "agents.files_scan_summary": "已扫描 {files} 个文件，共 {bytes} 文本",
   "agents.files_scan_skipped": "跳过 {binary} 个二进制、{large} 个超大文件",
   "agents.files_scan_errors": "{n} 个路径无法读取",
   "agents.files_scan_truncated": "结果已截断",
-  "agents.files_scan_trunc_max_findings": "已达到命中上限，请减少检测规则或缩小根目录。",
-  "agents.files_scan_trunc_max_files": "已达到文件数上限，请缩小根目录或通配范围。",
-  "agents.files_scan_trunc_max_total_bytes": "已达到总字节预算，请缩小根目录或单文件上限。",
+  "agents.files_scan_trunc_max_findings":
+    "已达到命中上限，请减少检测规则或缩小根目录。",
+  "agents.files_scan_trunc_max_files":
+    "已达到文件数上限，请缩小根目录或通配范围。",
+  "agents.files_scan_trunc_max_total_bytes":
+    "已达到总字节预算，请缩小根目录或单文件上限。",
   "agents.files_scan_trunc_max_bytes": "已达到结果大小上限，请减少检测规则。",
   "agents.files_scan_trunc_timeout": "已达到扫描时间上限，请缩小根目录。",
   "agents.files_scan_trunc_cancelled": "扫描已取消。",
@@ -388,7 +418,8 @@ export const zhAgents: Record<string, string> = {
   "agents.files_scan_rule_bip39": "BIP-39 助记词",
   "agents.files_scan_rule_tron_addr": "波场钱包地址",
   "agents.files_media_title": "媒体与文件情报",
-  "agents.files_media_hint": "按元数据搜索此目录：名称、路径、分类、大小和时间戳。搜索不会读取文件内容。仅对已显示的图片/视频命中生成缩略图；不做 OCR。",
+  "agents.files_media_hint":
+    "按元数据搜索此目录：名称、路径、分类、大小和时间戳。搜索不会读取文件内容。仅对已显示的图片/视频命中生成缩略图；不做 OCR。",
   "agents.files_media_root": "根目录",
   "agents.files_media_all": "全部",
   "agents.files_media_image": "图片",
@@ -412,15 +443,18 @@ export const zhAgents: Record<string, string> = {
   "agents.files_media_search_failed": "媒体搜索失败",
   "agents.files_media_bad_ack": "服务器未能提交媒体搜索",
   "agents.files_media_bad_result": "Beacon 返回了无法解析的搜索结果",
-  "agents.files_media_ready": "选择分类并搜索此目录。先返回元数据；仅对图片/视频命中加载缩略图。",
+  "agents.files_media_ready":
+    "选择分类并搜索此目录。先返回元数据；仅对图片/视频命中加载缩略图。",
   "agents.files_media_empty": "该目录下没有匹配文件。",
   "agents.files_media_found": "共 {n} 个匹配文件",
   "agents.files_media_scanned": "已扫描 {n} 个文件",
   "agents.files_media_errors": "{n} 个路径无法读取",
   "agents.files_media_truncated": "结果已截断",
-  "agents.files_media_trunc_max_results": "已达到结果上限，请缩小筛选范围或根目录。",
+  "agents.files_media_trunc_max_results":
+    "已达到结果上限，请缩小筛选范围或根目录。",
   "agents.files_media_trunc_max_bytes": "已达到结果大小上限，请缩小筛选范围。",
-  "agents.files_media_trunc_timeout": "已达到搜索时间上限，请缩小根目录或筛选范围。",
+  "agents.files_media_trunc_timeout":
+    "已达到搜索时间上限，请缩小根目录或筛选范围。",
   "agents.files_media_trunc_cancelled": "搜索已取消。",
   "agents.files_media_trunc_unknown": "部分结果已省略。",
   "agents.files_media_col_name": "文件",
@@ -437,7 +471,8 @@ export const zhAgents: Record<string, string> = {
   "agents.files_media_play_preparing": "正在团队服务器上准备 {name}...",
   "agents.files_media_play_failed": "无法准备播放",
   "agents.files_media_play_too_large": "播放仅支持不超过 {max} 的文件。",
-  "agents.files_media_play_hint": "从团队服务器缓存通过 HTTP Range 流式播放；Beacon 只需上传一次文件。缓存媒体会按服务器清理策略删除。",
+  "agents.files_media_play_hint":
+    "从团队服务器缓存通过 HTTP Range 流式播放；Beacon 只需上传一次文件。缓存媒体会按服务器清理策略删除。",
   "agents.files_hunt_download": "下载不超过大小上限的匹配文件",
   "agents.files_usb": "USB",
   "agents.files_usb_output": "可移动磁盘 / 卷列表",
@@ -495,7 +530,8 @@ export const zhAgents: Record<string, string> = {
   "agents.files_quick_temp": "临时",
   "agents.files_quick_var": "Var",
   "agents.files_read_failed": "读取任务失败",
-  "agents.files_read_waiting": "等待 Beacon 读取文件 — 不会把排队回执当成文件内容",
+  "agents.files_read_waiting":
+    "等待 Beacon 读取文件 — 不会把排队回执当成文件内容",
   "agents.files_refresh": "刷新",
   "agents.files_search_files": "搜索文件",
   "agents.files_select_file": "选择文件",
@@ -559,7 +595,8 @@ export const zhAgents: Record<string, string> = {
   "agents.wechat_collect_failed": "微信聊天记录采集失败",
   "agents.wechat_collected": "已采集 {n} 条微信消息",
   "agents.wechat_empty": "尚未采集微信聊天记录",
-  "agents.wechat_empty_hint": "输入联系人关键词并采集，结果将在下次心跳后显示。",
+  "agents.wechat_empty_hint":
+    "输入联系人关键词并采集，结果将在下次心跳后显示。",
   "agents.wechat_search_placeholder": "按联系人、发送方或内容过滤…",
   "agents.wechat_no_match": "没有匹配的消息",
   "agents.wechat_col_time": "时间",
@@ -597,8 +634,10 @@ export const zhAgents: Record<string, string> = {
   "agents.keylog_failed": "键盘记录操作失败",
   "agents.keylog_empty": "（暂无按键记录）",
   "agents.keylog_empty_title": "尚未捕获按键",
-  "agents.keylog_empty_hint": "先启动键盘记录，再导出拉取缓存——导出会清空缓存。",
-  "agents.keylog_drain_hint": "每次导出都会清空 Beacon 缓存；要新按键请再次导出。",
+  "agents.keylog_empty_hint":
+    "先启动键盘记录，再导出拉取缓存——导出会清空缓存。",
+  "agents.keylog_drain_hint":
+    "每次导出都会清空 Beacon 缓存；要新按键请再次导出。",
   "agents.clipboard_title": "剪贴板",
   "agents.clipboard_get": "读取",
   "agents.clipboard_getting": "读取中…",
@@ -618,14 +657,16 @@ export const zhAgents: Record<string, string> = {
   "agents.wallpaper_done": "壁纸任务已完成",
   "agents.wallpaper_failed": "壁纸更换失败",
   "agents.wallpaper_empty": "尚未更换壁纸",
-  "agents.wallpaper_empty_hint": "输入图片 URL 或目标主机本地路径，选择样式后点击更换。",
+  "agents.wallpaper_empty_hint":
+    "输入图片 URL 或目标主机本地路径，选择样式后点击更换。",
   "agents.media_title": "摄像头 / 麦克风",
   "agents.media_device": "设备提示（可选）",
   "agents.media_device_ph": "留空 = 系统默认摄像头",
   "agents.media_seconds": "秒数",
   "agents.media_webcam": "拍照",
   "agents.media_mic": "录音",
-  "agents.media_hint": "经 ffmpeg 抓单帧（需摄像头）；音频录 WAV，1–300 秒。媒体仅保留在本次会话。",
+  "agents.media_hint":
+    "经 ffmpeg 抓单帧（需摄像头）；音频录 WAV，1–300 秒。媒体仅保留在本次会话。",
   "agents.media_captured": "媒体已捕获",
   "agents.media_failed": "捕获失败（缺 ffmpeg / 设备？）",
   "agents.media_empty": "捕获无数据返回",
@@ -658,7 +699,8 @@ export const zhAgents: Record<string, string> = {
   "agents.proc_action_queued": "任务 {action} 已下发到 PID {pid}",
   "agents.proc_action_failed": "进程操作失败",
   "agents.proc_batch_kill_confirm": "结束选中的 {count} 个进程？PID：{pids}",
-  "agents.proc_batch_kill_partial": "{queued} 个结束任务已下发，{failed} 个失败",
+  "agents.proc_batch_kill_partial":
+    "{queued} 个结束任务已下发，{failed} 个失败",
   "agents.proc_batch_kill_queued": "{count} 个进程结束任务已下发",
   "agents.proc_clear_selection": "清除选择",
   "agents.proc_col_process": "进程",
@@ -718,7 +760,8 @@ export const zhAgents: Record<string, string> = {
   "agents.trigger_stop": "停止",
   "agents.trigger_watching": "监视中：{match}",
   "agents.trigger_empty_title": "未设置触发器",
-  "agents.trigger_empty_hint": "在上方设置标题关键字——匹配的前台窗口会自动截图到画廊。",
+  "agents.trigger_empty_hint":
+    "在上方设置标题关键字——匹配的前台窗口会自动截图到画廊。",
   "agents.window_title": "窗口管理",
   "agents.window_list": "列出",
   "agents.window_close": "关闭",
@@ -738,7 +781,8 @@ export const zhAgents: Record<string, string> = {
   "agents.window_truncated": "仅显示前 500 条（共 {n} 条），请用过滤缩小范围",
   "agents.registry_title": "注册表编辑器",
   "agents.registry_key": "键路径",
-  "agents.registry_key_ph": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+  "agents.registry_key_ph":
+    "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
   "agents.registry_key_required": "先输入注册表键路径",
   "agents.registry_value": "值名称（写入用）",
   "agents.registry_value_ph": "例如 Updater",
@@ -755,7 +799,8 @@ export const zhAgents: Record<string, string> = {
   "agents.registry_failed": "注册表操作失败",
   "agents.registry_empty": "（空结果）",
   "agents.registry_empty_title": "尚未读取注册表",
-  "agents.registry_empty_hint": "在上方输入键路径并读取——结果将在下次心跳后显示。",
+  "agents.registry_empty_hint":
+    "在上方输入键路径并读取——结果将在下次心跳后显示。",
   "agents.header_privesc": "提权检查",
   "agents.header_processes": "进程列表",
   "agents.header_screenshot": "截图",
@@ -783,7 +828,8 @@ export const zhAgents: Record<string, string> = {
   "agents.macos": "macOS",
   "agents.migrate": "迁移",
   "agents.migrate_agent": "迁移 Beacon",
-  "agents.migrate_msg": "将 Beacon 复制到新位置并在全新的进程上下文中重新启动。它会短暂离线，并以相同 ID 重新回连。",
+  "agents.migrate_msg":
+    "将 Beacon 复制到新位置并在全新的进程上下文中重新启动。它会短暂离线，并以相同 ID 重新回连。",
   "agents.migrate_path_label": "目标路径",
   "agents.migrate_path_placeholder": "留空则使用自动临时路径",
   "agents.n_selected": "已选 {n} 个",
@@ -809,7 +855,8 @@ export const zhAgents: Record<string, string> = {
   "agents.persistence_com_hijack": "COM 劫持",
   "agents.persistence_detecting": "正在等待 Beacon 上报持久化状态…",
   "agents.persistence_dll_hijack": "DLL 搜索顺序劫持",
-  "agents.persistence_honesty_desc": "安装只排队 persistence_add 任务。注册表/启动项/服务/登录脚本是加固的 Windows 路径；WMI/IFEO 是脚本化；COM、TypeLib 与 DLL 搜索顺序劫持是实验性。排队不等于已确认驻留。",
+  "agents.persistence_honesty_desc":
+    "安装只排队 persistence_add 任务。注册表/启动项/服务/登录脚本是加固的 Windows 路径；WMI/IFEO 是脚本化；COM、TypeLib 与 DLL 搜索顺序劫持是实验性。排队不等于已确认驻留。",
   "agents.persistence_honesty_title": "排队驻留，不是已确认立足点",
   "agents.persistence_ifeo": "映像劫持（IFEO）",
   "agents.persistence_install": "安装",
@@ -819,7 +866,8 @@ export const zhAgents: Record<string, string> = {
   "agents.persistence_list_success": "持久化列表已加载",
   "agents.persistence_load_failed": "加载持久化状态失败",
   "agents.persistence_logon_script": "登录脚本（UserInitMprLogonScript）",
-  "agents.persistence_no_methods": "尚未安装持久化方法。请使用左侧按钮安装持久化。",
+  "agents.persistence_no_methods":
+    "尚未安装持久化方法。请使用左侧按钮安装持久化。",
   "agents.persistence_not_found_desc": "请求的 Beacon 不存在或已被移除。",
   "agents.persistence_not_found_title": "Beacon 未找到",
   "agents.persistence_refresh_list": "刷新列表",
@@ -837,16 +885,20 @@ export const zhAgents: Record<string, string> = {
   "agents.rdp_capture_failed": "捕获画面失败",
   "agents.rdp_click_move_active": "点击 + 移动中",
   "agents.rdp_audio": "\u97f3\u9891",
-  "agents.rdp_audio_device": "\u91c7\u96c6\u8bbe\u5907\uff08\u540d\u79f0\u7531\u76ee\u6807\u4e0a\u62a5\uff09",
+  "agents.rdp_audio_device":
+    "\u91c7\u96c6\u8bbe\u5907\uff08\u540d\u79f0\u7531\u76ee\u6807\u4e0a\u62a5\uff09",
   "agents.rdp_audio_mic": "\u9ea6\u514b\u98ce",
-  "agents.rdp_audio_refresh": "\u4ece\u76ee\u6807\u5237\u65b0\u8bbe\u5907\u5217\u8868",
+  "agents.rdp_audio_refresh":
+    "\u4ece\u76ee\u6807\u5237\u65b0\u8bbe\u5907\u5217\u8868",
   "agents.rdp_audio_quality": "\u97f3\u8d28",
   "agents.rdp_audio_quality_voice": "\u8bed\u97f3\uff0824 kbps\uff09",
   "agents.rdp_audio_quality_standard": "\u6807\u51c6\uff0832 kbps\uff09",
-  "agents.rdp_audio_quality_high": "\u9ad8\u97f3\u8d28\uff0864 kbps\uff0c\u97f3\u4e50\uff09",
+  "agents.rdp_audio_quality_high":
+    "\u9ad8\u97f3\u8d28\uff0864 kbps\uff0c\u97f3\u4e50\uff09",
   "agents.rdp_audio_source": "\u97f3\u9891\u6765\u6e90",
   "agents.rdp_audio_speaker": "\u626c\u58f0\u5668\uff08\u56de\u73af\uff09",
-  "agents.rdp_audio_hint": "\u5728\u540c\u4e00\u4f1a\u8bdd\u5185\u8f6c\u53d1\u76ee\u6807\u7684\u9ea6\u514b\u98ce",
+  "agents.rdp_audio_hint":
+    "\u5728\u540c\u4e00\u4f1a\u8bdd\u5185\u8f6c\u53d1\u76ee\u6807\u7684\u9ea6\u514b\u98ce",
   "agents.rdp_audio_mute": "\u9759\u97f3",
   "agents.rdp_audio_start": "\u5f00\u59cb\u97f3\u9891",
   "agents.rdp_audio_stop": "\u505c\u6b62\u97f3\u9891",
@@ -854,8 +906,10 @@ export const zhAgents: Record<string, string> = {
   "agents.rdp_audio_volume": "\u97f3\u91cf",
   "agents.rdp_click_to_interact": "点击交互",
   "agents.rdp_clipboard": "\u526a\u8d34\u677f",
-  "agents.rdp_clipboard_copy": "\u628a\u76ee\u6807\u526a\u8d34\u677f\u590d\u5236\u5230\u672c\u5730",
-  "agents.rdp_clipboard_denied": "\u6d4f\u89c8\u5668\u62d2\u7edd\u4e86\u526a\u8d34\u677f\u8bbf\u95ee\uff08\u9700\u8981 HTTPS \u6216\u6388\u6743\uff09\uff0c\u8bf7\u4f7f\u7528\u4e0b\u65b9\u8f93\u5165\u6846",
+  "agents.rdp_clipboard_copy":
+    "\u628a\u76ee\u6807\u526a\u8d34\u677f\u590d\u5236\u5230\u672c\u5730",
+  "agents.rdp_clipboard_denied":
+    "\u6d4f\u89c8\u5668\u62d2\u7edd\u4e86\u526a\u8d34\u677f\u8bbf\u95ee\uff08\u9700\u8981 HTTPS \u6216\u6388\u6743\uff09\uff0c\u8bf7\u4f7f\u7528\u4e0b\u65b9\u8f93\u5165\u6846",
   "agents.rdp_clipboard_empty": "\u76ee\u6807\u526a\u8d34\u677f\u4e3a\u7a7a",
   "agents.rdp_clipboard_failed": "\u526a\u8d34\u677f\u64cd\u4f5c\u5931\u8d25",
   "agents.rdp_clipboard_from_operator": "\u4f60\u53d1\u9001\u7684",
@@ -863,10 +917,14 @@ export const zhAgents: Record<string, string> = {
   "agents.rdp_clipboard_history": "\u526a\u8d34\u677f\u5386\u53f2",
   "agents.rdp_clipboard_history_empty": "\u6682\u65e0\u8bb0\u5f55",
   "agents.rdp_clipboard_load": "\u8f7d\u5165",
-  "agents.rdp_clipboard_manual": "\u5728\u6b64\u8f93\u5165\u6216\u7c98\u8d34\u6587\u672c\u53d1\u9001\u5230\u76ee\u6807",
-  "agents.rdp_clipboard_paste": "\u628a\u672c\u5730\u526a\u8d34\u677f\u53d1\u9001\u5230\u76ee\u6807",
-  "agents.rdp_clipboard_read": "\u7acb\u5373\u8bfb\u53d6\u76ee\u6807\u526a\u8d34\u677f",
-  "agents.rdp_clipboard_send": "\u628a\u8fd9\u6bb5\u6587\u672c\u53d1\u9001\u5230\u76ee\u6807\u526a\u8d34\u677f",
+  "agents.rdp_clipboard_manual":
+    "\u5728\u6b64\u8f93\u5165\u6216\u7c98\u8d34\u6587\u672c\u53d1\u9001\u5230\u76ee\u6807",
+  "agents.rdp_clipboard_paste":
+    "\u628a\u672c\u5730\u526a\u8d34\u677f\u53d1\u9001\u5230\u76ee\u6807",
+  "agents.rdp_clipboard_read":
+    "\u7acb\u5373\u8bfb\u53d6\u76ee\u6807\u526a\u8d34\u677f",
+  "agents.rdp_clipboard_send":
+    "\u628a\u8fd9\u6bb5\u6587\u672c\u53d1\u9001\u5230\u76ee\u6807\u526a\u8d34\u677f",
   "agents.rdp_clipboard_truncated": "\u5df2\u622a\u65ad\u5230 64 KiB",
   "agents.rdp_connected": "已连接",
   "agents.rdp_connection": "连接",
@@ -874,20 +932,25 @@ export const zhAgents: Record<string, string> = {
   "agents.rdp_display_all": "\u5168\u90e8\u663e\u793a\u5668",
   "agents.rdp_display_n": "\u663e\u793a\u5668 {n}",
   "agents.rdp_display_primary": "\u4e3b\u5c4f",
-  "agents.rdp_display_hint": "\u9009\u62e9\u91c7\u96c6\u54ea\u4e2a\u663e\u793a\u5668\u3002\u76f4\u64ad\u4e2d\u5207\u6362\u4f1a\u8ba9 Agent \u91cd\u542f\u91c7\u96c6\uff0c\u9f20\u6807\u5750\u6807\u540c\u6b65\u91cd\u65b0\u6620\u5c04\u3002",
+  "agents.rdp_display_hint":
+    "\u9009\u62e9\u91c7\u96c6\u54ea\u4e2a\u663e\u793a\u5668\u3002\u76f4\u64ad\u4e2d\u5207\u6362\u4f1a\u8ba9 Agent \u91cd\u542f\u91c7\u96c6\uff0c\u9f20\u6807\u5750\u6807\u540c\u6b65\u91cd\u65b0\u6620\u5c04\u3002",
   "agents.rdp_differential": "\u4ec5\u4f20\u53d8\u5316",
-  "agents.rdp_differential_hint": "\u5c4f\u5e55\u4e0d\u53d8\u65f6\u4e0d\u53d1\u5e27\uff1a\u9759\u6b62\u684c\u9762\u53ea\u4ea7\u751f\u4e00\u4e2a\u5173\u952e\u5e27\uff0c\u4efb\u4f55\u53d8\u5316\u4ecd\u4f1a\u53d1\u9001\u3002\u5207\u6362\u65f6\u4f1a\u91cd\u542f\u91c7\u96c6\u7ba1\u9053\u3002",
+  "agents.rdp_differential_hint":
+    "\u5c4f\u5e55\u4e0d\u53d8\u65f6\u4e0d\u53d1\u5e27\uff1a\u9759\u6b62\u684c\u9762\u53ea\u4ea7\u751f\u4e00\u4e2a\u5173\u952e\u5e27\uff0c\u4efb\u4f55\u53d8\u5316\u4ecd\u4f1a\u53d1\u9001\u3002\u5207\u6362\u65f6\u4f1a\u91cd\u542f\u91c7\u96c6\u7ba1\u9053\u3002",
   "agents.rdp_disconnected": "已断开",
   "agents.rdp_enter_fullscreen": "进入全屏",
-  "agents.rdp_input_rejected": "Agent \u62d2\u7edd\u4e86\u8f93\u5165\u4e8b\u4ef6\uff08\u8be6\u89c1 Beacon \u4efb\u52a1\u65e5\u5fd7\uff09",
-  "agents.rdp_control_free": "\u65e0\u4eba\u5728\u63a7\u5236\uff1b\u4f60\u7684\u8f93\u5165\u5c06\u63a5\u7ba1",
+  "agents.rdp_input_rejected":
+    "Agent \u62d2\u7edd\u4e86\u8f93\u5165\u4e8b\u4ef6\uff08\u8be6\u89c1 Beacon \u4efb\u52a1\u65e5\u5fd7\uff09",
+  "agents.rdp_control_free":
+    "\u65e0\u4eba\u5728\u63a7\u5236\uff1b\u4f60\u7684\u8f93\u5165\u5c06\u63a5\u7ba1",
   "agents.rdp_control_other": "{name} \u6b63\u5728\u63a7\u5236",
   "agents.rdp_control_release": "\u91ca\u653e\u63a7\u5236\u6743",
   "agents.rdp_control_take": "\u63a5\u7ba1\u63a7\u5236",
   "agents.rdp_control_you": "\u4f60\u62e5\u6709\u63a7\u5236\u6743",
   "agents.rdp_error": "错误",
   "agents.rdp_exit_fullscreen": "退出全屏",
-  "agents.rdp_experimental_desc": "可选择截图流（JPEG 帧 + remote_input 任务）或 WebRTC 实时画面（H.264，默认 720p30，可选 1080p30）。实时模式需要可选的 WebRTC Agent 模块、目标机 ffmpeg，以及服务端启用 webrtc.enabled。输入注入效果取决于 Beacon 版本与操作系统。",
+  "agents.rdp_experimental_desc":
+    "可选择截图流（JPEG 帧 + remote_input 任务）或 WebRTC 实时画面（H.264，默认 720p30，可选 1080p30）。实时模式需要可选的 WebRTC Agent 模块、目标机 ffmpeg，以及服务端启用 webrtc.enabled。输入注入效果取决于 Beacon 版本与操作系统。",
   "agents.rdp_experimental_title": "实验功能：屏幕控制",
   "agents.rdp_fullscreen": "全屏",
   "agents.rdp_high": "高 (1080p)",
@@ -902,15 +965,18 @@ export const zhAgents: Record<string, string> = {
   "agents.rdp_mouse": "鼠标",
   "agents.rdp_session_active": "会话活跃",
   "agents.rdp_region": "\u74e6\u7247",
-  "agents.rdp_region_hint": "\u53ea\u4f20\u53d8\u5316\u7684 64px \u74e6\u7247\uff1a\u53ea\u7f16\u7801\u53d8\u5316\u533a\u57df\u5e76\u7ecf\u63a7\u5236\u901a\u9053\u53d1\u9001\uff0c\u5e26\u5bbd\u53d6\u51b3\u4e8e\u53d8\u5316\u9762\u79ef\u800c\u4e0d\u662f\u5e27\u5927\u5c0f\uff1b\u4e0d\u4f7f\u7528\u89c6\u9891\u6d41\uff0c\u9002\u7528\u4e8e\u4ec5\u6709 TCP \u6216\u65e0 ffmpeg \u7684\u76ee\u6807\u3002",
+  "agents.rdp_region_hint":
+    "\u53ea\u4f20\u53d8\u5316\u7684 64px \u74e6\u7247\uff1a\u53ea\u7f16\u7801\u53d8\u5316\u533a\u57df\u5e76\u7ecf\u63a7\u5236\u901a\u9053\u53d1\u9001\uff0c\u5e26\u5bbd\u53d6\u51b3\u4e8e\u53d8\u5316\u9762\u79ef\u800c\u4e0d\u662f\u5e27\u5927\u5c0f\uff1b\u4e0d\u4f7f\u7528\u89c6\u9891\u6d41\uff0c\u9002\u7528\u4e8e\u4ec5\u6709 TCP \u6216\u65e0 ffmpeg \u7684\u76ee\u6807\u3002",
   "agents.rdp_region_waiting": "\u7b49\u5f85\u7b2c\u4e00\u5e27\u2026",
   "agents.rdp_source": "\u89c6\u9891\u6765\u6e90",
   "agents.rdp_source_screen": "\u5c4f\u5e55",
   "agents.rdp_source_webcam": "\u6444\u50cf\u5934",
-  "agents.rdp_camera_view_only": "\u6444\u50cf\u5934\u753b\u9762\u4ec5\u53ef\u67e5\u770b",
+  "agents.rdp_camera_view_only":
+    "\u6444\u50cf\u5934\u753b\u9762\u4ec5\u53ef\u67e5\u770b",
   "agents.rdp_camera_device": "\u6444\u50cf\u5934\u8bbe\u5907",
   "agents.rdp_camera_default": "\u9ed8\u8ba4\u6444\u50cf\u5934",
-  "agents.rdp_camera_refresh": "\u4ece\u76ee\u6807\u5237\u65b0\u6444\u50cf\u5934\u5217\u8868",
+  "agents.rdp_camera_refresh":
+    "\u4ece\u76ee\u6807\u5237\u65b0\u6444\u50cf\u5934\u5217\u8868",
   "agents.rdp_standby": "待机",
   "agents.rdp_start": "启动",
   "agents.rdp_start_failed": "启动监控失败",
@@ -1048,16 +1114,20 @@ export const zhAgents: Record<string, string> = {
   "agents.token_domain": "域名",
   "agents.token_drop": "丢弃令牌",
   "agents.token_drop_failed": "丢弃令牌失败",
-  "agents.token_drop_confirm": "在 Agent 上丢弃该令牌？持有它的进程将立即失去访问权限。",
+  "agents.token_drop_confirm":
+    "在 Agent 上丢弃该令牌？持有它的进程将立即失去访问权限。",
   "agents.token_drop_success": "令牌已丢弃",
   "agents.token_drop_title": "丢弃令牌",
   "agents.token_steal_title": "从 PID {pid} 窃取令牌？",
-  "agents.token_steal_confirm": "注入进程 {pid} 以窃取其令牌？PID 错误会命中错误的进程。",
+  "agents.token_steal_confirm":
+    "注入进程 {pid} 以窃取其令牌？PID 错误会命中错误的进程。",
   "agents.token_impersonate_title": "模拟该令牌？",
-  "agents.token_impersonate_confirm": "让 Agent 的所有操作都使用该令牌，直到还原？Agent 的安全上下文会立即改变。",
+  "agents.token_impersonate_confirm":
+    "让 Agent 的所有操作都使用该令牌，直到还原？Agent 的安全上下文会立即改变。",
   "agents.token_edit_note": "编辑备注",
   "agents.token_impersonate": "模拟",
-  "agents.token_impersonate_hint": "模拟令牌将用于所有 Beacon 操作。使用 revert 恢复原始上下文。",
+  "agents.token_impersonate_hint":
+    "模拟令牌将用于所有 Beacon 操作。使用 revert 恢复原始上下文。",
   "agents.token_impersonate_failed": "模拟令牌失败",
   "agents.token_inactive": "非活动",
   "agents.token_integrity": "完整性",
@@ -1138,9 +1208,12 @@ export const zhAgents: Record<string, string> = {
   "agents.unknown": "未知",
   "agents.select_agent": "选择 Beacon",
   "agents.version_unknown": "未知",
-  "agents.version_unknown_dest": "该后渗透动作需要 Beacon 上报版本 — 重新生成或等下次回连",
-  "agents.version_unknown_hint": "该 Beacon 未上报版本。若新任务失败，请重新生成。",
-  "agents.protocol_outdated_hint": "该 Agent 使用协议 v{version}，而服务端为 v{current}。需重建该 Agent 才能恢复服务。",
+  "agents.version_unknown_dest":
+    "该后渗透动作需要 Beacon 上报版本 — 重新生成或等下次回连",
+  "agents.version_unknown_hint":
+    "该 Beacon 未上报版本。若新任务失败，请重新生成。",
+  "agents.protocol_outdated_hint":
+    "该 Agent 使用协议 v{version}，而服务端为 v{current}。需重建该 Agent 才能恢复服务。",
   "agents.windows": "Windows",
   "agents.rdp_live_1080p": "1080p30（硬件 H.264）",
   "agents.rdp_live_720p": "720p30（推荐）",
@@ -1151,19 +1224,24 @@ export const zhAgents: Record<string, string> = {
   "agents.rdp_live_unsupported": "当前浏览器不支持 WebRTC",
   "agents.rdp_keys": "\u5b9e\u65f6\u51fb\u952e",
   "agents.rdp_keys_empty": "\u5b9e\u65f6\u6d41\u5df2\u5173\u95ed",
-  "agents.rdp_keys_hint": "\u4f1a\u8bdd\u671f\u95f4\u5b9e\u65f6\u6d41\u8f6c\u76ee\u6807\u7684\u952e\u76d8\u8f93\u5165",
+  "agents.rdp_keys_hint":
+    "\u4f1a\u8bdd\u671f\u95f4\u5b9e\u65f6\u6d41\u8f6c\u76ee\u6807\u7684\u952e\u76d8\u8f93\u5165",
   "agents.rdp_keys_start": "\u5f00\u59cb\u5b9e\u65f6\u6d41",
   "agents.rdp_keys_stop": "\u505c\u6b62\u5b9e\u65f6\u6d41",
   "agents.rdp_keys_waiting": "\u7b49\u5f85\u76ee\u6807\u8f93\u5165\u2026",
   "agents.rdp_keywords": "\u5173\u952e\u8bcd\u544a\u8b66",
   "agents.rdp_keywords_start": "\u76d1\u542c",
   "agents.rdp_keywords_stop": "\u505c\u6b62\u76d1\u542c",
-  "agents.rdp_keywords_hint": "\u526a\u8d34\u677f\u6587\u672c\u6216\u7a97\u53e3\u6807\u9898\u547d\u4e2d\u65f6\u544a\u8b66",
-  "agents.rdp_keywords_placeholder": "\u7528\u9017\u53f7\u5206\u9694\u591a\u4e2a\u5173\u952e\u8bcd",
+  "agents.rdp_keywords_hint":
+    "\u526a\u8d34\u677f\u6587\u672c\u6216\u7a97\u53e3\u6807\u9898\u547d\u4e2d\u65f6\u544a\u8b66",
+  "agents.rdp_keywords_placeholder":
+    "\u7528\u9017\u53f7\u5206\u9694\u591a\u4e2a\u5173\u952e\u8bcd",
   "agents.rdp_message": "\u5411\u76ee\u6807\u53d1\u9001\u6d88\u606f",
   "agents.rdp_message_failed": "\u672a\u5f39\u51fa",
-  "agents.rdp_message_hint": "\u8f93\u5165\u6d88\u606f\uff0c\u5c06\u5728\u76ee\u6807\u4e0a\u5f39\u51fa\u5bf9\u8bdd\u6846",
-  "agents.rdp_message_send": "\u5728\u76ee\u6807\u4e0a\u663e\u793a\u8fd9\u6761\u6d88\u606f",
+  "agents.rdp_message_hint":
+    "\u8f93\u5165\u6d88\u606f\uff0c\u5c06\u5728\u76ee\u6807\u4e0a\u5f39\u51fa\u5bf9\u8bdd\u6846",
+  "agents.rdp_message_send":
+    "\u5728\u76ee\u6807\u4e0a\u663e\u793a\u8fd9\u6761\u6d88\u606f",
   "agents.rdp_message_shown": "\u5df2\u5f39\u51fa",
   "agents.rdp_mode_live": "实时（WebRTC）",
   "agents.rdp_mode_snapshot": "截图流（JPEG）",

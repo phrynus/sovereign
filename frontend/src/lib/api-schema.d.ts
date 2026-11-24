@@ -7922,6 +7922,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{id}/keep_awake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue bounded keep-awake (seconds: 0 releases, empty uses 300) */
+        post: operations["post_agents_id_keep_awake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{id}/set_sleep_mask_advanced": {
         parameters: {
             query?: never;
@@ -23956,6 +23973,26 @@ export interface operations {
         };
     };
     post_agents_id_set_sleep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_agents_id_keep_awake: {
         parameters: {
             query?: never;
             header?: never;

@@ -25,5 +25,6 @@ describe("dockCommandLabel", () => {
     expect(dockCommandLabel("ps")).toBe("ps");
     expect(dockCommandLabel("screenshot")).toBe("screenshot");
     expect(dockCommandLabel("sleep")).toBe("set_sleep");
+    expect(dockCommandLabel("keep_awake")).toBe("keep_awake");
   });
 });

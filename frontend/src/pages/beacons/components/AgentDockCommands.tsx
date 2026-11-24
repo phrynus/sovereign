@@ -5,7 +5,7 @@ import { useMutation } from "@/lib/hooks/useMutation";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Camera, ListChecks, Network, Timer } from "lucide-react";
+import { Camera, ListChecks, Moon, Network, Timer } from "lucide-react";
 import {
   parseSleepArgs,
   parseSocksPort,
@@ -23,7 +23,12 @@ interface AgentDockCommandsProps {
   onQueued: (task: { task_id: number; type: string; command: string }) => void;
 }
 
-export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued }: AgentDockCommandsProps) {
+export function AgentDockCommands({
+  agentId,
+  intervalHint,
+  jitterHint,
+  onQueued,
+}: AgentDockCommandsProps) {
   const { t } = useI18n();
   const { toastError } = useErrorToast();
   const [sleepRaw, setSleepRaw] = useState(
@@ -31,6 +36,7 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
   );
   const [busy, setBusy] = useState<DockCommandKind | "socks" | null>(null);
   const [socksPort, setSocksPort] = useState("1080");
+  const [awakeRaw, setAwakeRaw] = useState("300");
   const [socksOn, setSocksOn] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -46,15 +52,20 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         // Unknown, not stopped: offering "start" here would start a second relay.
         if (!cancelled) setSocksOn(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [agentId]);
 
   // Reset per-agent params when switching sessions (hints arrive together
   // with the new beacon on the same render as the id change).
   useEffect(() => {
-    setSleepRaw(`${intervalHint && intervalHint > 0 ? intervalHint : 60},${jitterHint && jitterHint >= 0 ? jitterHint : 10}`);
+    setSleepRaw(
+      `${intervalHint && intervalHint > 0 ? intervalHint : 60},${jitterHint && jitterHint >= 0 ? jitterHint : 10}`,
+    );
     setSocksPort("1080");
     setBusy(null);
+    setAwakeRaw("300");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
@@ -62,13 +73,16 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
   // flight disables the whole row); the mutations own error routing and the
   // stale-completion guard.
   const { mutate: queueCommand } = useMutation({
-    fn: (kind: DockCommandKind, sleep: { interval: number; jitter: number } | undefined) =>
-      queueDockCommand(agentId, kind, sleep),
+    fn: (
+      kind: DockCommandKind,
+      sleep: { interval: number; jitter: number } | undefined,
+    ) => queueDockCommand(agentId, kind, sleep),
     onSuccess: (queued) => {
       toast.success(t("agents.dock_cmd_queued", { type: queued.type }));
       onQueued(queued);
     },
-    onError: (e, kind) => toastError(e, "agents.detail_action_failed", { label: kind }),
+    onError: (e, kind) =>
+      toastError(e, "agents.detail_action_failed", { label: kind }),
   });
 
   const { mutate: startSocks } = useMutation({
@@ -76,7 +90,10 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
     onSuccess: (res) => {
       setSocksOn(true);
       setSocksPort(String(res.port));
-      toast.success(res.message || t("agents.dock_socks_started", { port: String(res.port) }));
+      toast.success(
+        res.message ||
+          t("agents.dock_socks_started", { port: String(res.port) }),
+      );
     },
     onError: (e) => toastError(e, "agents.dock_socks_failed"),
   });
@@ -109,6 +126,22 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
     }
   };
 
+  const runKeepAwake = async () => {
+    if (!agentId || busy) return;
+    const raw = awakeRaw.trim();
+    const seconds = raw === "" ? 300 : Number(raw);
+    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {
+      toast.error(t("agents.dock_keep_awake_invalid"));
+      return;
+    }
+    setBusy("keep_awake");
+    try {
+      await queueCommand("keep_awake", { interval: seconds, jitter: 0 });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const toggleSocks = async () => {
     if (!agentId || busy) return;
     if (socksOn) {
@@ -135,11 +168,23 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
 
   return (
     <div className="flex items-center gap-1 border-b border-border px-2 py-1">
-      <Button type="button" variant="ghost" size="xs" disabled={!!busy} onClick={() => void run("ps")}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={!!busy}
+        onClick={() => void run("ps")}
+      >
         <ListChecks className="size-3.5" />
         {t("agents.dock_cmd_ps")}
       </Button>
-      <Button type="button" variant="ghost" size="xs" disabled={!!busy} onClick={() => void run("screenshot")}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={!!busy}
+        onClick={() => void run("screenshot")}
+      >
         <Camera className="size-3.5" />
         {t("agents.dock_cmd_screenshot")}
       </Button>
@@ -150,9 +195,32 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         placeholder="60,10"
         className="h-7 w-24 font-mono text-xs"
       />
-      <Button type="button" variant="ghost" size="xs" disabled={!!busy} onClick={() => void run("sleep")}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={!!busy}
+        onClick={() => void run("sleep")}
+      >
         <Timer className="size-3.5" />
         {t("agents.dock_cmd_sleep")}
+      </Button>
+      <Input
+        value={awakeRaw}
+        onChange={(e) => setAwakeRaw(e.target.value)}
+        aria-label={t("agents.dock_keep_awake")}
+        placeholder="300"
+        className="h-7 w-16 font-mono text-xs"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={!!busy}
+        onClick={() => void runKeepAwake()}
+      >
+        <Moon className="size-3.5" />
+        {t("agents.dock_keep_awake")}
       </Button>
       <Input
         value={socksPort}
@@ -165,11 +233,17 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
         variant="ghost"
         size="xs"
         disabled={!!busy || socksOn === null}
-        title={socksOn === null ? t("agents.dock_socks_status_unknown") : undefined}
+        title={
+          socksOn === null ? t("agents.dock_socks_status_unknown") : undefined
+        }
         onClick={() => void toggleSocks()}
       >
         <Network className="size-3.5" />
-        {socksOn === null ? t("agents.dock_socks_unknown") : socksOn ? t("agents.dock_socks_stop") : t("agents.dock_cmd_socks")}
+        {socksOn === null
+          ? t("agents.dock_socks_unknown")
+          : socksOn
+            ? t("agents.dock_socks_stop")
+            : t("agents.dock_cmd_socks")}
       </Button>
     </div>
   );

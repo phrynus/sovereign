@@ -10,6 +10,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/r0si/sovereign/pkg/protocol"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,8 +18,8 @@ import (
 )
 
 const (
-	keepAwakeDefaultSeconds = 300
-	keepAwakeMaxSeconds     = 86400
+	keepAwakeDefaultSeconds = protocol.KeepAwakeDefaultSeconds
+	keepAwakeMaxSeconds     = protocol.KeepAwakeMaxSeconds
 )
 
 var (

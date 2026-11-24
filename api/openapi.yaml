@@ -10608,6 +10608,22 @@ paths:
         '200':
           description: OK
 
+  /agents/{id}/keep_awake:
+    post:
+      tags: [Agents]
+      summary: "Queue bounded keep-awake (seconds: 0 releases, empty uses 300)"
+      operationId: post_agents_id_keep_awake
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
   /agents/{id}/set_sleep_mask_advanced:
     post:
       tags: [Agents]

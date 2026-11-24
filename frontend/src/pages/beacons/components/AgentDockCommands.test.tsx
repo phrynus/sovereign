@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -43,12 +49,17 @@ describe("AgentDockCommands", () => {
     renderCommands();
     const sleep = screen.getByRole("button", { name: "agents.dock_cmd_sleep" });
 
-    vi.mocked(api.postJson).mockRejectedValue({ status: 400, message: "sleep out of range" });
+    vi.mocked(api.postJson).mockRejectedValue({
+      status: 400,
+      message: "sleep out of range",
+    });
     await act(async () => {
       fireEvent.click(sleep);
     });
 
-    await waitFor(() => expect(errorToast).toHaveBeenCalledWith("sleep out of range"));
+    await waitFor(() =>
+      expect(errorToast).toHaveBeenCalledWith("sleep out of range"),
+    );
     expect((sleep as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -61,34 +72,75 @@ describe("AgentDockCommands", () => {
       fireEvent.click(sleep);
     });
 
-    await waitFor(() => expect(successToast).toHaveBeenCalledWith("agents.dock_cmd_queued"));
-    expect(onQueued).toHaveBeenCalledWith({ task_id: 7, type: "set_sleep", command: "60,10" });
-    expect(api.postJson).toHaveBeenCalledWith(paths.agents.setSleep("a1"), { interval: 60, jitter: 10 });
+    await waitFor(() =>
+      expect(successToast).toHaveBeenCalledWith("agents.dock_cmd_queued"),
+    );
+    expect(onQueued).toHaveBeenCalledWith({
+      task_id: 7,
+      type: "set_sleep",
+      command: "60,10",
+    });
+    expect(api.postJson).toHaveBeenCalledWith(paths.agents.setSleep("a1"), {
+      interval: 60,
+      jitter: 10,
+    });
   });
 
   it("normalizes a failed SOCKS start into the relay message", async () => {
     renderCommands();
     const socks = await startedSocksButton();
 
-    vi.mocked(api.post).mockRejectedValue({ status: 400, message: "port already taken" });
+    vi.mocked(api.post).mockRejectedValue({
+      status: 400,
+      message: "port already taken",
+    });
     await act(async () => {
       fireEvent.click(socks);
     });
 
-    await waitFor(() => expect(errorToast).toHaveBeenCalledWith("port already taken"));
+    await waitFor(() =>
+      expect(errorToast).toHaveBeenCalledWith("port already taken"),
+    );
     expect((socks as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("keeps the interval validation toast direct", async () => {
     renderCommands();
-    const input = screen.getByRole("textbox", { name: "agents.dock_cmd_sleep" });
+    const input = screen.getByRole("textbox", {
+      name: "agents.dock_cmd_sleep",
+    });
     fireEvent.change(input, { target: { value: "nonsense" } });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "agents.dock_cmd_sleep" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "agents.dock_cmd_sleep" }),
+      );
     });
 
     expect(errorToast).toHaveBeenCalledWith("agents.dock_cmd_sleep_invalid");
     expect(api.postJson).not.toHaveBeenCalled();
+  });
+  it("queues a keep-awake task with the entered seconds", async () => {
+    const { onQueued } = renderCommands();
+    const input = screen.getByRole("textbox", {
+      name: "agents.dock_keep_awake",
+    });
+    fireEvent.change(input, { target: { value: "600" } });
+    vi.mocked(api.postJson).mockResolvedValue({ task_id: 9 });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "agents.dock_keep_awake" }),
+      );
+    });
+
+    expect(api.postJson).toHaveBeenCalledWith(paths.agents.keepAwake("a1"), {
+      seconds: 600,
+    });
+    expect(onQueued).toHaveBeenCalledWith({
+      task_id: 9,
+      type: "keep_awake",
+      command: "600",
+    });
   });
 });

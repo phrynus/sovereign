@@ -15,25 +15,33 @@ export const paths = {
     bulkTask: "/agents/bulk/task",
     batchDelete: "/agents/batch/delete",
     batchTags: "/agents/batch/tags",
-    bulkResults: (query = "page=1&pageSize=10") => `/agents/bulk/results?${query}`,
+    bulkResults: (query = "page=1&pageSize=10") =>
+      `/agents/bulk/results?${query}`,
     /** Dual-use agent detail + commands */
     one: (id: string) => `/agents/${id}`,
     tasks: (id: string) => `/agents/${id}/tasks`,
-    task: (id: string, taskId: string | number) => `/agents/${id}/tasks/${taskId}`,
+    task: (id: string, taskId: string | number) =>
+      `/agents/${id}/tasks/${taskId}`,
     inject: (id: string) => `/agents/${id}/inject`,
-    timeline: (id: string, query = "") => `/api/agents/${id}/timeline${query ? `?${query}` : ""}`,
-    cancelTask: (id: string, taskId: string | number) => `/agents/${id}/tasks/${taskId}/cancel`,
-    rerunTask: (id: string, taskId: string | number) => `/agents/${id}/task/${taskId}/rerun`,
+    timeline: (id: string, query = "") =>
+      `/api/agents/${id}/timeline${query ? `?${query}` : ""}`,
+    cancelTask: (id: string, taskId: string | number) =>
+      `/agents/${id}/tasks/${taskId}/cancel`,
+    rerunTask: (id: string, taskId: string | number) =>
+      `/agents/${id}/task/${taskId}/rerun`,
     kill: (id: string) => `/agents/${id}/kill`,
     migrate: (id: string) => `/agents/${id}/migrate`,
     uninstall: (id: string) => `/agents/${id}/uninstall`,
     note: (id: string) => `/agents/${id}/note`,
     diagnose: (id: string) => `/agents/${id}/diagnose`,
     setSleep: (id: string) => `/agents/${id}/set_sleep`,
+    keepAwake: (id: string) => `/agents/${id}/keep_awake`,
     killDate: (id: string) => `/agents/${id}/kill_date`,
     command: (id: string) => `/agents/${id}/command`,
     screenshots: (id: string, query = "") =>
-      query ? `/api/agents/${id}/screenshots?${query}` : `/api/agents/${id}/screenshots`,
+      query
+        ? `/api/agents/${id}/screenshots?${query}`
+        : `/api/agents/${id}/screenshots`,
     processTree: (id: string) => `/api/agents/${id}/process-tree`,
     /** POST queue a fresh process snapshot (write permission). */
     collectProcesses: (id: string) => `/api/agents/${id}/processes`,
@@ -97,7 +105,8 @@ export const paths = {
     modulesDeploy: (id: string) => `/agents/${id}/modules/deploy`,
     trafficProfile: (id: string) => `/agents/${id}/traffic-profile`,
     trafficAdapt: (id: string) => `/agents/${id}/traffic-profile/adapt`,
-    trafficAutoAdapt: (id: string) => `/agents/${id}/traffic-profile/auto-adapt`,
+    trafficAutoAdapt: (id: string) =>
+      `/agents/${id}/traffic-profile/auto-adapt`,
     rportfwdStatus: (id: string) => `/agents/${id}/rportfwd/status`,
     rportfwdStart: (id: string) => `/agents/${id}/rportfwd/start`,
     rportfwdStop: (id: string) => `/agents/${id}/rportfwd/stop`,
@@ -134,11 +143,14 @@ export const paths = {
     tokenMake: (id: string) => `/agents/${id}/token/make`,
     tokenRevert: (id: string) => `/agents/${id}/token/revert`,
     tokenWhoami: (id: string) => `/agents/${id}/token/whoami`,
-    tokenOne: (id: string, tokenId: string | number) => `/agents/${id}/token/${tokenId}`,
+    tokenOne: (id: string, tokenId: string | number) =>
+      `/agents/${id}/token/${tokenId}`,
     tokenImpersonate: (id: string, tokenId: string | number) =>
       `/agents/${id}/token/${tokenId}/impersonate`,
-    tokenNote: (id: string, tokenId: string | number) => `/agents/${id}/token/${tokenId}/note`,
-    coerce: (id: string, coerceType: string) => `/agents/${id}/coerce/${coerceType}`,
+    tokenNote: (id: string, tokenId: string | number) =>
+      `/agents/${id}/token/${tokenId}/note`,
+    coerce: (id: string, coerceType: string) =>
+      `/agents/${id}/coerce/${coerceType}`,
     relayStart: (id: string) => `/agents/${id}/relay/start`,
     relayStop: (id: string) => `/agents/${id}/relay/stop`,
   },
@@ -151,7 +163,8 @@ export const paths = {
   credentials: {
     /** Vault + agents/agents-scoped lists come from the dual-use /credentials
      *  page route (JSON via Accept, snake aliases like vault_entries). */
-    list: (query = "format=json") => (query ? `/credentials?${query}` : "/credentials"),
+    list: (query = "format=json") =>
+      query ? `/credentials?${query}` : "/credentials",
     /** Agent-scoped lookup goes through the dual-use /credentials page route,
      *  which supports agent_id filtering and returns a `total` count. */
     byAgent: (agentId: string, limit = 1) =>
@@ -179,7 +192,8 @@ export const paths = {
     password: (id: string) => `/users/${id}/password`,
     forceLogout: (id: string) => `/users/${id}/force-logout`,
     sessions: (id: string) => `/users/${id}/sessions`,
-    revokeSession: (id: string, sessionId: string | number) => `/users/${id}/sessions/${sessionId}/revoke`,
+    revokeSession: (id: string, sessionId: string | number) =>
+      `/users/${id}/sessions/${sessionId}/revoke`,
     revokeAllSessions: (id: string) => `/users/${id}/sessions/revoke-all`,
   },
   /**
@@ -206,7 +220,8 @@ export const paths = {
   audit: {
     logs: (query: string) => `/audit/logs?${query}`,
     exportLogs: (query: string) => `/audit/logs/export?${query}`,
-    actions: (query = "") => (query ? `/audit/actions?${query}` : "/audit/actions"),
+    actions: (query = "") =>
+      query ? `/audit/actions?${query}` : "/audit/actions",
     verify: (query: string) => `/audit/verify?${query}`,
     logins: (query: string) => `/audit/logins?${query}`,
     exportLogins: (query: string) => `/audit/logins/export?${query}`,
@@ -248,11 +263,16 @@ export const paths = {
     apiKeys: "/api/api-keys",
     apiKey: (id: string | number) => `/api/api-keys/${id}`,
     apiKeyRotate: (id: string | number) => `/api/api-keys/${id}/rotate`,
-    savedViews: (page = "") => (page ? `/api/saved-views?page=${encodeURIComponent(page)}` : "/api/saved-views"),
+    savedViews: (page = "") =>
+      page
+        ? `/api/saved-views?page=${encodeURIComponent(page)}`
+        : "/api/saved-views",
     savedView: (id: string | number) => `/api/saved-views/${id}`,
     notificationRoutes: "/api/notification-routes",
-    notificationRoute: (id: string | number) => `/api/notification-routes/${id}`,
-    notificationRouteTest: (id: string | number) => `/api/notification-routes/${id}/test`,
+    notificationRoute: (id: string | number) =>
+      `/api/notification-routes/${id}`,
+    notificationRouteTest: (id: string | number) =>
+      `/api/notification-routes/${id}/test`,
     beaconKey: "/settings/beacon-key",
     reloadStatus: "/config/reload-status",
     killSwitch: "/admin/killswitch",
@@ -264,13 +284,15 @@ export const paths = {
     profileImport: "/api/generate/profile/import",
     profileImportText: "/api/generate/profile/import-text",
     profileValidate: "/api/generate/profile/validate",
-    profileDelete: (name: string) => `/api/generate/profile/${encodeURIComponent(name)}`,
+    profileDelete: (name: string) =>
+      `/api/generate/profile/${encodeURIComponent(name)}`,
     buildStatus: (id: string | number) => `/generate/builds/${id}`,
     buildDownload: (id: string | number) => `/generate/builds/${id}/download`,
     delivery: "/generate/delivery",
     oneLiner: "/generate/one-liner",
     /** Binary/stager/shellcode builds: /generate/exe, /dll, /ps1, /linux ... */
-    binary: (format: string) => `/generate/${format.startsWith("/") ? format.slice(1) : format}`,
+    binary: (format: string) =>
+      `/generate/${format.startsWith("/") ? format.slice(1) : format}`,
     donut: "/generate/donut",
     modules: "/api/generate/modules",
   },
@@ -300,7 +322,8 @@ export const paths = {
     alertResolve: (id: string | number) => `/api/monitor/alerts/${id}/resolve`,
   },
   monitor: {
-    alerts: (query = "") => (query ? `/api/monitor/alerts?${query}` : "/api/monitor/alerts"),
+    alerts: (query = "") =>
+      query ? `/api/monitor/alerts?${query}` : "/api/monitor/alerts",
   },
   plugins: {
     list: "/api/plugins",
@@ -327,18 +350,19 @@ export const paths = {
     sessions: "/ai/sessions",
     session: (id: string | number) => `/ai/sessions/${id}`,
     sessionMessages: (id: string | number) => `/ai/sessions/${id}/messages`,
-		sessionBranch: (id: string | number) => `/ai/sessions/${id}/branch`,
-		runs: "/api/ai/runs",
-		runEvents: (id: string) => `/api/ai/runs/${id}/events`,
-		runCancel: (id: string) => `/api/ai/runs/${id}/cancel`,
-		profiles: "/api/ai/profiles",
-		intents: "/api/ai/intents",
-		intentApprove: (id: string) => `/api/ai/intents/${id}/approve`,
-		intentReject: (id: string) => `/api/ai/intents/${id}/reject`,
-		knowledgeCollections: "/api/ai/knowledge/collections",
-		knowledgeSearch: "/api/ai/knowledge/search",
-		attachments: (sessionId: string | number) => `/api/ai/sessions/${sessionId}/attachments`,
-		attachment: (id: string) => `/api/ai/attachments/${id}`,
+    sessionBranch: (id: string | number) => `/ai/sessions/${id}/branch`,
+    runs: "/api/ai/runs",
+    runEvents: (id: string) => `/api/ai/runs/${id}/events`,
+    runCancel: (id: string) => `/api/ai/runs/${id}/cancel`,
+    profiles: "/api/ai/profiles",
+    intents: "/api/ai/intents",
+    intentApprove: (id: string) => `/api/ai/intents/${id}/approve`,
+    intentReject: (id: string) => `/api/ai/intents/${id}/reject`,
+    knowledgeCollections: "/api/ai/knowledge/collections",
+    knowledgeSearch: "/api/ai/knowledge/search",
+    attachments: (sessionId: string | number) =>
+      `/api/ai/sessions/${sessionId}/attachments`,
+    attachment: (id: string) => `/api/ai/attachments/${id}`,
     status: "/api/ai/status",
     analyzeResult: "/api/ai/analyze-result",
     suggestNextSteps: "/api/ai/suggest-next-steps",
@@ -368,8 +392,10 @@ export const paths = {
     detail: "/circuit-breaker/detail",
     config: "/circuit-breaker/config",
     events: "/circuit-breaker/events",
-    reset: (listenerId: string | number) => `/circuit-breaker/reset/${listenerId}`,
-    toggle: (listenerId: string | number) => `/circuit-breaker/toggle/${listenerId}`,
+    reset: (listenerId: string | number) =>
+      `/circuit-breaker/reset/${listenerId}`,
+    toggle: (listenerId: string | number) =>
+      `/circuit-breaker/toggle/${listenerId}`,
   },
   autotag: {
     rules: "/api/autotag/rules",
@@ -397,24 +423,30 @@ export const paths = {
    */
   report: {
     overview: "/report",
-    agents: (query = "") => (query ? `/api/report/agents?${query}` : "/api/report/agents"),
-    tasks: (query = "") => (query ? `/api/report/tasks?${query}` : "/api/report/tasks"),
+    agents: (query = "") =>
+      query ? `/api/report/agents?${query}` : "/api/report/agents",
+    tasks: (query = "") =>
+      query ? `/api/report/tasks?${query}` : "/api/report/tasks",
     credentials: (query = "") =>
       query ? `/api/report/credentials?${query}` : "/api/report/credentials",
-    network: (query = "") => (query ? `/api/report/network?${query}` : "/api/report/network"),
-    findings: (query = "") => (query ? `/api/report/findings?${query}` : "/api/report/findings"),
+    network: (query = "") =>
+      query ? `/api/report/network?${query}` : "/api/report/network",
+    findings: (query = "") =>
+      query ? `/api/report/findings?${query}` : "/api/report/findings",
     history: "/api/report/history",
     generated: (id: string | number) => `/api/report/generated/${id}`,
     // Served by handleAPIExportGeneratedReport, which applies the same bulk
     // export scope gate as the other export endpoints. The old
     // /report/:id/download?format= path had no backend route at all, so the
     // Report page's download button 404'd.
-    download: (id: string | number) => `/api/report/generated/${encodeURIComponent(String(id))}/download`,
+    download: (id: string | number) =>
+      `/api/report/generated/${encodeURIComponent(String(id))}/download`,
     generate: "/api/report/generate",
     one: (id: string) => `/api/report/${id}`,
     exportHtml: (query: string) => `/api/report/export/html?${query}`,
     iocs: (query = "days=30") => (query ? `/api/ioc?${query}` : "/api/ioc"),
-    iocExport: (format: "stix2" | "csv", days = 30) => `/api/ioc/export?format=${format}&days=${days}`,
+    iocExport: (format: "stix2" | "csv", days = 30) =>
+      `/api/ioc/export?format=${format}&days=${days}`,
     handoverExport: (days = 30) => `/api/handover/export?days=${days}`,
   },
   dashboard: {
@@ -427,7 +459,8 @@ export const paths = {
     osDistribution: "/api/dashboard/os-distribution",
     taskStatus: "/api/dashboard/task-status",
     taskGantt: (range: string) => `/api/dashboard/task-gantt?range=${range}`,
-    listenerTraffic: (range: string) => `/api/dashboard/listener-traffic?range=${range}`,
+    listenerTraffic: (range: string) =>
+      `/api/dashboard/listener-traffic?range=${range}`,
     activeMissions: "/api/dashboard/active-missions",
   },
   /**
@@ -448,14 +481,16 @@ export const paths = {
   // chat page is gone (the AI workspace owns chat now), but the paths stay for
   // api-paths.test.ts and for any future consumer of the still-live routes.
   chat: {
-    history: (channel: string) => `/chat/history?channel=${encodeURIComponent(channel)}`,
+    history: (channel: string) =>
+      `/chat/history?channel=${encodeURIComponent(channel)}`,
     channels: "/chat/channels",
     send: "/chat/send",
   },
   mitre: {
     templates: "/mitre/templates",
     phases: "/mitre/phases",
-    timeline: (query = "") => (query ? `/mitre/timeline?${query}` : "/mitre/timeline"),
+    timeline: (query = "") =>
+      query ? `/mitre/timeline?${query}` : "/mitre/timeline",
     heatmap: (range = "30d") => `/api/mitre/heatmap?range=${range}`,
   },
   v1: {
@@ -467,7 +502,8 @@ export const paths = {
     stop: "/api/dns/stop",
   },
   timeline: {
-    data: (query = "") => (query ? `/api/timeline/data?${query}` : "/api/timeline/data"),
+    data: (query = "") =>
+      query ? `/api/timeline/data?${query}` : "/api/timeline/data",
   },
   topology: {
     data: "/api/topology/data",
@@ -570,7 +606,8 @@ export const paths = {
   },
   infrastructure: {
     acmeProvision: "/infrastructure/acme/provision",
-    profileExport: (format: string) => `/infrastructure/profile/export?format=${encodeURIComponent(format)}`,
+    profileExport: (format: string) =>
+      `/infrastructure/profile/export?format=${encodeURIComponent(format)}`,
   },
   integrations: {
     list: "/integrations",

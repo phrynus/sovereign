@@ -1,10 +1,15 @@
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 
-export type DockCommandKind = "ps" | "screenshot" | "sleep";
+export type DockCommandKind = "ps" | "screenshot" | "sleep" | "keep_awake";
 
-export function parseSleepArgs(raw: string): { interval: number; jitter: number } | null {
-  const parts = raw.trim().split(/[\s,]+/).filter(Boolean);
+export function parseSleepArgs(
+  raw: string,
+): { interval: number; jitter: number } | null {
+  const parts = raw
+    .trim()
+    .split(/[\s,]+/)
+    .filter(Boolean);
   if (parts.length === 0) return null;
   const interval = Number(parts[0]);
   const jitter = parts.length > 1 ? Number(parts[1]) : 0;
@@ -16,6 +21,7 @@ export function parseSleepArgs(raw: string): { interval: number; jitter: number 
 export function dockCommandLabel(kind: DockCommandKind): string {
   if (kind === "ps") return "ps";
   if (kind === "screenshot") return "screenshot";
+  if (kind === "keep_awake") return "keep_awake";
   return "set_sleep";
 }
 
@@ -25,8 +31,12 @@ export function parseSocksPort(raw: string): number | null {
   return n;
 }
 
-export async function socksRelayStatus(agentId: string): Promise<{ active: boolean; port: number | null }> {
-  const data = await api.get<{ active?: boolean; port?: number }>(paths.agents.socksRelayStatus(agentId));
+export async function socksRelayStatus(
+  agentId: string,
+): Promise<{ active: boolean; port: number | null }> {
+  const data = await api.get<{ active?: boolean; port?: number }>(
+    paths.agents.socksRelayStatus(agentId),
+  );
   const port = Number(data.port);
   return {
     active: data.active === true,
@@ -34,10 +44,16 @@ export async function socksRelayStatus(agentId: string): Promise<{ active: boole
   };
 }
 
-export async function startDockSocks(agentId: string, port: number): Promise<{ port: number; message: string }> {
-  const data = await api.post<{ port?: number; message?: string }>(paths.agents.socksRelayStart(agentId), {
-    port: String(port),
-  });
+export async function startDockSocks(
+  agentId: string,
+  port: number,
+): Promise<{ port: number; message: string }> {
+  const data = await api.post<{ port?: number; message?: string }>(
+    paths.agents.socksRelayStart(agentId),
+    {
+      port: String(port),
+    },
+  );
   const actual = Number(data.port);
   return {
     port: Number.isFinite(actual) && actual > 0 ? actual : port,
@@ -62,11 +78,21 @@ export async function queueDockCommand(
   } else if (kind === "screenshot") {
     data = await api.post(paths.agents.screenshotTask(agentId));
     command = "screenshot";
+  } else if (kind === "keep_awake") {
+    const seconds = sleep?.interval ?? 300;
+    command = String(seconds);
+    data = await api.postJson<{ task_id?: number }>(
+      paths.agents.keepAwake(agentId),
+      { seconds },
+    );
   } else {
     const interval = sleep?.interval ?? 60;
     const jitter = sleep?.jitter ?? 0;
     command = `${interval},${jitter}`;
-    data = await api.postJson(paths.agents.setSleep(agentId), { interval, jitter });
+    data = await api.postJson(paths.agents.setSleep(agentId), {
+      interval,
+      jitter,
+    });
   }
   const taskId = Number(data.task_id);
   if (!Number.isFinite(taskId) || taskId <= 0) {
