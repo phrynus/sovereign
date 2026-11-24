@@ -769,7 +769,9 @@ var schemaMigrations = []*gormigrate.Migration{
 			if !tx.Migrator().HasTable("credential_entries") {
 				return nil
 			}
-			execMigration(tx, "ALTER TABLE credential_entries ADD COLUMN expiry_known BOOLEAN DEFAULT FALSE", "add_credential_expiry_known")
+			if !tx.Migrator().HasColumn("credential_entries", "expiry_known") {
+				execMigration(tx, "ALTER TABLE credential_entries ADD COLUMN expiry_known BOOLEAN DEFAULT FALSE", "add_credential_expiry_known")
+			}
 			if !tx.Migrator().HasColumn("credential_entries", "expiry_known") {
 				return nil
 			}
