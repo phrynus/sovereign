@@ -1265,7 +1265,9 @@ var indexMigrations = []*gormigrate.Migration{
 	{
 		ID: "2026-11-07-add-agent-group-created-by",
 		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE agent_groups ADD COLUMN created_by VARCHAR(100) DEFAULT ''", "add_agent_groups_created_by")
+			if tx.Migrator().HasTable("agent_groups") && !tx.Migrator().HasColumn("agent_groups", "created_by") {
+				execMigration(tx, "ALTER TABLE agent_groups ADD COLUMN created_by VARCHAR(100) DEFAULT ''", "add_agent_groups_created_by")
+			}
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
@@ -1276,7 +1278,9 @@ var indexMigrations = []*gormigrate.Migration{
 	{
 		ID: "2026-11-08-add-agent-tag-created-by",
 		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE agent_tags ADD COLUMN created_by VARCHAR(100) DEFAULT ''", "add_agent_tags_created_by")
+			if tx.Migrator().HasTable("agent_tags") && !tx.Migrator().HasColumn("agent_tags", "created_by") {
+				execMigration(tx, "ALTER TABLE agent_tags ADD COLUMN created_by VARCHAR(100) DEFAULT ''", "add_agent_tags_created_by")
+			}
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
