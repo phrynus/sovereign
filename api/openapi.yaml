@@ -14736,6 +14736,28 @@ paths:
         '403':
           description: Missing credentials.read
 
+  /credentials/options:
+    get:
+      tags: [Credentials]
+      summary: Vault picker options (dual-use alias)
+      operationId: credentialOptionsAlias
+      security: [{SessionCookie: []}]
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, default: 100, maximum: 500}}
+      responses:
+        '200': {description: Redacted options}
+        '403': {description: Missing credentials.read}
+
+  /api/tasks/specs:
+    get:
+      tags: [Tasks]
+      summary: Dispatchable task specification catalogue
+      operationId: listTaskSpecs
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {description: Protocol task specifications}
+
   /api/tasks:
     get:
       tags: [Tasks]
@@ -14792,7 +14814,7 @@ paths:
         '200':
           description: Task detail
 
-  /api/agents/{id}/files/write:
+  /agents/{id}/files/write:
     post:
       tags: [Files]
       summary: Queue an optimistic-concurrency text edit
@@ -14820,7 +14842,7 @@ paths:
         '404':
           description: No completed read/write baseline for this path
 
-  /api/agents/{id}/files/history:
+  /agents/{id}/files/history:
     get:
       tags: [Files]
       summary: Text file revision history
@@ -14835,7 +14857,7 @@ paths:
         '200':
           description: Revision metadata list
 
-  /api/agents/{id}/files/revisions/{taskId}:
+  /agents/{id}/files/revisions/{taskId}:
     get:
       tags: [Files]
       summary: One file revision snapshot
@@ -14849,7 +14871,7 @@ paths:
         '200':
           description: Base64 content and hash metadata
 
-  /api/agents/{id}/transfers:
+  /agents/{id}/transfers:
     get:
       tags: [Files]
       summary: List durable transfers for an agent
@@ -14878,7 +14900,7 @@ paths:
                 filename: {type: string}
       responses: {'200': {description: Transfer session}}
 
-  /api/agents/{id}/transfers/{transfer_id}:
+  /agents/{id}/transfers/{transfer_id}:
     get:
       tags: [Files]
       summary: Get one transfer
@@ -14898,7 +14920,7 @@ paths:
         - {name: transfer_id, in: path, required: true, schema: {type: integer}}
       responses: {'200': {description: Cancelled transfer}}
 
-  /api/agents/{id}/transfers/{transfer_id}/chunk:
+  /agents/{id}/transfers/{transfer_id}/chunk:
     put:
       tags: [Files]
       summary: Push one acknowledged 2 MiB chunk
@@ -14920,7 +14942,7 @@ paths:
                 final: {type: boolean}
       responses: {'200': {description: Task and updated transfer}}
 
-  /api/agents/{id}/transfers/{transfer_id}/resume:
+  /agents/{id}/transfers/{transfer_id}/resume:
     post:
       tags: [Files]
       operationId: resumeTransfer
@@ -14930,7 +14952,7 @@ paths:
         - {name: transfer_id, in: path, required: true, schema: {type: integer}}
       responses: {'200': {description: Task and updated transfer}}
 
-  /api/agents/{id}/transfers/{transfer_id}/pause:
+  /agents/{id}/transfers/{transfer_id}/pause:
     post:
       tags: [Files]
       operationId: pauseTransfer
@@ -14940,7 +14962,7 @@ paths:
         - {name: transfer_id, in: path, required: true, schema: {type: integer}}
       responses: {'200': {description: Paused transfer}}
 
-  /api/agents/{id}/transfers/{transfer_id}/file:
+  /agents/{id}/transfers/{transfer_id}/file:
     get:
       tags: [Files]
       summary: Download a completed pull (supports Range)

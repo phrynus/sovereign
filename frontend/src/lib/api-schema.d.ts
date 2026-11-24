@@ -11595,6 +11595,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/credentials/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vault picker options (dual-use alias) */
+        get: operations["credentialOptionsAlias"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/specs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dispatchable task specification catalogue */
+        get: operations["listTaskSpecs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -11630,7 +11664,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/files/write": {
+    "/agents/{id}/files/write": {
         parameters: {
             query?: never;
             header?: never;
@@ -11647,7 +11681,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/files/history": {
+    "/agents/{id}/files/history": {
         parameters: {
             query?: never;
             header?: never;
@@ -11664,7 +11698,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/files/revisions/{taskId}": {
+    "/agents/{id}/files/revisions/{taskId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -11681,7 +11715,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/transfers": {
+    "/agents/{id}/transfers": {
         parameters: {
             query?: never;
             header?: never;
@@ -11699,7 +11733,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/transfers/{transfer_id}": {
+    "/agents/{id}/transfers/{transfer_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -11717,7 +11751,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/transfers/{transfer_id}/chunk": {
+    "/agents/{id}/transfers/{transfer_id}/chunk": {
         parameters: {
             query?: never;
             header?: never;
@@ -11734,7 +11768,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/transfers/{transfer_id}/resume": {
+    "/agents/{id}/transfers/{transfer_id}/resume": {
         parameters: {
             query?: never;
             header?: never;
@@ -11750,7 +11784,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/transfers/{transfer_id}/pause": {
+    "/agents/{id}/transfers/{transfer_id}/pause": {
         parameters: {
             query?: never;
             header?: never;
@@ -11766,7 +11800,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents/{id}/transfers/{transfer_id}/file": {
+    "/agents/{id}/transfers/{transfer_id}/file": {
         parameters: {
             query?: never;
             header?: never;
@@ -29933,6 +29967,52 @@ export interface operations {
             };
             /** @description Missing credentials.read */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    credentialOptionsAlias: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing credentials.read */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listTaskSpecs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Protocol task specifications */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
