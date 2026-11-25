@@ -60,11 +60,14 @@ func TestAuditExportJSONFormat(t *testing.T) {
 		t.Fatalf("Content-Disposition = %q", cd)
 	}
 	var body struct {
-		Count     int    `json:"count"`
-		Truncated bool   `json:"truncated"`
-		Filtered  bool   `json:"filtered"`
-		Format    string `json:"format"`
-		Rows      []struct {
+		Count           int    `json:"count"`
+		Truncated       bool   `json:"truncated"`
+		Filtered        bool   `json:"filtered"`
+		Scope           string `json:"scope"`
+		ChainContiguous bool   `json:"chain_contiguous"`
+		Warning         string `json:"warning"`
+		Format          string `json:"format"`
+		Rows            []struct {
 			ID        uint   `json:"id"`
 			User      string `json:"user"`
 			Action    string `json:"action"`
@@ -79,8 +82,11 @@ func TestAuditExportJSONFormat(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode: %v (%s)", err, w.Body.String())
 	}
-	if body.Count != 3 || len(body.Rows) != 3 || body.Format != "json" || body.Truncated || body.Filtered {
+	if body.Count != 3 || len(body.Rows) != 3 || body.Format != "json" || body.Truncated || !body.Filtered {
 		t.Fatalf("payload = %+v", body)
+	}
+	if body.Scope != "tenant=1" || body.ChainContiguous || !strings.Contains(body.Warning, "not a contiguous hash chain") {
+		t.Fatalf("tenant JSON envelope lost its selection caveat: %+v", body)
 	}
 	// Verification needs every hashed field and both hashes; assert it instead of trusting the comment.
 	row := body.Rows[0]

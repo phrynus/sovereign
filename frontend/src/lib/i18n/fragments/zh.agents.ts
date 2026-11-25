@@ -1138,6 +1138,7 @@ export const zhAgents: Record<string, string> = {
   "agents.tasklist_download_result": "下载结果",
   "agents.tasklist_empty": "暂无任务",
   "agents.tasklist_empty_hint": "下发给该 Beacon 的命令会显示在这里。",
+  "agents.tasks_redacted": "任务详情已隐藏，仅显示状态和时间。",
   "agents.title": "Beacon 管理",
   "agents.toggle_columns_aria": "切换列显示",
   "agents.token_actions": "操作",

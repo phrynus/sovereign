@@ -54,6 +54,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
 		return
 	}
+	tenantID := s.currentTenantID(c)
 
 	// Listener is required
 	if form.ListenerID == 0 {
@@ -79,7 +80,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		beaconKey = s.serverBeaconKey()
 	}
 
-	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, s.currentTenantID(c))
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, tenantID)
 	if err != nil {
 		// Keep the raw error in the log: it names key material and paths, which
 		// must not travel to the client even for an authenticated operator.
@@ -110,7 +111,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 
 	ps1Code, err := payload.GeneratePowerShellSource(cfg, s.implantDataDir())
 	if err != nil {
-		s.logBuild("windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "failed", "build error", "")
+		s.logBuild(tenantID, "windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 		return
 	}
@@ -124,7 +125,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 	}
 	oneLiner := obfuscation.GenerateCommandLineOneLinerWithOptions(ps1Code, psOpts)
 
-	s.logBuild("windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "success", "", "")
+	s.logBuild(tenantID, "windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "success", "", "")
 	respond(c, gin.H{
 
 		"code":            oneLiner,
@@ -166,6 +167,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
 		return
 	}
+	tenantID := s.currentTenantID(c)
 
 	payloadType := form.PayloadType
 	if payloadType == "" {
@@ -237,7 +239,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		beaconKey = s.serverBeaconKey()
 	}
 
-	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, s.currentTenantID(c))
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey, tenantID)
 	if err != nil {
 		// Keep the raw error in the log: it names key material and paths, which
 		// must not travel to the client even for an authenticated operator.
@@ -305,7 +307,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	}
 
 	if genErr != nil {
-		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+		s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(genErr, "Payload generation"))
 		return
 	}
@@ -320,7 +322,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	}
 	requestHost, ok := sanitizeRequestHost(c.Request.Host)
 	if !ok {
-		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "invalid Host header", "")
+		s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "invalid Host header", "")
 		respondError(c, http.StatusBadRequest, "invalid Host header")
 		return
 	}
@@ -330,12 +332,12 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	// whatever cwd the process started in.
 	payloadsDir, err := s.hostedPayloadsDir()
 	if err != nil {
-		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+		s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 		return
 	}
 	if err := os.MkdirAll(payloadsDir, 0750); err != nil {
-		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+		s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 		return
 	}
@@ -343,7 +345,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	payloadID := util.NewString()
 	payloadSubDir := filepath.Join(payloadsDir, payloadID)
 	if err := os.MkdirAll(payloadSubDir, 0750); err != nil {
-		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+		s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 		return
 	}
@@ -352,19 +354,19 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 
 	if payloadType == "ps1" {
 		if err := os.WriteFile(hostPath, []byte(ps1Code), 0600); err != nil {
-			s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+			s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 			return
 		}
 	} else {
 		input, readErr := os.ReadFile(genPath)
 		if readErr != nil {
-			s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+			s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 			respondError(c, http.StatusInternalServerError, sanitizeError(readErr, "Payload generation"))
 			return
 		}
 		if err := os.WriteFile(hostPath, input, 0600); err != nil {
-			s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
+			s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 			return
 		}
@@ -393,7 +395,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		s.registerTransientArtifact(genPath)
 	}
 
-	s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "success", "", hostPath)
+	s.logBuild(tenantID, format, "oneliner", form.C2URL, form.ListenerID, filename, "success", "", hostPath)
 	respond(c, gin.H{
 
 		"payload_id":   payloadID,

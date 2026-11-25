@@ -58,7 +58,8 @@ export default memo(function AgentHeader({
   actionLoading, onQuickAction, credCount, mimikatzReady = null, avProducts = [], avStatus = "unknown", onKill, onUninstall, onMigrate, onPopOut,
 }: AgentHeaderProps) {
   const { t } = useI18n();
-  const { can } = usePermissions();
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
   const hostname = agent.hostname || "\u2014";
   const ip = agent.ip || "\u2014";
   const publicIP = agent.public_ip || "";
@@ -161,7 +162,7 @@ export default memo(function AgentHeader({
               <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/shell`} />}><Terminal className="size-4" /> {t("nav.beacon_shell_title")} <kbd className="text-micro-sm opacity-50 ml-1">S</kbd></Button>
               <Button variant="outline" size="sm" render={<Link to={`/ai?agent=${encodeURIComponent(agentId)}`} />}><Bot className="size-4" /> {t("ai.open_for_agent")}</Button>
               <Button variant="outline" size="sm" render={<Link to={rebuildPayloadHref(agent)} />}><RefreshCw className="size-4" /> {t("agents.rebuild_payload")}</Button>
-              <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-micro-sm opacity-50 ml-1">F</kbd></Button>
+              {canReadFiles && <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/files`} />}><FolderOpen className="size-4" /> {t("agents.files_title")} <kbd className="text-micro-sm opacity-50 ml-1">F</kbd></Button>}
               <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/screen`} />}><Monitor className="size-4" /> {t("nav.beacon_screen")} <span className="text-micro opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-micro-sm opacity-50 ml-1">D</kbd></Button>
               <Button variant="outline" size="sm" onClick={onPopOut} aria-label={t("agents.popout_console")}>
                 <PictureInPicture2 className="size-4" /> {t("agents.popout_console")}

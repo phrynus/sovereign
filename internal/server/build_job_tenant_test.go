@@ -61,6 +61,38 @@ func TestBuildJobVisibilityIsTenantScoped(t *testing.T) {
 	}
 }
 
+func TestBuildJobListAndSnapshotsAreTenantScoped(t *testing.T) {
+	s := mustTenantServer(t)
+	own := s.startBuildJobWithProfile("windows", "exe", "https://own.example", 1, "own.exe", "", "", "", 1)
+	s.startBuildJobWithProfile("windows", "exe", "https://foreign.example", 2, "foreign.exe", "", "", "", 2)
+	s.startBuildJobWithProfile("windows", "exe", "https://legacy.example", 3, "legacy.exe", "", "", "", 0)
+
+	c, w := tenantScopedAdminContext(s, t, "build-list-tenant-one", 1)
+	s.handleBuildList(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list = %d (%s)", w.Code, w.Body.String())
+	}
+	var response struct {
+		Builds []struct {
+			ID       string `json:"id"`
+			Filename string `json:"filename"`
+		} `json:"builds"`
+	}
+	unmarshalData(t, w.Body.Bytes(), &response)
+	if len(response.Builds) != 1 || response.Builds[0].ID != own.ID {
+		t.Fatalf("tenant list leaked jobs: %+v", response.Builds)
+	}
+	if snapshots := s.buildJobSnapshotsForTenant(1); len(snapshots) != 1 || snapshots[0]["id"] != own.ID {
+		t.Fatalf("tenant snapshots leaked jobs: %+v", snapshots)
+	}
+	if snapshots := s.buildJobSnapshotsForTenant(0); len(snapshots) != 3 {
+		t.Fatalf("global snapshots = %d, want 3", len(snapshots))
+	}
+	if response.Builds[0].Filename != "own.exe" {
+		t.Fatalf("unexpected build fixture: %+v", response.Builds)
+	}
+}
+
 // TestBuildJobVisibleToUnscopedAndLegacy covers the two permissive cases so they
 // cannot rot: an unscoped caller (tid 0, single-tenant install) and a job that
 // carries no tenant (created before the field existed).

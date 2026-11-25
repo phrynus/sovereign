@@ -40,8 +40,8 @@ export function resultLooksComparable(text?: string): boolean {
 
 export function previousComparableTask<T extends {
   id: number;
-  type: string;
-  command: string;
+  type?: string;
+  command?: string;
   status: string;
   result?: string;
 }>(tasks: T[], current: Pick<T, "id" | "type" | "command">): T | null {

@@ -252,6 +252,8 @@ export const en: Record<string, string> = {
     "audit.verify_chain": "Verify chain",
     "audit.verify_running": "Verifying…",
     "audit.verify_ok": "Chain intact ({n} rows)",
+    "audit.verify_tenant_ok": "Visible rows verified ({n} rows)",
+    "audit.verify_tenant_scope": "Tenant view: global chain continuity and anchor were not verified.",
     "audit.verify_failed": "Chain broken at #{id}",
     "audit.verify_error": "Chain verification failed",
     "audit.verify_hint": "Checks the newest 5,000 rows; use cmd/verify-audit for a full offline verification.",

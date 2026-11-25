@@ -85,7 +85,7 @@ func TestFileEditorWriteWithCompletedBaseline(t *testing.T) {
 	if !strings.HasPrefix(rawDraft, "FC2ENC:") {
 		t.Fatalf("draft at rest = %q", rawDraft)
 	}
-	projected := taskForOperator(task)
+	projected := taskForAuthorizedOperator(task)
 	if projected.Data != "" {
 		t.Fatalf("projection leaked the draft: %+v", projected)
 	}

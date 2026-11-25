@@ -93,6 +93,7 @@ export const zhDashboard: Record<string, string> = {
   "dashboard.task_gantt": "任务甘特图",
   "dashboard.task_status": "任务状态",
   "dashboard.title": "作战仪表盘",
+  "dashboard.tasks_redacted": "任务详情已隐藏，仅显示状态和时间。",
   "dashboard.traffic_load_failed": "加载流量数据失败",
   "dashboard.unknown": "未知",
   "dashboard.view_all": "查看全部",

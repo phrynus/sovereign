@@ -9,6 +9,8 @@ interface MergableTask {
   id?: number | string;
   ID?: number | string;
   status?: string;
+  created_at?: string;
+  updated_at?: string;
   result?: string;
   error?: string;
 }
@@ -27,6 +29,7 @@ export function mergeSnapshotWithPrev<T>(snapshot: T, prev: T | null): T {
   const old = prev as Record<string, unknown>;
   if (typeof snap !== "object" || typeof old !== "object") return snapshot;
 
+  const redacted = snap.tasks_redacted === true || old.tasks_redacted === true;
   const snapTasks = Array.isArray(snap.tasks) ? (snap.tasks as MergableTask[]) : null;
   const prevTasks = Array.isArray(old.tasks) ? (old.tasks as MergableTask[]) : null;
   if (!snapTasks || !prevTasks) return snapshot;
@@ -50,8 +53,12 @@ export function mergeSnapshotWithPrev<T>(snapshot: T, prev: T | null): T {
     const out = { ...snapTask };
     let taskChanged = false;
     if (prior.status && snapTask.status !== prior.status) { out.status = prior.status; taskChanged = true; }
-    if (prior.result && snapTask.result !== prior.result) { out.result = prior.result; taskChanged = true; }
-    if (prior.error && snapTask.error !== prior.error) { out.error = prior.error; taskChanged = true; }
+    if (redacted) {
+      if (prior.updated_at && snapTask.updated_at !== prior.updated_at) { out.updated_at = prior.updated_at; taskChanged = true; }
+    } else {
+      if (prior.result && snapTask.result !== prior.result) { out.result = prior.result; taskChanged = true; }
+      if (prior.error && snapTask.error !== prior.error) { out.error = prior.error; taskChanged = true; }
+    }
     if (taskChanged) { merged[i] = out; changed = true; }
   }
   if (!changed) return snapshot;

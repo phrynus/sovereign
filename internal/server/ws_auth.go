@@ -67,9 +67,10 @@ func (s *Server) wsSessionUserOK(claims *middleware.Claims) bool {
 }
 
 // startWSAuthRecheck periodically re-validates a live operator WS session and
-// closes the connection when the account is disabled, force-logged-out, or the
-// session row is revoked. done must be closed when the read loop exits.
-func (s *Server) startWSAuthRecheck(tokenStr string, claims *middleware.Claims, done <-chan struct{}, closeFn func()) {
+// closes the connection when the account is disabled, force-logged-out, the
+// session row is revoked, or a previously granted tasks.read permission is
+// removed. done must be closed when the read loop exits.
+func (s *Server) startWSAuthRecheck(tokenStr string, claims *middleware.Claims, done <-chan struct{}, hadTaskAccess bool, closeFn func()) {
 	if claims == nil || tokenStr == "" || closeFn == nil {
 		return
 	}
@@ -85,7 +86,7 @@ func (s *Server) startWSAuthRecheck(tokenStr string, claims *middleware.Claims, 
 			case <-done:
 				return
 			case <-ticker.C:
-				if !s.wsSessionStillValid(tokenStr, claims) {
+				if !s.wsSessionStillValid(tokenStr, claims, hadTaskAccess) {
 					closeFn()
 					return
 				}
@@ -95,10 +96,19 @@ func (s *Server) startWSAuthRecheck(tokenStr string, claims *middleware.Claims, 
 }
 
 // wsSessionStillValid is the periodic form of the connect-time auth checks.
-func (s *Server) wsSessionStillValid(tokenStr string, claims *middleware.Claims) bool {
+// hadTaskAccess snapshots the authority present when the socket opened: a
+// socket that never had task access stays useful for non-task events, while a
+// socket that had it must disconnect promptly when that permission is revoked.
+func (s *Server) wsSessionStillValid(tokenStr string, claims *middleware.Claims, hadTaskAccess bool) bool {
 	revoked, err := s.isSessionRevoked(tokenStr)
 	if err != nil || revoked {
 		return false
 	}
-	return s.wsSessionUserOK(claims)
+	if !s.wsSessionUserOK(claims) {
+		return false
+	}
+	if hadTaskAccess && !s.userCanViewTasks(claims.Username) {
+		return false
+	}
+	return true
 }

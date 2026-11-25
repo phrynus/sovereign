@@ -2536,18 +2536,24 @@ paths:
   /audit/verify:
     get:
       tags: [Audit]
-      summary: Verify the audit hash chain
-      description: Walk the newest audit rows and report whether the tamper-evident hash chain is intact
+      summary: Verify the global audit chain or a tenant selection
+      description: >-
+        Tenant 0 verifies the single global hash chain, including previous-hash
+        continuity and the out-of-band anchor. A non-zero tenant verifies only
+        self-hashes and optional Ed25519 signatures on rows visible to that
+        tenant; it never claims global continuity or exposes the global anchor.
+        ok=false is a finding, not a server error.
       operationId: verifyAuditChain
       security:
         - SessionCookie: []
       parameters:
         - name: limit
           in: query
-          description: How many of the newest rows to check (default 1000, max 5000)
+          description: How many of the newest visible rows to check (default 1000, max 5000)
           schema:
             type: integer
             default: 1000
+            maximum: 5000
       responses:
         '200':
           description: Verification verdict (ok=false is a finding, not a server error)
@@ -2561,88 +2567,159 @@ paths:
                     properties:
                       data:
                         type: object
+                        required: [ok, checked, signature_kind, scope, anchor_applicable]
                         properties:
-                          ok:
+                          ok: {type: boolean}
+                          checked: {type: integer}
+                          first_bad_id: {type: integer}
+                          reason: {type: string}
+                          discontinuities: {type: integer}
+                          signature_kind: {type: string}
+                          scope: {type: string, enum: [global, tenant]}
+                          anchor_applicable: {type: boolean}
+                          entry_hash_valid:
                             type: boolean
-                          checked:
-                            type: integer
-                          first_bad_id:
-                            type: integer
-                          reason:
-                            type: string
+                            description: Newest visible row's self-hash validity; present for tenant scope.
+                          signature_valid:
+                            type: boolean
+                            description: >-
+                              Newest visible row's Ed25519 signature validity; present for tenant scope.
+                              False also means a legacy row carries no signature, which is not itself a failure.
+        '403':
+          description: Caller tenant could not be resolved
   /audit/export:
     get:
       tags: [Audit]
-      summary: Export the audit chain
-      description: Stream the audit hash chain as newline-delimited JSON for offline verification
+      summary: Export the global audit chain or a tenant selection
+      description: >-
+        Stream audit rows with their original global-chain hashes. Tenant 0 with
+        no explicit filter exports the contiguous global chain. A non-zero tenant
+        always exports a selection of that single chain, even without query
+        filters, so filtered=true, X-Audit-Export-Scope contains tenant=<id>, and
+        a Warning states that the selection is not a contiguous hash chain.
       operationId: exportAuditChain
       security:
         - SessionCookie: []
       parameters:
         - name: limit
           in: query
-          description: Maximum number of the newest rows to export (default 50000, max 200000)
+          description: Maximum number of the oldest matching rows to export (default 50000, max 200000)
           schema:
             type: integer
             default: 50000
+            maximum: 200000
         - name: since_id
           in: query
-          description: >-
-            Export only rows with a greater id. Ids are monotonic, so this makes
-            the export incremental: fetch the rows appended since the copy you
-            already verified, and stitch the two together via prev_hash.
+          description: Export only rows with a greater id; a global export remains a contiguous continuation.
           schema:
             type: integer
             default: 0
+        - name: user
+          in: query
+          description: Exact audit username; makes the export a selection.
+          schema: {type: string}
+        - name: action
+          in: query
+          description: Exact action name; makes the export a selection.
+          schema: {type: string}
+        - name: agent_id
+          in: query
+          description: Exact related agent/target id; makes the export a selection.
+          schema: {type: string}
         - name: since
           in: query
-          description: >-
-            Lower time bound, from the same parser the task export uses (relative 24h/7d or an RFC3339
-            instant). Duration bounds are measured backwards from now; an RFC3339 value is an absolute
-            instant. A time bound makes the export a SELECTION, so the response carries the
-            `X-Audit-Export-Filtered` warning, and `X-Audit-Export-Scope` names every filter that shaped the rows
-            (semicolon-separated, sorted, or `all`) so an investigator holding the file can reproduce the selection instead of
-            guessing which of six filters produced it.
+          description: Lower time bound (relative 24h/7d or RFC3339); makes the export a selection.
           schema: {type: string}
         - name: until
           in: query
-          description: Upper time bound, same spellings as since; must not precede it
+          description: Upper time bound, same spellings as since; must not precede it.
           schema: {type: string}
         - name: format
           in: query
           description: >-
-            ndjson (default) streams one row per line; json returns a single document with count, truncated, filtered and
-            rows. Both carry the same row objects, with both hashes and every hashed field - they are the VERIFIABLE artefact,
-            and the format is part of the ETag. `ecs` and `cef` are SIEM **projections** for tools that ingest security events:
-            they carry the ECS vocabulary (event.action/outcome, user.name, source.ip, host.id, message) or the CEF header plus
-            extensions, but they **drop the hash chain**, so a file in either format cannot verify the log. Both say so in a 199
-            Warning header and are delivered under their own extension (`.ecs.ndjson`, `.cef`) so a collector globbing for the
-            verifiable export cannot pick up a projection by mistake.
+            ndjson (default) streams one verifiable row per line; json returns one
+            document carrying count, truncated, filtered, scope, chain_contiguous,
+            warning, format and rows. Both preserve every hashed field and both
+            hashes. ecs and cef are SIEM projections, not verifiable chain exports.
           schema: {type: string, enum: [ndjson, json, ecs, cef], default: ndjson}
       responses:
         '200':
-          description: One JSON object per line, each with prev_hash and entry_hash
+          description: Audit rows or SIEM projection
+          headers:
+            ETag: {type: string}
+            Cache-Control: {type: string}
+            X-Audit-Export-Rows: {type: string}
+            X-Audit-Export-Truncated: {type: string, enum: ['true', 'false']}
+            X-Audit-Export-Filtered: {type: string, enum: ['true', 'false']}
+            X-Audit-Export-Scope:
+              type: string
+              description: Sorted name=value filters, including tenant=<id> for non-zero tenants, or all.
+            X-Export-Scope: {type: string}
+            Warning:
+              type: string
+              description: May contain multiple 199 warnings for selection continuity and SIEM projection limits.
           content:
             application/x-ndjson:
               schema:
                 type: string
+                description: One audit row per line for ndjson, or one ECS event per line for ecs.
+            application/json:
+              schema:
+                type: object
+                required: [count, truncated, filtered, scope, chain_contiguous, format, rows]
+                properties:
+                  count: {type: integer}
+                  truncated: {type: boolean}
+                  filtered: {type: boolean}
+                  scope: {type: string}
+                  chain_contiguous: {type: boolean}
+                  warning: {type: string}
+                  format: {type: string, enum: [json]}
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, tenant_id, user, action, resource, agent_id, ip, success, error, details, prev_hash, entry_hash, created_at]
+                      properties:
+                        id: {type: integer}
+                        tenant_id: {type: integer}
+                        user: {type: string}
+                        action: {type: string}
+                        resource: {type: string}
+                        agent_id: {type: string}
+                        ip: {type: string}
+                        success: {type: boolean}
+                        error: {type: string}
+                        details: {type: string}
+                        prev_hash: {type: string}
+                        entry_hash: {type: string}
+                        created_at: {type: string}
+                        signature: {type: string}
+            text/plain:
+              schema:
+                type: string
+                description: CEF projection for format=cef.
+        '400':
+          description: Invalid format or time bound
+        '403':
+          description: Caller tenant could not be resolved
         '503':
           description: Database is not initialized
   /audit/anchor:
     get:
       tags: [Audit]
-      summary: Current audit chain head, for out-of-band archiving
+      summary: Current global chain head or newest visible tenant row
       description: >-
-        The newest audit row's id and entry hash, plus whether the server-side
-        anchor file agrees with the table. Pasting this into an incident report
-        gives a later investigator something a rewrite of the table cannot
-        reproduce.
+        Tenant 0 receives the global head, out-of-band anchor metadata and the
+        row/anchor signatures for archiving. A non-zero tenant receives only its
+        newest visible row with scope=tenant and anchor_applicable=false; global
+        anchor id, timestamp and signature are omitted.
       operationId: getAuditChainAnchor
       security:
         - SessionCookie: []
       responses:
         '200':
-          description: Chain head
+          description: Chain head or tenant row validity
           content:
             application/json:
               schema:
@@ -2653,17 +2730,33 @@ paths:
                     properties:
                       data:
                         type: object
+                        required: [id, entry_hash, scope, anchor_applicable, anchor_matches, anchor_recorded, entry_hash_valid, signature_valid]
                         properties:
-                          id:
-                            type: integer
-                          entry_hash:
-                            type: string
-                          created_at:
-                            type: string
-                          anchor_matches:
+                          id: {type: integer}
+                          entry_hash: {type: string}
+                          created_at: {type: string}
+                          scope: {type: string, enum: [global, tenant]}
+                          anchor_applicable: {type: boolean}
+                          anchor_matches: {type: boolean}
+                          anchor_recorded: {type: boolean}
+                          entry_hash_valid:
                             type: boolean
-                          anchor_recorded:
+                            description: Newest visible row's self-hash validity.
+                          signature_valid:
                             type: boolean
+                            description: Newest visible row's Ed25519 signature validity; false also covers legacy unsigned rows.
+                          signature:
+                            type: string
+                            description: Newest visible row's signature, not the global anchor signature.
+                          anchor_id: {type: integer}
+                          anchor_timestamp: {type: string}
+                          anchor_signature:
+                            type: string
+                            description: Global out-of-band anchor signature; tenant 0 only.
+        '403':
+          description: Caller tenant could not be resolved
+        '503':
+          description: Database is not initialized
   /api/tasks/specs:
     get:
       tags: [Tasks]
@@ -5674,7 +5767,7 @@ paths:
     get:
       tags: [Lateral Movement]
       summary: Lateral movement history
-      description: Get lateral movement history for an agent
+      description: Tenant-scoped lateral history. Callers without tasks.read receive fixed rows without type, target, method, result or error.
       operationId: getLateralHistory
       security:
         - SessionCookie: []
@@ -5682,9 +5775,8 @@ paths:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
-            format: uuid
+          description: Source agent id, or all for the caller's tenant
+          schema: {type: string}
       responses:
         '200':
           description: Lateral movement history
@@ -5697,14 +5789,21 @@ paths:
                     required: [data]
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Task'
+                        type: object
+                        required: [tasks, total, tasks_redacted]
+                        properties:
+                          tasks:
+                            type: array
+                            items: {$ref: '#/components/schemas/LateralHistoryRow'}
+                          total: {type: integer}
+                          tasks_redacted: {type: boolean}
+        '404': {description: Source agent not visible to this tenant}
+        '500': {description: History query failed}
   /api/privesc/history/{id}:
     get:
       tags: [Privilege Escalation]
       summary: Privilege escalation history
-      description: Get privilege escalation history for an agent
+      description: Tenant-scoped history for one privesc task. Result, check type and findings require tasks.read.
       operationId: getPrivescHistory
       security:
         - SessionCookie: []
@@ -5712,9 +5811,7 @@ paths:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
-            format: uuid
+          schema: {type: integer, minimum: 1}
       responses:
         '200':
           description: Privilege escalation history
@@ -5727,9 +5824,19 @@ paths:
                     required: [data]
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Task'
+                        type: object
+                        required: [tasks, total, tasks_redacted]
+                        properties:
+                          tasks:
+                            type: array
+                            items: {$ref: '#/components/schemas/PrivescHistoryEntry'}
+                          findings:
+                            type: array
+                            items: {type: object, additionalProperties: true}
+                          total: {type: integer}
+                          tasks_redacted: {type: boolean}
+        '404': {description: Privesc task not visible to this tenant}
+        '500': {description: History query failed}
   /api/topology/data:
     get:
       tags: [Agents]
@@ -6848,49 +6955,6 @@ paths:
         '200':
           description: OK
 
-  /api/lateral/result:
-    post:
-      tags: [Lateral Movement]
-      summary: Lateral movement task result
-      operationId: lateralResult
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
-  /api/privesc/result:
-    post:
-      tags: [Privilege Escalation]
-      summary: Privesc result
-      operationId: privescResult
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
-  /api/privesc/run:
-    post:
-      tags: [Privilege Escalation]
-      summary: Run privesc suite
-      operationId: privescRun
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
-  /api/scan/result:
-    post:
-      tags: [Scanner]
-      summary: Scan result callback
-      operationId: scanResult
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
 
   /api/scan/export/{taskId}:
     get:
@@ -8595,28 +8659,6 @@ paths:
         '200':
           description: OK
 
-  /api/browser/result:
-    post:
-      tags: [Intel]
-      summary: Browser steal result callback
-      operationId: browserResult
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
-  /api/wifi/result:
-    post:
-      tags: [Intel]
-      summary: WiFi cred result callback
-      operationId: wifiResult
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-
   /listeners/{id}:
     get:
       tags: [Listeners]
@@ -8663,7 +8705,24 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: OK
+          description: Tenant-scoped agent info; success_rate requires tasks.read
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [agent, task_count, tasks_redacted]
+                        properties:
+                          agent: {$ref: '#/components/schemas/Agent'}
+                          task_count: {type: integer}
+                          success_rate: {type: string}
+                          tasks_redacted: {type: boolean}
+        '404': {description: Agent not visible to this tenant}
+        '500': {description: Agent info query failed}
 
   /toolkit/agents/{id}/tasks:
     get:
@@ -8679,7 +8738,27 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: OK
+          description: Tenant-scoped tasks projected by tasks.read
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [tasks, tasks_redacted]
+                        properties:
+                          tasks:
+                            type: array
+                            items:
+                              oneOf:
+                                - $ref: '#/components/schemas/Task'
+                                - $ref: '#/components/schemas/TaskSummary'
+                          tasks_redacted: {type: boolean}
+        '404': {description: Agent not visible to this tenant}
+        '500': {description: Task query failed}
 
   /toolkit/results:
     get:
@@ -8690,7 +8769,26 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Tenant-scoped recent tasks projected by tasks.read
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [tasks, tasks_redacted]
+                        properties:
+                          tasks:
+                            type: array
+                            items:
+                              oneOf:
+                                - $ref: '#/components/schemas/Task'
+                                - $ref: '#/components/schemas/TaskSummary'
+                          tasks_redacted: {type: boolean}
+        '500': {description: Task query failed}
 
   /translations/stats:
     get:
@@ -15483,6 +15581,16 @@ components:
         method: {type: string}
         command: {type: string}
 
+    TaskSummary:
+      type: object
+      description: Fixed task projection for callers without tasks.read
+      required: [id, status, created_at, updated_at]
+      properties:
+        id: {type: integer}
+        status: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
     Task:
       type: object
       properties:
@@ -15583,6 +15691,33 @@ components:
         result_mtime:
           type: integer
           format: int64
+
+    LateralHistoryRow:
+      type: object
+      required: [task_id, source_agent_id, status, created_at, created_by]
+      properties:
+        task_id: {type: integer}
+        source_agent_id: {type: string}
+        type: {type: string, description: Requires tasks.read}
+        status: {type: string}
+        created_at: {type: string, format: date-time}
+        created_by: {type: string}
+        target: {type: string, description: Requires tasks.read; parsed only from canonical method|target wire arguments}
+        method: {type: string, description: Requires tasks.read; parsed only from canonical method|target wire arguments}
+        result: {type: string, description: Requires tasks.read}
+        error: {type: string, description: Requires tasks.read}
+
+    PrivescHistoryEntry:
+      type: object
+      required: [id, agent_id, status, created_at]
+      properties:
+        id: {type: integer}
+        agent_id: {type: string}
+        check_type: {type: string, description: Requires tasks.read}
+        status: {type: string}
+        result: {type: string, description: Requires tasks.read}
+        findings_count: {type: integer, description: Requires tasks.read}
+        created_at: {type: string, format: date-time}
 
     Listener:
       type: object

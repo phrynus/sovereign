@@ -121,7 +121,7 @@ func TestWsSessionStillValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse token: %v", err)
 	}
-	if !s.wsSessionStillValid(token, claims) {
+	if !s.wsSessionStillValid(token, claims, true) {
 		t.Fatal("fresh session should be valid")
 	}
 
@@ -129,7 +129,7 @@ func TestWsSessionStillValid(t *testing.T) {
 	if err := s.db.Model(&user).Update("force_logout_at", time.Now().Add(time.Hour)).Error; err != nil {
 		t.Fatalf("force logout: %v", err)
 	}
-	if s.wsSessionStillValid(token, claims) {
+	if s.wsSessionStillValid(token, claims, true) {
 		t.Fatal("force-logout must invalidate live WS recheck")
 	}
 
@@ -140,8 +140,29 @@ func TestWsSessionStillValid(t *testing.T) {
 	if !s.revokeSession(token) {
 		t.Fatal("revoke failed")
 	}
-	if s.wsSessionStillValid(token, claims) {
+	if s.wsSessionStillValid(token, claims, true) {
 		t.Fatal("revoked session must fail WS recheck")
+	}
+}
+
+// TestWsSessionStillValidRevokesTaskAccess pins permission revocation on an
+// already-open socket without disconnecting users who never had task access.
+func TestWsSessionStillValidRevokesTaskAccess(t *testing.T) {
+	s := newWSAuthTestServer(t)
+	user := seedWSAuthUser(t, s, "ws-task-revoke")
+	token := issueWSAuthToken(t, s, user)
+	claims, err := middleware.ParseToken(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Model(&user).Update("role", "viewer").Error; err != nil {
+		t.Fatal(err)
+	}
+	if s.wsSessionStillValid(token, claims, true) {
+		t.Fatal("revoked tasks.read must invalidate a socket that had task access")
+	}
+	if !s.wsSessionStillValid(token, claims, false) {
+		t.Fatal("a socket without task access must remain valid for other events")
 	}
 }
 

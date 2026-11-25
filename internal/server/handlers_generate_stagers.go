@@ -265,19 +265,20 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	tenantID := s.currentTenantID(c)
 
 	stagerPath, err := s.withBuildSlot(func() (string, error) {
 		return s.generateTokenStager("windows", form)
 	})
 	if err != nil {
-		s.logStagerBuild("windows", form, "failed", err.Error())
+		s.logStagerBuild(tenantID, "windows", form, "failed", err.Error())
 		// buildFailureText, not sanitizeError: the stager error already carries the scrubbed toolchain output, and the sanitizer
 		// replaced it with the fallback sentence - the same defect that made a failed payload build read "Build failed".
 		respondError(c, http.StatusInternalServerError, buildFailureText(err))
 		return
 	}
 
-	s.logStagerBuild("windows", form, "success", stagerPath)
+	s.logStagerBuild(tenantID, "windows", form, "success", stagerPath)
 	s.registerTransientArtifact(stagerPath)
 	agentsDir := filepath.Join(s.rawDataDir(), "agents")
 	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
@@ -289,22 +290,23 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	tenantID := s.currentTenantID(c)
 
 	stagerPath, err := s.withBuildSlot(func() (string, error) {
 		return s.generateTokenStager("linux", form)
 	})
 	if err != nil {
-		s.logStagerBuild("linux", form, "failed", err.Error())
+		s.logStagerBuild(tenantID, "linux", form, "failed", err.Error())
 		respondError(c, http.StatusInternalServerError, buildFailureText(err))
 		return
 	}
 
-	s.logStagerBuild("linux", form, "success", stagerPath)
+	s.logStagerBuild(tenantID, "linux", form, "success", stagerPath)
 	s.registerTransientArtifact(stagerPath)
 	agentsDir := filepath.Join(s.rawDataDir(), "agents")
 	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }
 
-func (s *Server) logStagerBuild(goos string, form *stagerGenerateForm, status, detail string) {
-	s.logBuild(goos, "stager", form.C2URL, form.ListenerID, form.Filename, status, detail, "")
+func (s *Server) logStagerBuild(tenantID uint, goos string, form *stagerGenerateForm, status, detail string) {
+	s.logBuild(tenantID, goos, "stager", form.C2URL, form.ListenerID, form.Filename, status, detail, "")
 }

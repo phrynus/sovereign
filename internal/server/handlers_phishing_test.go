@@ -413,11 +413,6 @@ func TestLaunchPhishingCampaignValidation(t *testing.T) {
 	}
 }
 
-// Cross-tenant launch is NOT covered: PhishingCampaign has no TenantID in this
-// tree, so a foreign campaign is launchable. See the "Campaign tenancy" note
-// above; the assertion that used to live here referenced fields and a helper
-// that only exist in an unlanded change.
-
 // uintToStr formats an id for path params without importing strconv twice.
 func uintToStr(v uint) string {
 	if v == 0 {

@@ -124,7 +124,10 @@ func TestTimelineDetailsAreDecrypted(t *testing.T) {
 	seedEncryptedTaskResult(t, s, "g1-tl", 1, "whoami", "whoami", out)
 
 	c, _ := tenantScopedAdminContext(s, t, "g1-admin", 1)
-	events := s.buildTimelineEvents(c, "task", "", "", "", "")
+	events, err := s.buildTimelineEvents(c, "task", "", "", "", "")
+	if err != nil {
+		t.Fatalf("build timeline: %v", err)
+	}
 
 	var found bool
 	for _, e := range events {

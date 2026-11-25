@@ -17,6 +17,9 @@ import (
 // purge silently removed rows and left nothing behind saying who did it or how many.
 func TestPurgeAuditLogsRecordsItself(t *testing.T) {
 	s := mustTenantServer(t)
+	if err := s.db.Create(&db.User{Username: "admin1", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 
 	// Old rows that are eligible (the handler floors the window at 90 days).
 	old := time.Now().AddDate(0, 0, -200)
@@ -76,6 +79,9 @@ func TestPurgeAuditLogsRecordsItself(t *testing.T) {
 // server's own maintenance.
 func TestPurgeDoesNotTripTheChainVerifier(t *testing.T) {
 	s := mustTenantServer(t)
+	if err := s.db.Create(&db.User{Username: "admin1", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 
 	// Old rows must go through the real write path so they carry a valid hash;
 	// created_at is not part of the hash, so backdating them is chain-neutral.

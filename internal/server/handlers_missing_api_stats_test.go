@@ -106,6 +106,9 @@ func TestAPISettingsStats(t *testing.T) {
 func TestAPIMeshTopology(t *testing.T) {
 	s := mustTenantServer(t)
 	seedMissingAPIAdmin(t, s)
+	for _, id := range []string{"mesh-a", "mesh-b", "mesh-c"} {
+		seedTenantAgent(t, s, id, 1)
+	}
 	now := time.Now()
 	for _, p := range []db.MeshPeer{
 		{AgentID: "mesh-a", PeerID: "mesh-b", PeerAddr: "10.0.0.2:4444", Latency: 12, LastSeen: now},

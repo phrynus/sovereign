@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Permission } from "@/components/ui/permission";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, Download, Eye, File, FilePenLine, Folder, ImageIcon, Lock, Pencil, Trash2, X } from "lucide-react";
@@ -60,16 +61,19 @@ export default memo(function FilesTable(props: FilesTableProps) {
   );
 
   return (
-    <>
+    <Permission perms="files.read">
+      <>
       {selected.size > 0 && (
         <Card className="flex flex-wrap items-center gap-2 p-(--card-spacing)">
           <span className="text-xs text-muted-foreground">{t("agents.files_selected", { n: selected.size })}</span>
           <Button variant="secondary" size="sm" disabled={batchBusy} onClick={onBatchPull}>
             <Download className="size-4" /> {t("agents.files_pull_selected")}
           </Button>
-          <Button variant="destructive" size="sm" disabled={batchBusy} onClick={onBatchDelete}>
-            <Trash2 className="size-4" /> {t("agents.files_delete_selected")}
-          </Button>
+          <Permission perms="files.write">
+            <Button variant="destructive" size="sm" disabled={batchBusy} onClick={onBatchDelete}>
+              <Trash2 className="size-4" /> {t("agents.files_delete_selected")}
+            </Button>
+          </Permission>
           {batchBusy && (
             <Button variant="ghost" size="sm" onClick={onCancelBatch}>
               <X className="size-4" /> {t("common.cancel")}
@@ -81,11 +85,13 @@ export default memo(function FilesTable(props: FilesTableProps) {
         </Card>
       )}
 
+      <Permission perms="files.write">
+        {canWrite => (
       <Card
         className={`min-h-0 flex-1 overflow-hidden ${dragOver ? "ring-2 ring-primary" : ""}`}
-        onDragOver={(e) => { e.preventDefault(); onDragOver(); }}
+        onDragOver={(e) => { if (canWrite) { e.preventDefault(); onDragOver(); } }}
         onDragLeave={onDragLeave}
-        onDrop={onDrop}
+        onDrop={(e) => { if (canWrite) onDrop(e); }}
       >
         {dragOver && (
           <div className="border-b border-dashed border-primary bg-primary/5 px-4 py-2 text-center text-xs text-primary">
@@ -147,16 +153,18 @@ export default memo(function FilesTable(props: FilesTableProps) {
                   <div className="flex items-center justify-end gap-1">
                     {!entry.is_dir && (
                       <>
-                        {entry.size <= EDITOR_MAX_BYTES && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEdit(entry.name)}
-                            aria-label={t("agents.files_edit")}
-                          >
-                            <FilePenLine className="size-4" /> {t("agents.files_edit")}
-                          </Button>
-                        )}
+                        <Permission perms="files.write">
+                          {entry.size <= EDITOR_MAX_BYTES && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onEdit(entry.name)}
+                              aria-label={t("agents.files_edit")}
+                            >
+                              <FilePenLine className="size-4" /> {t("agents.files_edit")}
+                            </Button>
+                          )}
+                        </Permission>
                         <Button variant="ghost" size="sm" onClick={() => onPreview(entry.name)}>
                           <Eye className="size-4" /> {t("agents.files_preview_btn")}
                         </Button>
@@ -165,31 +173,33 @@ export default memo(function FilesTable(props: FilesTableProps) {
                         </Button>
                       </>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onRename(entry.name)}
-                      aria-label={t("agents.files_rename")}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onChmod(entry.name)}
-                      aria-label={t("agents.files_chmod")}
-                    >
-                      <Lock className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onDelete(entry.name)}
-                      className="text-destructive-ink"
-                      aria-label={t("common.delete")}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <Permission perms="files.write">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onRename(entry.name)}
+                        aria-label={t("agents.files_rename")}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onChmod(entry.name)}
+                        aria-label={t("agents.files_chmod")}
+                      >
+                        <Lock className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onDelete(entry.name)}
+                        className="text-destructive-ink"
+                        aria-label={t("common.delete")}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </Permission>
                   </div>
                 </TableCell>
               </TableRow>
@@ -197,6 +207,9 @@ export default memo(function FilesTable(props: FilesTableProps) {
           </TableBody>
         </Table>
       </Card>
-    </>
+        )}
+      </Permission>
+      </>
+    </Permission>
   );
 });

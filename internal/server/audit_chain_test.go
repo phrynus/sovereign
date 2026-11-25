@@ -81,6 +81,9 @@ func TestFlushAuditEntries_ConcurrentChainIntegrity(t *testing.T) {
 // bypassed it via a raw Create with empty prev_hash/entry_hash).
 func TestLogOperatorAction_EntersHashChain(t *testing.T) {
 	s := newAuditTestServer(t)
+	if err := s.db.Create(&db.User{Username: "admin-user", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

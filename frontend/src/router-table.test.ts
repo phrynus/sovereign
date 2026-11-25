@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { router } from "./router";
+import { router, requiredPerms } from "./router";
 
 // The route table is the single source of truth for paths: a duplicated path
 // would silently shadow one page behind another, so fail loudly instead.
@@ -13,6 +13,12 @@ function collectPaths(routes: { path?: string; children?: unknown[] }[], out: st
 }
 
 describe("router table", () => {
+
+  it("requires files.read for the beacon files child route", () => {
+    expect(requiredPerms("/beacons/agent-1/files")).toEqual(["files.read"]);
+    expect(requiredPerms("/beacons/agent-1")).toEqual(["agents.read"]);
+    expect(requiredPerms("/beacons")).toEqual(["agents.read"]);
+  });
   it("has no duplicate paths", () => {
     const paths = collectPaths(router.routes as never, []);
     const dupes = paths.filter((p, i) => paths.indexOf(p) !== i);

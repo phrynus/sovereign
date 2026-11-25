@@ -139,6 +139,23 @@ describe("AuditPage tabs", () => {
     expect(String(call?.[0])).toContain("limit=5000");
   });
 
+  it("does not call tenant row validation a complete global chain", async () => {
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      const p = String(path);
+      if (p.startsWith("/audit/verify")) {
+        return { ok: true, checked: 12, scope: "tenant", anchor_applicable: false };
+      }
+      if (p.startsWith("/audit/logs")) return { logs: [], total: 0, failed: 0 };
+      if (p.startsWith("/users")) return { users: [] };
+      return {};
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /audit\.verify_chain/ }));
+    expect(await screen.findByText("audit.verify_tenant_ok")).toBeTruthy();
+    expect(screen.getByText("audit.verify_tenant_scope")).toBeTruthy();
+    expect(screen.queryByText("audit.verify_ok")).toBeNull();
+  });
+
   it("shows the first broken row when verification fails", async () => {
     vi.mocked(api.get).mockImplementation(async (path: string) => {
       const p = String(path);

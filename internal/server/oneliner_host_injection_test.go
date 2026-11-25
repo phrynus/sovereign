@@ -98,4 +98,13 @@ func TestOneLinerRejectsSpoofedHost(t *testing.T) {
 	if strings.Contains(body, "Start-Process calc") {
 		t.Fatal("injected command reached the generated one-liners")
 	}
+	for _, status := range []string{"failed", "success"} {
+		var count int64
+		if err := s.db.Model(&db.BuildLog{}).Where("tenant_id = ? AND format = ? AND status = ?", 1, "oneliner", status).Count(&count).Error; err != nil {
+			t.Fatalf("count %s build logs: %v", status, err)
+		}
+		if count != 1 {
+			t.Fatalf("tenant-1 %s build logs = %d, want 1", status, count)
+		}
+	}
 }

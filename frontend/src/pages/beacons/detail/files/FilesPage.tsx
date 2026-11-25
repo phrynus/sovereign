@@ -4,6 +4,7 @@ registerFragment(enAgents);
 import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Permission } from "@/components/ui/permission";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { DataError } from "@/components/ui/data-state";
@@ -12,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { FolderOpen, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { joinPath, parentPath, type FileEntry } from "@/lib/agent-files/types";
 import type { FileSearchHit } from "@/lib/agent-files/file-search";
 import { transferPercent } from "@/lib/agent-files/file-task";
@@ -28,6 +30,10 @@ import FilesEditor from "./components/FilesEditor";
 import TransferList from "./components/TransferList";
 
 export default function FilesPage() {
+  return <Permission perms="files.read"><FilesPageContent /></Permission>;
+}
+
+function FilesPageContent() {
   const { t } = useI18n();
   const urlParams = useParams<{ id: string }>();
   const id = Array.isArray(urlParams?.id) ? urlParams.id[0] : urlParams?.id || "";
@@ -59,11 +65,13 @@ export default function FilesPage() {
     uploading,
     pullName,
     transfers,
-    transferBusyId,
+    transfersError,
     pauseTransfer,
     resumeTransfer,
     cancelTransfer,
     startOverTransfer,
+    transferBusyId,
+    loadTransfers,
     downloadTransfer,
     pullProgress,
     previewContent,
@@ -105,6 +113,8 @@ export default function FilesPage() {
     findFiles,
     huntFiles,
   } = useAgentFiles(id);
+  const { permissions } = usePermissions();
+  const canWrite = permissions == null || permissions.includes("files.write");
 
   const {
     selected, setSelected,
@@ -156,6 +166,7 @@ export default function FilesPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    if (!canWrite) return;
     const files = e.dataTransfer?.files;
     if (!files?.length) return;
     [...files].forEach((file) => uploadFile(file));
@@ -317,6 +328,13 @@ export default function FilesPage() {
         </Card>
       )}
 
+      {transfersError && (
+        <DataError
+          message={transfersError}
+          onRetry={() => void loadTransfers()}
+          className="py-6"
+        />
+      )}
       <TransferList
         t={t}
         transfers={transfers}

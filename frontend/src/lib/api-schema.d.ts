@@ -1278,8 +1278,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Verify the audit hash chain
-         * @description Walk the newest audit rows and report whether the tamper-evident hash chain is intact
+         * Verify the global audit chain or a tenant selection
+         * @description Tenant 0 verifies the single global hash chain, including previous-hash continuity and the out-of-band anchor. A non-zero tenant verifies only self-hashes and optional Ed25519 signatures on rows visible to that tenant; it never claims global continuity or exposes the global anchor. ok=false is a finding, not a server error.
          */
         get: operations["verifyAuditChain"];
         put?: never;
@@ -1298,8 +1298,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Export the audit chain
-         * @description Stream the audit hash chain as newline-delimited JSON for offline verification
+         * Export the global audit chain or a tenant selection
+         * @description Stream audit rows with their original global-chain hashes. Tenant 0 with no explicit filter exports the contiguous global chain. A non-zero tenant always exports a selection of that single chain, even without query filters, so filtered=true, X-Audit-Export-Scope contains tenant=<id>, and a Warning states that the selection is not a contiguous hash chain.
          */
         get: operations["exportAuditChain"];
         put?: never;
@@ -1318,8 +1318,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Current audit chain head, for out-of-band archiving
-         * @description The newest audit row's id and entry hash, plus whether the server-side anchor file agrees with the table. Pasting this into an incident report gives a later investigator something a rewrite of the table cannot reproduce.
+         * Current global chain head or newest visible tenant row
+         * @description Tenant 0 receives the global head, out-of-band anchor metadata and the row/anchor signatures for archiving. A non-zero tenant receives only its newest visible row with scope=tenant and anchor_applicable=false; global anchor id, timestamp and signature are omitted.
          */
         get: operations["getAuditChainAnchor"];
         put?: never;
@@ -2814,7 +2814,7 @@ export interface paths {
         };
         /**
          * Lateral movement history
-         * @description Get lateral movement history for an agent
+         * @description Tenant-scoped lateral history. Callers without tasks.read receive fixed rows without type, target, method, result or error.
          */
         get: operations["getLateralHistory"];
         put?: never;
@@ -2834,7 +2834,7 @@ export interface paths {
         };
         /**
          * Privilege escalation history
-         * @description Get privilege escalation history for an agent
+         * @description Tenant-scoped history for one privesc task. Result, check type and findings require tasks.read.
          */
         get: operations["getPrivescHistory"];
         put?: never;
@@ -3987,74 +3987,6 @@ export interface paths {
         put?: never;
         /** Execute lateral movement task */
         post: operations["lateralExecute"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/lateral/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Lateral movement task result */
-        post: operations["lateralResult"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/privesc/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Privesc result */
-        post: operations["privescResult"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/privesc/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run privesc suite */
-        post: operations["privescRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/scan/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Scan result callback */
-        post: operations["scanResult"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5866,40 +5798,6 @@ export interface paths {
         get: operations["apiDocs"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/browser/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Browser steal result callback */
-        post: operations["browserResult"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/wifi/result": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** WiFi cred result callback */
-        post: operations["wifiResult"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12136,6 +12034,15 @@ export interface components {
             method?: string;
             command?: string;
         };
+        /** @description Fixed task projection for callers without tasks.read */
+        TaskSummary: {
+            id: number;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         Task: {
             id?: number;
             /** Format: uuid */
@@ -12198,6 +12105,37 @@ export interface components {
             base_task_id?: number | null;
             /** Format: int64 */
             result_mtime?: number;
+        };
+        LateralHistoryRow: {
+            task_id: number;
+            source_agent_id: string;
+            /** @description Requires tasks.read */
+            type?: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            /** @description Requires tasks.read; parsed only from canonical method|target wire arguments */
+            target?: string;
+            /** @description Requires tasks.read; parsed only from canonical method|target wire arguments */
+            method?: string;
+            /** @description Requires tasks.read */
+            result?: string;
+            /** @description Requires tasks.read */
+            error?: string;
+        };
+        PrivescHistoryEntry: {
+            id: number;
+            agent_id: string;
+            /** @description Requires tasks.read */
+            check_type?: string;
+            status: string;
+            /** @description Requires tasks.read */
+            result?: string;
+            /** @description Requires tasks.read */
+            findings_count?: number;
+            /** Format: date-time */
+            created_at: string;
         };
         Listener: {
             id?: number;
@@ -14737,7 +14675,7 @@ export interface operations {
     verifyAuditChain: {
         parameters: {
             query?: {
-                /** @description How many of the newest rows to check (default 1000, max 5000) */
+                /** @description How many of the newest visible rows to check (default 1000, max 5000) */
                 limit?: number;
             };
             header?: never;
@@ -14754,28 +14692,50 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuccessResponse"] & {
                         data: {
-                            ok?: boolean;
-                            checked?: number;
+                            ok: boolean;
+                            checked: number;
                             first_bad_id?: number;
                             reason?: string;
+                            discontinuities?: number;
+                            signature_kind: string;
+                            /** @enum {string} */
+                            scope: "global" | "tenant";
+                            anchor_applicable: boolean;
+                            /** @description Newest visible row's self-hash validity; present for tenant scope. */
+                            entry_hash_valid?: boolean;
+                            /** @description Newest visible row's Ed25519 signature validity; present for tenant scope. False also means a legacy row carries no signature, which is not itself a failure. */
+                            signature_valid?: boolean;
                         };
                     };
                 };
+            };
+            /** @description Caller tenant could not be resolved */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
     exportAuditChain: {
         parameters: {
             query?: {
-                /** @description Maximum number of the newest rows to export (default 50000, max 200000) */
+                /** @description Maximum number of the oldest matching rows to export (default 50000, max 200000) */
                 limit?: number;
-                /** @description Export only rows with a greater id. Ids are monotonic, so this makes the export incremental: fetch the rows appended since the copy you already verified, and stitch the two together via prev_hash. */
+                /** @description Export only rows with a greater id; a global export remains a contiguous continuation. */
                 since_id?: number;
-                /** @description Lower time bound, from the same parser the task export uses (relative 24h/7d or an RFC3339 instant). Duration bounds are measured backwards from now; an RFC3339 value is an absolute instant. A time bound makes the export a SELECTION, so the response carries the `X-Audit-Export-Filtered` warning, and `X-Audit-Export-Scope` names every filter that shaped the rows (semicolon-separated, sorted, or `all`) so an investigator holding the file can reproduce the selection instead of guessing which of six filters produced it. */
+                /** @description Exact audit username; makes the export a selection. */
+                user?: string;
+                /** @description Exact action name; makes the export a selection. */
+                action?: string;
+                /** @description Exact related agent/target id; makes the export a selection. */
+                agent_id?: string;
+                /** @description Lower time bound (relative 24h/7d or RFC3339); makes the export a selection. */
                 since?: string;
-                /** @description Upper time bound, same spellings as since; must not precede it */
+                /** @description Upper time bound, same spellings as since; must not precede it. */
                 until?: string;
-                /** @description ndjson (default) streams one row per line; json returns a single document with count, truncated, filtered and rows. Both carry the same row objects, with both hashes and every hashed field - they are the VERIFIABLE artefact, and the format is part of the ETag. `ecs` and `cef` are SIEM **projections** for tools that ingest security events: they carry the ECS vocabulary (event.action/outcome, user.name, source.ip, host.id, message) or the CEF header plus extensions, but they **drop the hash chain**, so a file in either format cannot verify the log. Both say so in a 199 Warning header and are delivered under their own extension (`.ecs.ndjson`, `.cef`) so a collector globbing for the verifiable export cannot pick up a projection by mistake. */
+                /** @description ndjson (default) streams one verifiable row per line; json returns one document carrying count, truncated, filtered, scope, chain_contiguous, warning, format and rows. Both preserve every hashed field and both hashes. ecs and cef are SIEM projections, not verifiable chain exports. */
                 format?: "ndjson" | "json" | "ecs" | "cef";
             };
             header?: never;
@@ -14784,14 +14744,67 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One JSON object per line, each with prev_hash and entry_hash */
+            /** @description Audit rows or SIEM projection */
             200: {
                 headers: {
+                    ETag?: unknown;
+                    "Cache-Control"?: unknown;
+                    "X-Audit-Export-Rows"?: unknown;
+                    /** @enum {string} */
+                    "X-Audit-Export-Truncated"?: unknown;
+                    /** @enum {string} */
+                    "X-Audit-Export-Filtered"?: unknown;
+                    /** @description Sorted name=value filters, including tenant=<id> for non-zero tenants, or all. */
+                    "X-Audit-Export-Scope"?: unknown;
+                    "X-Export-Scope"?: unknown;
+                    /** @description May contain multiple 199 warnings for selection continuity and SIEM projection limits. */
+                    Warning?: unknown;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/x-ndjson": string;
+                    "application/json": {
+                        count: number;
+                        truncated: boolean;
+                        filtered: boolean;
+                        scope: string;
+                        chain_contiguous: boolean;
+                        warning?: string;
+                        /** @enum {string} */
+                        format: "json";
+                        rows: {
+                            id: number;
+                            tenant_id: number;
+                            user: string;
+                            action: string;
+                            resource: string;
+                            agent_id: string;
+                            ip: string;
+                            success: boolean;
+                            error: string;
+                            details: string;
+                            prev_hash: string;
+                            entry_hash: string;
+                            created_at: string;
+                            signature?: string;
+                        }[];
+                    };
+                    "text/plain": string;
                 };
+            };
+            /** @description Invalid format or time bound */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller tenant could not be resolved */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Database is not initialized */
             503: {
@@ -14811,7 +14824,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Chain head */
+            /** @description Chain head or tenant row validity */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14819,14 +14832,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuccessResponse"] & {
                         data: {
-                            id?: number;
-                            entry_hash?: string;
+                            id: number;
+                            entry_hash: string;
                             created_at?: string;
-                            anchor_matches?: boolean;
-                            anchor_recorded?: boolean;
+                            /** @enum {string} */
+                            scope: "global" | "tenant";
+                            anchor_applicable: boolean;
+                            anchor_matches: boolean;
+                            anchor_recorded: boolean;
+                            /** @description Newest visible row's self-hash validity. */
+                            entry_hash_valid: boolean;
+                            /** @description Newest visible row's Ed25519 signature validity; false also covers legacy unsigned rows. */
+                            signature_valid: boolean;
+                            /** @description Newest visible row's signature, not the global anchor signature. */
+                            signature?: string;
+                            anchor_id?: number;
+                            anchor_timestamp?: string;
+                            /** @description Global out-of-band anchor signature; tenant 0 only. */
+                            anchor_signature?: string;
                         };
                     };
                 };
+            };
+            /** @description Caller tenant could not be resolved */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database is not initialized */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -17570,6 +17610,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Source agent id, or all for the caller's tenant */
                 id: string;
             };
             cookie?: never;
@@ -17583,9 +17624,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessResponse"] & {
-                        data: components["schemas"]["Task"][];
+                        data: {
+                            tasks: components["schemas"]["LateralHistoryRow"][];
+                            total: number;
+                            tasks_redacted: boolean;
+                        };
                     };
                 };
+            };
+            /** @description Source agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description History query failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -17594,7 +17653,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: string;
+                id: number;
             };
             cookie?: never;
         };
@@ -17607,9 +17666,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessResponse"] & {
-                        data: components["schemas"]["Task"][];
+                        data: {
+                            tasks: components["schemas"]["PrivescHistoryEntry"][];
+                            findings?: {
+                                [key: string]: unknown;
+                            }[];
+                            total: number;
+                            tasks_redacted: boolean;
+                        };
                     };
                 };
+            };
+            /** @description Privesc task not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description History query failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19175,78 +19255,6 @@ export interface operations {
         };
     };
     lateralExecute: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    lateralResult: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    privescResult: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    privescRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    scanResult: {
         parameters: {
             query?: never;
             header?: never;
@@ -21619,42 +21627,6 @@ export interface operations {
             };
         };
     };
-    browserResult: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    wifiResult: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     listenerGet: {
         parameters: {
             query?: never;
@@ -21706,8 +21678,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Tenant-scoped agent info; success_rate requires tasks.read */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse"] & {
+                        data?: {
+                            agent: components["schemas"]["Agent"];
+                            task_count: number;
+                            success_rate?: string;
+                            tasks_redacted: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent info query failed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21726,8 +21721,29 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Tenant-scoped tasks projected by tasks.read */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse"] & {
+                        data?: {
+                            tasks: (components["schemas"]["Task"] | components["schemas"]["TaskSummary"])[];
+                            tasks_redacted: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Agent not visible to this tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Task query failed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21744,8 +21760,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Tenant-scoped recent tasks projected by tasks.read */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse"] & {
+                        data?: {
+                            tasks: (components["schemas"]["Task"] | components["schemas"]["TaskSummary"])[];
+                            tasks_redacted: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Task query failed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

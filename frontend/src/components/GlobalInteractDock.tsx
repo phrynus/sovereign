@@ -5,6 +5,7 @@ import { paths } from "@/lib/api-paths";
 import { isEditableTarget, tabFromDigit } from "@/lib/interact-workspace";
 import { shouldCloseOnNavigate, useInteractStore } from "@/lib/interact-store";
 import { registerFragment } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 
 // The dock body lives under src/pages/beacons, so a static import here drags
 // page JS into the entry graph even though the dock is closed on first paint.
@@ -34,6 +35,8 @@ const AgentInteractDock = lazy(loadAgentInteractDock);
 export default function GlobalInteractDock() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
   const prevPath = useRef(pathname);
   const prevFocus = useRef<HTMLElement | null>(null);
   const agentId = useInteractStore((s) => s.agentId);
@@ -108,6 +111,7 @@ export default function GlobalInteractDock() {
        // dock tabs invisibly behind the modal (e.g. confirm dialogs).
        if (document.querySelector('[role="dialog"][data-state="open"]')) return;
        const next = tabFromDigit(e.key);
+       if (next === "files" && !canReadFiles) return;
        if (next) {
          e.preventDefault();
          setTab(next);
@@ -115,7 +119,7 @@ export default function GlobalInteractDock() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [agentId, handleClose, setTab]);
+  }, [agentId, canReadFiles, handleClose, setTab]);
 
   if (!agentId) return null;
 

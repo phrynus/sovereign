@@ -21,6 +21,9 @@ import (
 // seconds instead of hanging the whole suite.
 func TestConfigSaveWithAuditDoesNotDeadlock(t *testing.T) {
 	s := mustTenantServer(t)
+	if err := s.db.Create(&db.User{Username: "admin1", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 	// Use a config that Validate() accepts; the helper's own cfg is a test fixture.
 	cfg := config.DefaultConfig()
 	setServerTestKeys(cfg)

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { formatTime } from "@/lib/utils";
 import { ChartCard } from "@/components/ChartCard";
 import { Card } from "@/components/ui/card";
@@ -99,6 +100,64 @@ function AuditStrip() {
   );
 }
 
+export function DashboardRecentTasks({ stats }: { stats: DashboardStats | null }) {
+  const { t } = useI18n();
+  const recent = stats?.recent_tasks ?? [];
+  const redacted = stats?.tasks_redacted === true;
+
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <CardHeader
+        icon={ListChecks}
+        title={t("dashboard.recent_tasks")}
+        count={redacted ? stats?.total_tasks : undefined}
+        description={redacted ? t("dashboard.tasks_redacted") : undefined}
+      />
+      <div className="divide-y divide-border">
+        {stats === null ? (
+          <div className="p-(--card-spacing) space-y-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="p-(--card-spacing) text-center text-muted-foreground text-sm">
+            <EmptyState icon={Inbox} title={t("dashboard.no_tasks")} />
+          </div>
+        ) : recent.slice(0, 10).map((task) => (
+          <div key={task.id} className="flex items-center justify-between px-5 py-3 hover:bg-secondary transition-colors">
+            <div className="flex items-center gap-3">
+              <StatusIndicator
+                status={task.status === "completed" ? "completed" : task.status === "failed" ? "failed" : task.status === "pending" ? "pending" : task.status === "cancelled" ? "cancelled" : "running"}
+                variant="dotOnly"
+                size="sm"
+                ariaLabel={task.status}
+              />
+              <span className="text-micro-sm text-muted-foreground w-16 shrink-0">
+                {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
+              </span>
+              {redacted ? (
+                <span className="text-xs font-mono text-foreground">#{task.id}</span>
+              ) : (
+                <>
+                  <span className="text-xs font-mono text-foreground">{task.type}</span>
+                  <span className="text-xs text-muted-foreground truncate max-w-xs">{task.command}</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <time dateTime={task.created_at}>{task.created_at ? formatTime(task.created_at) : ""}</time>
+              {redacted && task.updated_at && task.updated_at !== task.created_at && (
+                <time dateTime={task.updated_at} title={task.updated_at}>{formatTime(task.updated_at)}</time>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function AnalyticsView({
   range,
   stats,
@@ -107,7 +166,8 @@ export default function AnalyticsView({
   stats: DashboardStats | null;
 }) {
   const { t } = useI18n();
-  const recent = stats?.recent_tasks ?? [];
+  const { can } = usePermissions();
+  const canViewTasks = can("tasks.read");
 
   return (
     <div>
@@ -115,9 +175,9 @@ export default function AnalyticsView({
 
       <Suspense fallback={<Skeleton className="h-64 w-full rounded-md" />}>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
-          <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="emerald" exportFilename="activity-heatmap.png"><LazyHeatmapGrid range={range} /></ChartCard>
+          {canViewTasks && <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="emerald" exportFilename="activity-heatmap.png"><LazyHeatmapGrid range={range} /></ChartCard>}
           <ChartCard title={t("dashboard.os_dist")} icon={Cpu} iconColor="info" exportFilename="os-distribution.png"><LazyOSDistChart /></ChartCard>
-          <ChartCard title={t("dashboard.task_status")} icon={PieChart} iconColor="warning" exportFilename="task-status.png"><LazyTaskStatusChart /></ChartCard>
+          {canViewTasks && <ChartCard title={t("dashboard.task_status")} icon={PieChart} iconColor="warning" exportFilename="task-status.png"><LazyTaskStatusChart /></ChartCard>}
           <ChartCard title={t("dashboard.cred_types")} icon={Key} iconColor="violet" exportFilename="credential-types.png"><LazyCredentialTypes /></ChartCard>
         </div>
 
@@ -128,44 +188,12 @@ export default function AnalyticsView({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7">
-          <DeferredAnalyticsSection><LazyTaskGanttSection range={range} /></DeferredAnalyticsSection>
+          {canViewTasks && <DeferredAnalyticsSection><LazyTaskGanttSection range={range} /></DeferredAnalyticsSection>}
           <DeferredAnalyticsSection><ChartCard title={t("dashboard.active_alerts")} icon={AlertTriangle} iconColor="warning"><LazyMonitorAlertsSection /></ChartCard></DeferredAnalyticsSection>
         </div>
       </Suspense>
 
-      <Card className="gap-0 overflow-hidden py-0">
-        <CardHeader icon={ListChecks} title={t("dashboard.recent_tasks")} />
-        <div className="divide-y divide-border">
-          {stats === null ? (
-            <div className="p-(--card-spacing) space-y-2">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : recent.length === 0 ? (
-            <div className="p-(--card-spacing) text-center text-muted-foreground text-sm">
-              <EmptyState icon={Inbox} title={t("dashboard.no_tasks")} />
-            </div>
-          ) : recent.slice(0, 10).map((task, i) => (
-            <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-secondary transition-colors">
-              <div className="flex items-center gap-3">
-                <StatusIndicator
-                  status={task.status === "completed" ? "completed" : task.status === "failed" ? "failed" : task.status === "pending" ? "pending" : task.status === "cancelled" ? "cancelled" : "running"}
-                  variant="dotOnly"
-                  size="sm"
-                  ariaLabel={task.status}
-                />
-                <span className="text-micro-sm text-muted-foreground w-16 shrink-0">
-                  {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
-                </span>
-                <span className="text-xs font-mono text-foreground">{task.type}</span>
-                <span className="text-xs text-muted-foreground truncate max-w-xs">{task.command}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">{task.created_at ? formatTime(task.created_at) : ""}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <DashboardRecentTasks stats={stats} />
     </div>
   );
 }

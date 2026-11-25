@@ -1,6 +1,7 @@
 import { memo, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Permission } from "@/components/ui/permission";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -76,7 +77,8 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
   } = props;
 
   return (
-    <>
+    <Permission perms="files.read">
+      <>
       <Dialog open={showUsb} onOpenChange={setShowUsb}>
         <DialogContent size="lg">
           <DialogHeader>
@@ -113,6 +115,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
         </DialogContent>
       </Dialog>
 
+      <Permission perms="files.write">
       <Dialog open={showUpload} onOpenChange={(open) => { if (!uploading) setShowUpload(open); }}>
         <DialogContent size="md">
           <DialogHeader>
@@ -171,7 +174,9 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </form>
         </DialogContent>
       </Dialog>
+      </Permission>
 
+      <Permission perms="files.write">
       <Dialog open={showMkdir} onOpenChange={setShowMkdir}>
         <DialogContent size="md">
           <DialogHeader>
@@ -202,7 +207,9 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </form>
         </DialogContent>
       </Dialog>
+      </Permission>
 
+      <Permission perms="files.write">
       <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
         <DialogContent size="md">
           <DialogHeader>
@@ -233,7 +240,9 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </form>
         </DialogContent>
       </Dialog>
+      </Permission>
 
+      <Permission perms="files.write">
       <Dialog open={chmodTarget !== null} onOpenChange={(open) => { if (!open) setChmodTarget(null); }}>
         <DialogContent size="md">
           <DialogHeader>
@@ -265,6 +274,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           </form>
         </DialogContent>
       </Dialog>
+      </Permission>
 
       {/* showPreview is set only after a successful read: an empty string is a valid file. */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
@@ -313,6 +323,7 @@ export default memo(function FilesDialogs(props: FilesDialogsProps) {
           )}
         </DialogContent>
       </Dialog>
-    </>
+      </>
+    </Permission>
   );
 });

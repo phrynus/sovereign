@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
 	"github.com/r0si/sovereign/internal/payload"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"github.com/r0si/sovereign/pkg/protocol"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
@@ -161,12 +162,16 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 			slog.Debug("Agent detail screenshots unavailable", "agent_id", id, "error", err)
 		}
 	}
+	canViewTasks := middleware.HasPermission(c, db.PermTasksRead)
 	g, ctx := errgroup.WithContext(c.Request.Context())
 	var tasks []db.Task
 	g.Go(func() error {
-		return s.tenantScope(s.db.WithContext(ctx), c).Where("agent_id = ?", id).
-			Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-			Order("created_at desc").Limit(AgentDetailTaskLimit).Find(&tasks).Error
+		query := s.tenantScope(s.db.WithContext(ctx), c).Where("agent_id = ?", id).
+			Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
+		if !canViewTasks {
+			query = query.Select("id, status, created_at, updated_at")
+		}
+		return query.Order("created_at desc").Limit(AgentDetailTaskLimit).Find(&tasks).Error
 	})
 	var totalTaskCount int64
 	g.Go(func() error {
@@ -265,22 +270,26 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		"Title":             fmt.Sprintf("Sovereign - Agent %s", agent.Hostname),
 		"ActiveNav":         "agents",
 		"Agent":             agent,
-		"Tasks":             tasks,
+		"Tasks":             tasksForOperator(c, tasks),
 		"Screenshots":       screenshots,
 		"TotalTasks":        totalTasks,
-		"CompletedTasks":    completedTasks,
-		"PendingTasks":      pendingTasks,
-		"FailedTasks":       failedTasks,
-		"SuccessRate":       successRate,
-		"AvgResponseTime":   avgResponseTime,
-		"ShellTasks":        shellTasks,
-		"ScreenshotTasks":   screenshotTasks,
-		"PSTasks":           psTasks,
-		"KillTasks":         killTasks,
 		"Uptime":            uptime,
 		"TimeSinceLastSeen": timeSince,
 		"AgentAge":          agentAgeStr,
 		"Children":          children,
+	}
+	if canViewTasks {
+		data["CompletedTasks"] = completedTasks
+		data["PendingTasks"] = pendingTasks
+		data["FailedTasks"] = failedTasks
+		data["SuccessRate"] = successRate
+		data["AvgResponseTime"] = avgResponseTime
+		data["ShellTasks"] = shellTasks
+		data["ScreenshotTasks"] = screenshotTasks
+		data["PSTasks"] = psTasks
+		data["KillTasks"] = killTasks
+	} else {
+		data["TasksRedacted"] = true
 	}
 	if lq, ok := s.getLinkQuality(id); ok && lq.hasLinkQuality() {
 		data["LinkQuality"] = lq
@@ -292,6 +301,9 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	stats := s.getNavStats(c)
 	for k, v := range stats {
 		data[k] = v
+	}
+	if !canViewTasks {
+		delete(data, "pending_count")
 	}
 
 	s.renderPageOrJSON(c, data)

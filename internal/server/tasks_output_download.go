@@ -53,6 +53,11 @@ func (s *Server) handleDownloadTaskOutput(c *gin.Context) {
 		}
 		task = retry
 	}
+	if !canReadTaskDetails(c, task.Type) {
+		respondError(c, http.StatusForbidden, "tasks.read required")
+		return
+	}
+	task = taskForAuthorizedOperator(task)
 
 	body := task.Result
 	if task.Error != "" {

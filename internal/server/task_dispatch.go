@@ -317,10 +317,12 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 			agentID, key, []string{"pending", TaskStatusPendingApproval, "running"}).
 			Order("id DESC").First(&existing).Error; err == nil {
 			if ref.ID == 0 {
+				existing.IdempotentReplay = true
 				return &existing, nil
 			}
 			if existing.Type == taskType && existing.CredentialID != nil &&
 				*existing.CredentialID == ref.ID && existing.CredentialFingerprint == ref.Fingerprint {
+				existing.IdempotentReplay = true
 				return &existing, nil
 			}
 			return nil, errCredentialReferenceConflict
@@ -420,6 +422,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 				Order("id DESC").First(&existing).Error; e2 == nil {
 				if ref.ID == 0 || (existing.Type == taskType && existing.CredentialID != nil &&
 					*existing.CredentialID == ref.ID && existing.CredentialFingerprint == ref.Fingerprint) {
+					existing.IdempotentReplay = true
 					return &existing, nil
 				}
 				return nil, errCredentialReferenceConflict
@@ -721,19 +724,26 @@ func (s *Server) persistTaskCreator(task *db.Task, username string) {
 	}
 }
 
-// dispatchTask logs the audit action, broadcasts the update via WS, and returns success JSON.
-func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, details string) {
-	user, _ := c.Get("user")
-	if username, ok := user.(string); ok && username != "" && task.CreatedBy == "" {
-		s.persistTaskCreator(task, username)
+// auditTaskCreation is the shared creation audit for REST and operator dispatch.
+// It records correlation identifiers only: raw commands, file contents, resolved
+// credentials and results must never enter the long-lived audit chain.
+func (s *Server) auditTaskCreation(c *gin.Context, task *db.Task) {
+	if task == nil || task.IdempotentReplay {
+		return
 	}
-	// Dangerous tasks carry creator + args fingerprint so the audit chain
-	// answers who ordered what, approved by whom (approve_task record), with
-	// which exact arguments — without persisting secrets in the log.
-	if dangerousTaskTypes[task.Type] {
-		details = fmt.Sprintf("%s [created_by=%s args=%s]", details, task.CreatedBy, taskArgsHash(task))
+	if c != nil {
+		if username := s.currentUsername(c); username != "" && task.CreatedBy == "" {
+			s.persistTaskCreator(task, username)
+		}
 	}
-	s.LogAuditRecord(c, auditAction, "agent", task.AgentID, details, true, nil)
+	s.LogAuditRecord(c, "task_create", "task", task.AgentID,
+		fmt.Sprintf("task_id=%d agent_id=%s created_by=%s args=%s",
+			task.ID, task.AgentID, task.CreatedBy, taskArgsHash(task)), true, nil)
+}
+
+// dispatchTask audits creation, broadcasts the update via WS, and returns success JSON.
+func (s *Server) dispatchTask(c *gin.Context, task *db.Task, _, _ string) {
+	s.auditTaskCreation(c, task)
 	s.broadcastTaskUpdate(task.AgentID, *task)
 	respond(c, gin.H{"task_id": task.ID})
 }

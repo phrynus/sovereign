@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mergeSnapshotWithPrev } from "./useAgentDetail";
 
 interface Snap {
-  tasks?: { id: number; status?: string; result?: string; error?: string }[];
+  tasks?: { id: number; status?: string; created_at?: string; updated_at?: string; result?: string; error?: string }[];
+  tasks_redacted?: boolean;
   total_tasks?: number;
 }
 
@@ -69,5 +70,38 @@ describe("mergeSnapshotWithPrev", () => {
 
     expect(next.tasks?.[0]).toMatchObject({ id: 1, status: "failed", error: "timeout" });
     expect(next.tasks?.[1]).toEqual({ id: 2, status: "pending" });
+  });
+
+  it("merges only status and timestamps when either snapshot is redacted", () => {
+    const readResult = vi.fn(() => "SECRET_RESULT_MARKER");
+    const readError = vi.fn(() => "SECRET_ERROR_MARKER");
+    const snap: Snap = {
+      tasks_redacted: true,
+      tasks: [{ id: 5, status: "running", created_at: "2026-08-14T00:00:00Z", updated_at: "2026-08-14T00:01:00Z" }],
+      total_tasks: 1,
+    };
+    const prev: Snap = {
+      tasks_redacted: true,
+      tasks: [{
+        id: 5,
+        status: "completed",
+        created_at: "2026-08-14T00:00:00Z",
+        updated_at: "2026-08-14T00:02:00Z",
+        get result() { return readResult(); },
+        get error() { return readError(); },
+      }],
+      total_tasks: 1,
+    };
+
+    const next = mergeSnapshotWithPrev(snap, prev);
+
+    expect(next.tasks?.[0]).toEqual({
+      id: 5,
+      status: "completed",
+      created_at: "2026-08-14T00:00:00Z",
+      updated_at: "2026-08-14T00:02:00Z",
+    });
+    expect(readResult).not.toHaveBeenCalled();
+    expect(readError).not.toHaveBeenCalled();
   });
 });

@@ -69,6 +69,7 @@ func BenchmarkAgentDetail(b *testing.B) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodGet, "/agents/"+parent.ID+"?include_screenshots=false&format=json", nil)
 		c.Params = gin.Params{{Key: "id", Value: parent.ID}}
+		c.Set("user_role", db.RoleAdmin)
 		s.handleAgentDetail(c)
 		if w.Code != http.StatusOK {
 			b.Fatalf("detail: status=%d body=%s", w.Code, w.Body.String())

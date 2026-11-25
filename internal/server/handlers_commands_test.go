@@ -166,6 +166,7 @@ func TestHandleGetTaskStatusEnforcesAgentScope(t *testing.T) {
 			{Key: "taskId", Value: strconv.FormatUint(uint64(task.ID), 10)},
 		}
 		c.Request, _ = http.NewRequest(http.MethodGet, "/api/v1/agents/"+agentID+"/tasks/"+strconv.FormatUint(uint64(task.ID), 10), nil)
+		c.Set("user_role", db.RoleAdmin)
 		s.handleGetTaskStatus(c)
 		return w
 	}

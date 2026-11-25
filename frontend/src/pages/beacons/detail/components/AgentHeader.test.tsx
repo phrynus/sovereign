@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import AgentHeader from "./AgentHeader";
+import type { PermissionKey } from "@/lib/permission-keys";
 
 vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: (k: string) => k }) }));
-const can = vi.fn();
-vi.mock("@/lib/hooks/usePermissions", () => ({ usePermissions: () => ({ can }) }));
+let permissions: PermissionKey[] | null = null;
+const can = vi.fn((permission: PermissionKey) => permissions?.includes(permission) ?? false);
+vi.mock("@/lib/hooks/usePermissions", () => ({ usePermissions: () => ({ can, permissions }) }));
 
 function renderHeader() {
   return render(
@@ -31,6 +33,8 @@ async function openMore() {
 describe("AgentHeader operation-log link", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    can.mockImplementation((permission: PermissionKey) => permissions?.includes(permission) ?? false);
+    permissions = null;
   });
 
   it("opens the beacon's operations log when audit.read is granted", async () => {
@@ -51,5 +55,17 @@ describe("AgentHeader operation-log link", () => {
     await openMore();
 
     expect(screen.queryByRole("menuitem", { name: /agents\.header_operations/ })).toBeNull();
+  });
+
+  it("hides the files entry without files.read", () => {
+    permissions = ["agents.read"];
+    renderHeader();
+    expect(screen.queryByRole("link", { name: /agents\.files_title/ })).toBeNull();
+  });
+
+  it("shows the files entry to file-only operators", () => {
+    permissions = ["files.read"];
+    renderHeader();
+    expect(screen.getByRole("link", { name: /agents\.files_title/ }).getAttribute("href")).toContain("/files");
   });
 });

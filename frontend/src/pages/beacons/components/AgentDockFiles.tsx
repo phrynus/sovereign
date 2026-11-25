@@ -6,6 +6,8 @@ import { useI18n } from "@/lib/i18n";
 import { errorText } from "@/lib/errors";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { Button } from "@/components/ui/button";
+import { Permission } from "@/components/ui/permission";
+import { DataError } from "@/components/ui/data-state";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
@@ -30,7 +32,11 @@ interface AgentDockFilesProps {
   osType: "windows" | "linux";
 }
 
-export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
+export function AgentDockFiles(props: AgentDockFilesProps) {
+  return <Permission perms="files.read"><AgentDockFilesContent {...props} /></Permission>;
+}
+
+function AgentDockFilesContent({ agentId, osType }: AgentDockFilesProps) {
   const { t } = useI18n();
   const { toastError } = useErrorToast();
   const initial = osType === "linux" ? "/" : "C:\\";
@@ -43,6 +49,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
   const [pushPct, setPushPct] = useState(0);
   const [pullProgress, setPullProgress] = useState<TransferProgress | null>(null);
   const [transfers, setTransfers] = useState<TransferSession[]>([]);
+  const [transfersError, setTransfersError] = useState<string | null>(null);
   const [transferBusyId, setTransferBusyId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -90,11 +97,12 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
     try {
       const rows = await listTransfers(agentId);
       setTransfers((prev) => prev.length === 0 && rows.length === 0 ? prev : rows);
-    } catch {
-      // Keep the last known sessions: a list hiccup is not a transfer failure.
+      setTransfersError(null);
+    } catch (err) {
+      // Keep the last known sessions; a list hiccup is not a transfer failure.
+      setTransfersError(errorText(t, err, () => t("common.load_failed")));
     }
-  }, [agentId]);
-
+  }, [agentId, t]);
   useEffect(() => {
     void loadTransfers();
   }, [loadTransfers]);
@@ -231,6 +239,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
           aria-label={t("agents.dock_files_path")}
           className="h-7 font-mono text-xs"
         />
+        <Permission perms="files.write">
         <input
           ref={fileRef}
           type="file"
@@ -252,6 +261,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
         >
           <CloudUpload className="size-3.5" />
         </Button>
+        </Permission>
       </form>
       <p className="border-b border-border px-3 py-1 text-micro-sm text-muted-foreground">
         {t("agents.dock_files_transfer_hint")}{" "}
@@ -271,6 +281,13 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
           </span>
         )}
       </p>
+      {transfersError && (
+        <DataError
+          message={transfersError}
+          onRetry={() => void loadTransfers()}
+          className="py-4"
+        />
+      )}
       <div className="max-h-40 overflow-auto border-b border-border px-2 py-2">
         <TransferList
           t={t}

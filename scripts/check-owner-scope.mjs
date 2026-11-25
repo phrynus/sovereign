@@ -27,7 +27,9 @@ const TABLE_RULES = new Map([
   ["BOFFile", ["bofScope", "creatorScope"]],
   ["PhishingTemplate", ["phishingScope", "creatorScope"]],
   ["PhishingCampaign", ["phishingScope", "creatorScope"]],
-  ["Workflow", ["workflowScope", "creatorScope"]],
+  ["PhishingEvent", ["phishingEventScope", "phishingScope", "creatorScope"]],
+  ["BuildLog", ["tenantScope", "getAgentOrFail"]],
+  ["MeshPeer", ["tenantScope", "visibleAgentIDSubquery"]],
   ["OneShotTask", ["visibleAgentIDSubquery"]],
   ["AgentStatusEvent", ["getAgentOrFail", "visibleAgentIDSubquery"]],
   ["AgentTag", ["tenantScope"]],
@@ -39,6 +41,7 @@ const TABLE_RULES = new Map([
 // Handlers that legitimately work on the whole installation, with the reason.
 const ALLOWLIST = new Map([
   ["handleBatchAgentTags", "narrowed with a tenant-scoped implants subquery before reading assignments"],
+  ["handlePhishingLanding", "public unauthenticated landing token resolves its campaign; new events inherit that campaign id"],
 ]);
 
 const SCOPES = [
@@ -48,6 +51,7 @@ const SCOPES = [
   "scriptScope",
   "bofScope",
   "phishingScope",
+  "phishingEventScope",
   "workflowScope",
   "visibleAgentIDSubquery",
   "findVisibleBOF",

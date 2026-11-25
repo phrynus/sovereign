@@ -80,10 +80,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		handleQueryError(c, err, "Failed to query tasks")
 		return
 	}
-	for i := range tasks {
-		tasks[i] = taskForOperator(tasks[i])
-	}
-
+	projectedTasks := tasksForOperator(c, tasks)
 	// Distinct task types for the filter dropdown: cached per tenant (the
 	// DISTINCT scan is the single most expensive query on this page).
 	taskTypes := s.cachedTaskTypes(c)
@@ -116,7 +113,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	data := gin.H{
 		"Title":          "Sovereign - Task History",
 		"ActiveNav":      "tasks",
-		"Tasks":          tasks,
+		"Tasks":          projectedTasks,
 		"Page":           p.Page,
 		"PageSize":       p.PageSize,
 		"Total":          total,

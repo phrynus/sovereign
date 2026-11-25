@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // timelineEvent is one unified entry on an agent's activity timeline.
@@ -52,40 +53,47 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 		return wantKinds[kind]
 	}
 
+	canViewTasks := middleware.HasPermission(c, db.PermTasksRead)
+	var tasks []db.Task
+	var totalTasks int64
 	events := make([]timelineEvent, 0, limit)
 
 	// ── Tasks (skip noisy/no-op types to keep the feed readable) ──
 	if want("task") {
-		skipTypes := map[string]bool{
-			"beacon_now": true, "set_sleep": true,
-		}
 		// Dest is db.Task so Task.AfterFind decrypts Command for the
 		// SensitiveTaskTypes (mimikatz, cred_check, token_make, …). Scanning into a
 		// bare struct put an "FC2ENC:..." blob in the feed as the event title.
-		var tasks []db.Task
 		q := s.db.Table("tasks").
-			Select("id, agent_id, type, command, status, created_at").
-			Where("agent_id = ?", id)
+			Where("agent_id = ?", id).
+			Where("type NOT IN ?", []string{"beacon_now", "set_sleep"})
 		q = s.tenantScope(q, c)
+		if err := q.Count(&totalTasks).Error; err != nil {
+			handleQueryError(c, err, "Failed to count the agent timeline")
+			return
+		}
+		if !canViewTasks {
+			q = q.Select("id, status, created_at, updated_at")
+		}
 		if err := q.Order("created_at desc").Limit(limit).Find(&tasks).Error; err != nil {
 			handleQueryError(c, err, "Failed to load the agent timeline")
 			return
 		}
 		for _, t := range tasks {
-			if skipTypes[t.Type] {
-				continue
+			event := timelineEvent{
+				Time: t.CreatedAt, Kind: "task", Title: "Task",
+				Status: t.Status, RefID: t.ID,
 			}
-			title := t.Command
-			if title == "" {
-				title = t.Type
+			if canViewTasks {
+				event.Type = t.Type
+				event.Title = t.Command
+				if event.Title == "" {
+					event.Title = t.Type
+				}
+				if len(event.Title) > 120 {
+					event.Title = event.Title[:120] + "…"
+				}
 			}
-			if len(title) > 120 {
-				title = title[:120] + "…"
-			}
-			events = append(events, timelineEvent{
-				Time: t.CreatedAt, Kind: "task", Type: t.Type,
-				Title: title, Status: t.Status, RefID: t.ID,
-			})
+			events = append(events, event)
 		}
 	}
 
@@ -170,10 +178,14 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 		writer := csv.NewWriter(&buf)
 		writer.Write([]string{"Time", "Kind", "Type", "Title", "Detail", "Status", "Ref ID"})
 		for _, event := range events {
+			eventType := event.Type
+			if !canViewTasks && event.Kind == "task" {
+				eventType = ""
+			}
 			writer.Write([]string{
 				event.Time.Format("2006-01-02 15:04:05"),
 				event.Kind,
-				event.Type,
+				eventType,
 				csvSafe(event.Title),
 				csvSafe(event.Detail),
 				event.Status,
@@ -186,12 +198,24 @@ func (s *Server) handleAgentTimeline(c *gin.Context) {
 			return
 		}
 		name := fmt.Sprintf("agent-%s-timeline_%s.csv", sanitizeFilenamePart(id), time.Now().Format("2006-01-02_150405"))
+		if !canViewTasks {
+			c.Header("X-Tasks-Redacted", "true")
+		}
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		c.Data(http.StatusOK, "text/csv; charset=utf-8", buf.Bytes())
 		return
 	}
 
-	respond(c, gin.H{"events": events})
+	payload := gin.H{
+		"events": events,
+		"tasks":  tasksForOperator(c, tasks),
+		"total":  totalTasks,
+		"limit":  limit,
+	}
+	if !canViewTasks {
+		payload["tasks_redacted"] = true
+	}
+	respond(c, payload)
 }
 
 type screenshotMod struct {

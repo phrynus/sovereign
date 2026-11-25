@@ -80,6 +80,7 @@ func TestHandleGetAgentTasks_WithData(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/agents/agent-tasks/tasks", nil)
 	c.Params = gin.Params{{Key: "id", Value: "agent-tasks"}}
+	c.Set("user_role", db.RoleAdmin)
 
 	s.handleGetAgentTasks(c)
 
@@ -205,6 +206,7 @@ func TestHandleTaskHistory_Renders(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks", nil)
 	c.Set("Accept", "text/html")
+	c.Set("user_role", db.RoleAdmin)
 
 	s.handleTaskHistory(c)
 
@@ -249,6 +251,7 @@ func TestHandleTaskHistory_KeywordSearch(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?q="+tc.q, nil)
+		c.Set("user_role", db.RoleAdmin)
 		s.handleTaskHistory(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("q=%q: expected 200, got %d; body=%s", tc.q, w.Code, w.Body.String())
@@ -262,6 +265,7 @@ func TestHandleTaskHistory_KeywordSearch(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?q=zzz-no-match", nil)
+	c.Set("user_role", db.RoleAdmin)
 	s.handleTaskHistory(c)
 	if strings.Contains(w.Body.String(), "whoami") || strings.Contains(w.Body.String(), "netstat") {
 		t.Fatalf("q=zzz-no-match should return no task commands, body=%s", w.Body.String())
@@ -285,6 +289,7 @@ func TestHandleTaskHistory_ClaimedByFilter(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?claimed_by=alice", nil)
+	c.Set("user_role", db.RoleAdmin)
 	s.handleTaskHistory(c)
 	if !strings.Contains(w.Body.String(), "mine-cmd") {
 		t.Fatalf("claimed_by=alice should include mine-cmd, body=%s", w.Body.String())
@@ -298,6 +303,7 @@ func TestHandleTaskHistory_ClaimedByFilter(t *testing.T) {
 	c, _ = gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/tasks?claimed_by=me", nil)
 	c.Set("user", "alice")
+	c.Set("user_role", db.RoleAdmin)
 	s.handleTaskHistory(c)
 	if !strings.Contains(w.Body.String(), "mine-cmd") {
 		t.Fatalf("claimed_by=me should include alice's task, body=%s", w.Body.String())

@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Permission } from "@/components/ui/permission";
 import { File, Search, X } from "lucide-react";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
@@ -28,6 +29,7 @@ export default memo(function FilesFindPanel({
   huntDownload, setHuntDownload, findFiles, huntFiles, navigateTo, setSelectedFile,
 }: FilesFindPanelProps) {
   return (
+    <Permission perms="files.read">
     <Card className="mb-4 p-(--card-spacing)">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
         <Search className="size-4" />
@@ -44,9 +46,11 @@ export default memo(function FilesFindPanel({
         <Button onClick={() => void findFiles()}>
           <Search className="size-4" /> {t("common.search")}
         </Button>
-        <Button variant="secondary" onClick={() => void huntFiles()}>
-          <Search className="size-4" /> {t("agents.files_hunt")}
-        </Button>
+        <Permission perms="files.write">
+          <Button variant="secondary" onClick={() => void huntFiles()}>
+            <Search className="size-4" /> {t("agents.files_hunt")}
+          </Button>
+        </Permission>
         {findResults.length > 0 && (
           <Button variant="secondary" onClick={() => { setFindResults([]); setFindPattern(""); }}>
             <X className="size-4" /> {t("agents.files_clear")}
@@ -54,15 +58,17 @@ export default memo(function FilesFindPanel({
         )}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">{t("agents.files_hunt_hint")}</p>
-      <Button
-        type="button"
-        variant={huntDownload ? "secondary" : "outline"}
-        size="sm"
-        className="mt-2"
-        onClick={() => setHuntDownload((v) => !v)}
-      >
-        {t("agents.files_hunt_download")}
-      </Button>
+      <Permission perms="files.write">
+        <Button
+          type="button"
+          variant={huntDownload ? "secondary" : "outline"}
+          size="sm"
+          className="mt-2"
+          onClick={() => setHuntDownload((v) => !v)}
+        >
+          {t("agents.files_hunt_download")}
+        </Button>
+      </Permission>
       {findResults.length > 0 && (
         <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/50">
           {findResults.map((result) => (
@@ -85,5 +91,6 @@ export default memo(function FilesFindPanel({
         </div>
       )}
     </Card>
+    </Permission>
   );
 });

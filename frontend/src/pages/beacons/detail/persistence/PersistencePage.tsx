@@ -112,14 +112,20 @@ export default function AgentPersistencePage() {
       for (let attempt = 0; attempt < 10; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         if (listRunRef.current !== run) break;
-        const tasks = await api.get<{ tasks?: Array<{ type: string; result: string }> }>(
-          paths.agents.tasks(id),
-        );
+        const tasks = await api.get<{
+          tasks_redacted?: boolean;
+          tasks?: Array<{ type?: string; result?: string }>;
+        }>(paths.agents.tasks(id));
         if (listRunRef.current !== run) break;
+        if (tasks.tasks_redacted) {
+          setListOutput(null);
+          toast.error(t("agents.tasks_redacted"));
+          break;
+        }
         const latest = (tasks.tasks || []).find(
           (task) => task.type === "persistence_list" && task.result && task.result.trim(),
         );
-        if (latest) {
+        if (latest?.result) {
           setListOutput(latest.result);
           break;
         }

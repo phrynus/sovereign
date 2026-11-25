@@ -22,6 +22,11 @@ being unverifiable.
 Response headers worth reading: `X-Audit-Export-Rows`, `X-Audit-Export-Truncated`, `X-Audit-Export-Filtered`, a
 `Warning` header when the rows are a selection, and an `ETag` you can revalidate with.
 
+For a non-zero tenant, the tenant scope is itself a selection: `X-Audit-Export-Filtered` is always
+`true`, the scope header names the tenant, and the rows are not a contiguous global chain. Use
+`/audit/anchor` and `/audit/verify` for that tenant's row-local hash/signature validity; the global
+signed anchor and continuity verdict apply only to the tenant-0 global view.
+
 ## Checking it
 
 ```
@@ -29,7 +34,7 @@ go run ./cmd/verify-audit audit.ndjson          # human-readable verdict
 go run ./cmd/verify-audit audit.json -json      # machine-readable
 ```
 
-Archive the `/audit/chain/anchor` response **separately** from the export and hand both to the verifier:
+Archive the `/audit/anchor` response **separately** from the export and hand both to the verifier:
 
 ```
 go run ./cmd/verify-audit audit.ndjson -anchor anchor.json -require-anchor-signature

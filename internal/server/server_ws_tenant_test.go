@@ -28,11 +28,12 @@ func tenantFanoutServer(t *testing.T) (*Server, map[string]chan []byte) {
 		chans[name] = ch
 		conn := &websocket.Conn{}
 		s.wsClients[conn] = &wsClientConn{
-			conn:     conn,
-			session:  UserSession{Username: name},
-			tenantID: tid,
-			ch:       ch,
-			done:     make(chan struct{}),
+			conn:         conn,
+			session:      UserSession{Username: name},
+			tenantID:     tid,
+			canViewTasks: true,
+			ch:           ch,
+			done:         make(chan struct{}),
 		}
 	}
 	add("legacy", 0)

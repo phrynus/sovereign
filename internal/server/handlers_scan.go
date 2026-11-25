@@ -192,69 +192,6 @@ func (s *Server) handleScanResultsByAgent(c *gin.Context) {
 	})
 }
 
-// handleProcessScanResult processes scan results reported by agent
-func (s *Server) handleProcessScanResult(c *gin.Context) {
-	var req struct {
-		TaskID  uint     `json:"task_id"`
-		AgentID string   `json:"agent_id"`
-		Results []string `json:"results"` // format: "port:protocol:state:service:version:banner"
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request")
-		return
-	}
-
-	// Parse and store results
-	var results []db.ScanResult
-	for _, resultStr := range req.Results {
-		parts := strings.Split(resultStr, ":")
-		if len(parts) < 3 {
-			continue
-		}
-
-		port, err := strconv.Atoi(parts[0])
-		if err != nil || port < 1 || port > 65535 {
-			continue
-		}
-		protocol := parts[1]
-		state := parts[2]
-		service := ""
-		version := ""
-		banner := ""
-
-		if len(parts) > 3 {
-			service = parts[3]
-		}
-		if len(parts) > 4 {
-			version = parts[4]
-		}
-		if len(parts) > 5 {
-			banner = strings.Join(parts[5:], ":")
-		}
-
-		results = append(results, db.ScanResult{
-			AgentID:  req.AgentID,
-			TaskID:   req.TaskID,
-			TargetIP: "",
-			Port:     port,
-			Protocol: protocol,
-			State:    state,
-			Service:  service,
-			Version:  version,
-			Banner:   banner,
-		})
-	}
-
-	if len(results) > 0 {
-		if err := s.db.CreateInBatches(results, 500).Error; err != nil {
-			slog.Error("Failed to save scan results", "agent_id", req.AgentID, "task", req.TaskID, "count", len(results), "err", err)
-		}
-	}
-
-	respond(c, gin.H{})
-}
-
 // handleExportScanResults exports scan results as CSV
 func (s *Server) handleExportScanResults(c *gin.Context) {
 	taskID := c.Param("taskId")

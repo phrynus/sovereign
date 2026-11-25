@@ -25,6 +25,9 @@ func auditCtx(user string) *gin.Context {
 // audit table, which is long-lived and read by every admin.
 func TestOperatorAuditHelpers(t *testing.T) {
 	s := mustTenantServer(t)
+	if err := s.db.Create(&db.User{Username: "admin1", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 
 	s.LogUserManagementAction(auditCtx("admin1"), "user_create", "bob", "role=admin")
 	s.LogPluginAction(auditCtx("admin1"), "plugin_install", "recon", "version=1.2")

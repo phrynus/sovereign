@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // ── Shell dispatch + task queries ─────────────────────────────────────────
@@ -203,9 +204,12 @@ func (s *Server) handleGetAgentTasks(c *gin.Context) {
 		return
 	}
 	p := parsePagination(c, DefaultTaskPageSize, MaxTaskPageSize)
-
-	query := s.db.Where("agent_id = ?", id).
+	canViewTasks := middleware.HasPermission(c, db.PermTasksRead)
+	query := s.tenantScope(s.db, c).Where("agent_id = ?", id).
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
+	if !canViewTasks {
+		query = query.Select("id, status, created_at, updated_at")
+	}
 
 	var total int64
 	if err := query.Model(&db.Task{}).Count(&total).Error; err != nil {
@@ -221,12 +225,16 @@ func (s *Server) handleGetAgentTasks(c *gin.Context) {
 		return
 	}
 
-	respond(c, gin.H{
-		"tasks":     tasks,
+	payload := gin.H{
+		"tasks":     tasksForOperator(c, tasks),
 		"total":     total,
 		"page":      p.Page,
 		"page_size": p.PageSize,
-	})
+	}
+	if !canViewTasks {
+		payload["tasks_redacted"] = true
+	}
+	respond(c, payload)
 }
 
 func (s *Server) handleGetTaskStatus(c *gin.Context) {
@@ -268,12 +276,16 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 				respondError(c, http.StatusNotFound, "task not found")
 				return
 			}
-		} else if task.AgentID != agentID {
+		} else if task.AgentID != agentID || !s.agentVisible(c, task.AgentID) {
 			respondError(c, http.StatusNotFound, "task not found")
 			return
 		}
 	}
-	task = taskForOperator(task)
+	if !canReadTaskDetails(c, task.Type) {
+		respondError(c, http.StatusForbidden, "tasks.read required")
+		return
+	}
+	task = taskForAuthorizedOperator(task)
 
 	payload := gin.H{
 		"id":         task.ID,

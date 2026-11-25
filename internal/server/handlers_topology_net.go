@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -70,18 +69,27 @@ func topologyLateralTouched(servicesJSON string) bool {
 // one graph consumable by the vendored vis-network viewer.
 // GET /api/topology/network
 func (s *Server) handleAPINetworkTopology(c *gin.Context) {
+	visible, visibleOK := s.visibleAgentIDSubquery(c)
 	var agents []db.Implant
 	// NOTE: P2PMode's physical column is "p2p_mode" (explicit column tag;
 	// pre-tag servers used GORM's derived "p2_p_mode"). Select it bare — an
 	// alias cannot be matched back to the struct field by GORM's scan mapper.
-	if err := s.db.
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).
 		Select("id, hostname, ip, os, status, p2p_mode, peer_count, parent_id, parent_agent_id").
 		Order("last_seen desc").Limit(300).Find(&agents).Error; err != nil {
-		slog.Error("topology/net: agent query failed", "err", err)
+		handleQueryError(c, err, "Failed to query topology agents")
+		return
 	}
 	var hosts []db.NetworkHost
-	if err := s.db.Order("last_seen desc").Limit(500).Find(&hosts).Error; err != nil {
-		slog.Error("topology/net: host query failed", "err", err)
+	hostQuery := s.db
+	if visibleOK {
+		hostQuery = hostQuery.Where("agent_id IN (?)", visible)
+	} else {
+		hostQuery = hostQuery.Where("1 = 0")
+	}
+	if err := hostQuery.Order("last_seen desc").Limit(500).Find(&hosts).Error; err != nil {
+		handleQueryError(c, err, "Failed to query topology hosts")
+		return
 	}
 
 	agentByID := make(map[string]db.Implant, len(agents))

@@ -371,6 +371,7 @@ func TestHandleAgentDetail(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest(http.MethodGet, "/agents/agent-stats?format=json", nil)
 		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		c.Set("user_role", db.RoleAdmin)
 		s.handleAgentDetail(c)
 
 		var resp struct {

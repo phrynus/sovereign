@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import FilesEditor from "./FilesEditor";
 import { useFileEditor } from "./useFileEditor";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useAppStore } from "@/lib/store";
 
 vi.mock("./useFileEditor", () => ({ useFileEditor: vi.fn() }));
 vi.mock("@/lib/hooks/useConfirm", () => ({ useConfirm: vi.fn() }));
@@ -29,6 +30,7 @@ function editorState(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAppStore.setState({ currentPermissions: null });
   save.mockResolvedValue(undefined);
   vi.mocked(useConfirm).mockReturnValue({ confirm: vi.fn().mockResolvedValue(true), modal: null } as never);
 });
@@ -73,5 +75,21 @@ describe("FilesEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "agents.files_editor_history" }));
     await waitFor(() => expect(loadHistory).toHaveBeenCalled());
     expect(screen.getByText(/#9 read/)).toBeTruthy();
+  });
+
+  it("keeps history readable but hides save for file-only operators", () => {
+    useAppStore.setState({ currentPermissions: ["files.read"] });
+    renderEditor({ dirty: true, draft: "edited" });
+
+    expect(screen.getByRole("button", { name: "agents.files_editor_history" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "agents.files_editor_save" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "agents.files_edit" })).toHaveProperty("disabled", true);
+  });
+
+  it("does not open the editor for agent-only operators", () => {
+    useAppStore.setState({ currentPermissions: ["agents.read"] });
+    const { container } = renderEditor();
+    expect(container.textContent).toBe("");
+    expect(useFileEditor).not.toHaveBeenCalled();
   });
 });

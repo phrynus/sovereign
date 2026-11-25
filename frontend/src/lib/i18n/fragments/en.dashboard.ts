@@ -93,6 +93,7 @@ export const enDashboard: Record<string, string> = {
   "dashboard.task_gantt": "Task Gantt",
   "dashboard.task_status": "Task Status",
   "dashboard.title": "Operations Dashboard",
+  "dashboard.tasks_redacted": "Task details are hidden; only status and time are available.",
   "dashboard.traffic_load_failed": "Failed to load traffic data",
   "dashboard.unknown": "Unknown",
   "dashboard.view_all": "View all",

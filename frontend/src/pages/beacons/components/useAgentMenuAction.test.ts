@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useAgentMenuAction } from "./useAgentMenuAction";
 import type { Beacon } from "./types";
+import { useAppStore } from "@/lib/store";
 
 vi.mock("@/lib/api", () => ({
   api: { get: vi.fn(), post: vi.fn(), postJson: vi.fn() },
@@ -28,9 +29,10 @@ const point = { x: 0, y: 0, beacon };
 
 function renderMenu() {
   const setMenuPoint = vi.fn();
+  const navigate = vi.fn();
   const deps = {
     t: (key: string) => key,
-    navigate: vi.fn(),
+    navigate,
     setSelectedAgentId: vi.fn(),
     setMenuPoint,
     openQuickSleep: vi.fn(),
@@ -38,12 +40,14 @@ function renderMenu() {
     setConfirm: vi.fn(),
   };
   const view = renderHook(() => useAgentMenuAction(deps));
-  return { ...view, setMenuPoint };
+  return { ...view, navigate, setMenuPoint };
 }
 
 beforeEach(() => {
+  useAppStore.setState({ currentPermissions: null });
   vi.clearAllMocks();
 });
+
 
 describe("useAgentMenuAction", () => {
   it("queues a screenshot task and reports it as queued", async () => {
@@ -91,5 +95,21 @@ describe("useAgentMenuAction", () => {
 
     await waitFor(() => expect(errorToast).toHaveBeenCalledWith("agents.detail_copy_failed"));
     expect(setMenuPoint).toHaveBeenCalledWith(null);
+  });
+
+  it("does not navigate to files without files.read", () => {
+    useAppStore.setState({ currentPermissions: ["agents.read"] });
+    const { result, navigate } = renderMenu();
+    act(() => result.current.handleMenuAction("files", point));
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("navigates quick-nav files for file-only operators", () => {
+    useAppStore.setState({ currentPermissions: ["files.read"] });
+    const navigate = vi.fn();
+    const deps = { t: (key: string) => key, navigate, setSelectedAgentId: vi.fn(), setMenuPoint: vi.fn(), openQuickSleep: vi.fn(), openNotesEdit: vi.fn(), setConfirm: vi.fn() };
+    const { result } = renderHook(() => useAgentMenuAction(deps));
+    act(() => result.current.handleQuickNav(beacon, "files"));
+    expect(navigate).toHaveBeenCalledWith("/beacons/a1/files");
   });
 });

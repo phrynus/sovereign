@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
+	"gorm.io/gorm"
 )
 
 // handleLateralPage renders the lateral movement page
@@ -18,30 +21,33 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 
 	// Get available agents
 	var agents []db.Implant
-	if err := s.db.Where("status = 'online'").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
-		slog.Error("Failed to query lateral agents", "err", err)
+	if err := s.tenantScope(s.db, c).Where("status = 'online'").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query agents")
+		return
 	}
 
-	// Get credentials from vault
 	var credentials []db.CredentialEntry
-	if err := s.db.Order("created_at desc").Limit(50).Find(&credentials).Error; err != nil {
-		slog.Error("Failed to query lateral credentials", "err", err)
+	if err := s.tenantScope(s.db, c).Order("created_at desc").Limit(50).Find(&credentials).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query credentials")
+		return
 	}
 
-	// Get statistics
 	var onlineAgents int64
-	if err := s.db.Model(&db.Implant{}).Where("status = 'online'").Count(&onlineAgents).Error; err != nil {
-		slog.Error("Failed to count online agents", "err", err)
+	if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("status = 'online'").Count(&onlineAgents).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to count agents")
+		return
 	}
 
 	var totalCreds int64
-	if err := s.db.Model(&db.CredentialEntry{}).Count(&totalCreds).Error; err != nil {
-		slog.Error("Failed to count credentials", "err", err)
+	if err := s.tenantScope(s.db.Model(&db.CredentialEntry{}), c).Count(&totalCreds).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to count credentials")
+		return
 	}
 
 	var totalTasks int64
-	if err := s.db.Model(&db.Task{}).Where("type = 'lateral'").Count(&totalTasks).Error; err != nil {
-		slog.Error("Failed to count lateral tasks", "err", err)
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("type = 'lateral'").Count(&totalTasks).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to count tasks")
+		return
 	}
 
 	data := gin.H{
@@ -52,87 +58,112 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 		"Credentials":  credentials,
 		"OnlineAgents": onlineAgents,
 		"TotalCreds":   totalCreds,
-		"TotalTasks":   totalTasks,
+	}
+	if middleware.HasPermission(c, db.PermTasksRead) {
+		data["TotalTasks"] = totalTasks
 	}
 	s.renderPageOrJSON(c, data)
 }
 
-// handleLateralHistory returns lateral movement history
-func (s *Server) handleLateralHistory(c *gin.Context) {
-	agentID := c.Param("id")
-
-	var tasks []db.Task
-	q := s.db.Where("type = 'lateral'")
-	if agentID != "all" {
-		q = q.Where("agent_id = ?", agentID)
-	}
-	q.Order("created_at desc").Limit(50).Find(&tasks)
-
-	// Real total: the 50-row cap made the stats card report ≤50 forever.
-	var total int64
-	countQ := s.db.Model(&db.Task{}).Where("type = 'lateral'")
-	if agentID != "all" {
-		countQ = countQ.Where("agent_id = ?", agentID)
-	}
-	countQ.Count(&total)
-
-	respond(c, gin.H{
-		"tasks": tasks,
-		"total": total,
-	})
+// LateralHistoryRow is the fixed lateral-history projection. Command,
+// credential material and task payloads never appear in this shape.
+type LateralHistoryRow struct {
+	TaskID        uint      `json:"task_id"`
+	SourceAgentID string    `json:"source_agent_id"`
+	Type          string    `json:"type,omitempty"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	CreatedBy     string    `json:"created_by"`
+	Target        string    `json:"target,omitempty"`
+	Method        string    `json:"method,omitempty"`
+	Result        string    `json:"result,omitempty"`
+	Error         string    `json:"error,omitempty"`
 }
 
-// handleProcessLateralResult processes lateral movement results from agent
-func (s *Server) handleProcessLateralResult(c *gin.Context) {
-	var req struct {
-		TaskID  uint   `json:"task_id"`
-		AgentID string `json:"agent_id"`
-		Success bool   `json:"success"`
-		Output  string `json:"output"`
-		Error   string `json:"error"`
-		Target  string `json:"target"`
-		Method  string `json:"method"`
+// handleLateralHistory returns tenant-scoped lateral movement history.
+func (s *Server) handleLateralHistory(c *gin.Context) {
+	agentID := c.Param("id")
+	if agentID != "all" {
+		var visible db.Implant
+		if err := s.tenantScope(s.db, c).Select("id").Where("id = ?", agentID).First(&visible).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				respondError(c, http.StatusNotFound, "agent not found")
+			} else {
+				respondError(c, http.StatusInternalServerError, "failed to query agent")
+			}
+			return
+		}
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request")
+	query := s.tenantScope(s.db, c).Where("type = 'lateral'")
+	if agentID != "all" {
+		query = query.Where("agent_id = ?", agentID)
+	}
+	var tasks []db.Task
+	if err := query.Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query lateral history")
 		return
 	}
 
-	// Update task
-	updates := map[string]interface{}{
-		"status": "completed",
-		"result": req.Output,
+	countQuery := s.tenantScope(s.db.Model(&db.Task{}), c).Where("type = 'lateral'")
+	if agentID != "all" {
+		countQuery = countQuery.Where("agent_id = ?", agentID)
+	}
+	var total int64
+	if err := countQuery.Count(&total).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to count lateral history")
+		return
 	}
 
-	if !req.Success {
-		updates["status"] = "failed"
-		updates["error"] = req.Error
+	rows := make([]LateralHistoryRow, 0, len(tasks))
+	for _, task := range tasks {
+		rows = append(rows, lateralHistoryRowForOperator(c, task))
 	}
+	respond(c, gin.H{
+		"tasks":          rows,
+		"total":          total,
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
+	})
+}
 
-	if err := s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(updates).Error; err != nil {
-		slog.Error("Failed to update lateral task", "task_id", req.TaskID, "err", err)
+func lateralHistoryRowForOperator(c *gin.Context, task db.Task) LateralHistoryRow {
+	row := LateralHistoryRow{
+		TaskID:        task.ID,
+		SourceAgentID: task.AgentID,
+		Status:        task.Status,
+		CreatedAt:     task.CreatedAt,
+		CreatedBy:     task.CreatedBy,
 	}
-
-	// If successful, add target to network hosts
-	if req.Success && req.Target != "" {
-		host := db.NetworkHost{
-			AgentID:  req.AgentID,
-			IP:       req.Target,
-			Hostname: "",
-			OS:       "",
-			Services: fmt.Sprintf(`[{"method":"%s","port":0}]`, req.Method),
-			LastSeen: time.Now(),
-		}
-		if err := s.db.Where("agent_id = ? AND ip = ?", req.AgentID, req.Target).FirstOrCreate(&host, db.NetworkHost{
-			AgentID: req.AgentID,
-			IP:      req.Target,
-		}).Error; err != nil {
-			slog.Error("Failed to create network host from lateral result", "err", err)
-		}
+	projected, authorized := taskForOperator(c, task).(db.Task)
+	if !authorized {
+		return row
 	}
+	row.Type = projected.Type
+	row.Result = projected.Result
+	row.Error = projected.Error
+	command, _, err := taskWireArgs(task)
+	if err != nil {
+		slog.Error("Failed to resolve lateral history arguments", "task_id", task.ID, "error", err)
+		return row
+	}
+	row.Method, row.Target = canonicalLateralMethodTarget(command)
+	return row
+}
 
-	respond(c, gin.H{})
+// canonicalLateralMethodTarget accepts only the implant's canonical
+// method|target|... wire form. JSON and other display strings are not a
+// source of history metadata.
+func canonicalLateralMethodTarget(command string) (method, target string) {
+	parts := strings.SplitN(strings.TrimSpace(command), "|", 3)
+	if len(parts) < 2 {
+		return "", ""
+	}
+	method = strings.ToLower(strings.TrimSpace(parts[0]))
+	target = strings.TrimSpace(parts[1])
+	if method == "" || target == "" {
+		return "", ""
+	}
+	return method, target
 }
 
 type lateralSpec struct {

@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AgentRow } from "./AgentRow";
 import type { Beacon } from "./types";
-
+import { useAppStore } from "@/lib/store";
 vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: (k: string) => k }) }));
 
 const BEACON: Beacon = {
@@ -38,6 +38,18 @@ function renderRow(beacon: Beacon = BEACON) {
 }
 
 describe("AgentRow failure count", () => {
+
+  it("hides the files quick action without files.read", () => {
+    useAppStore.setState({ currentPermissions: ["agents.read"] });
+    renderRow();
+    expect(screen.queryByRole("button", { name: "agents.files_title" })).toBeNull();
+  });
+
+  it("shows the files quick action to file-only operators", () => {
+    useAppStore.setState({ currentPermissions: ["files.read"] });
+    renderRow();
+    expect(screen.getByRole("button", { name: "agents.files_title" })).toBeTruthy();
+  });
   it("links a beacon's failures to exactly those operations", () => {
     renderRow();
     const link = screen.getByRole("link", { name: "3" });

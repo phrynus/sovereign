@@ -254,6 +254,8 @@ export const zh: Record<string, string> = {
     "audit.verify_chain": "校验审计链",
     "audit.verify_running": "校验中…",
     "audit.verify_ok": "审计链完整（{n} 行）",
+    "audit.verify_tenant_ok": "可见行校验通过（{n} 行）",
+    "audit.verify_tenant_scope": "租户视图：未验证全局链连续性与 anchor。",
     "audit.verify_failed": "审计链在 #{id} 处断裂",
     "audit.verify_error": "审计链校验失败",
     "audit.verify_hint": "检查最新 5,000 行；完整离线校验请使用 cmd/verify-audit。",

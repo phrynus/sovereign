@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import { Permission } from "@/components/ui/permission";
 import { Separator } from "@/components/ui/separator";
 import {
   Camera,
@@ -121,7 +122,9 @@ export function AgentContextMenu({ point, onClose, onAction }: AgentContextMenuP
       <MenuRow icon={<Clock />} label={t("agents.quick_sleep")} onClick={() => run("sleep")} />
       <MenuRow icon={<StickyNote />} label={t("agents.edit_notes")} onClick={() => run("notes")} />
       <Separator className="my-1" />
-      <MenuRow icon={<FolderOpen />} label={t("agents.files_title")} onClick={() => run("files")} />
+      <Permission perms="files.read">
+        <MenuRow icon={<FolderOpen />} label={t("agents.files_title")} onClick={() => run("files")} />
+      </Permission>
       <MenuRow icon={<Network />} label={t("agents.dock_cmd_socks")} onClick={() => run("socks")} />
       <MenuRow icon={<Copy />} label={t("agents.copy_id")} onClick={() => run("copy_id")} />
       <MenuRow icon={<RefreshCw />} label={t("agents.rebuild_payload")} onClick={() => run("rebuild")} />

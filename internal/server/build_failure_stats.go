@@ -42,14 +42,13 @@ func (s *Server) handleBuildFailureStats(c *gin.Context) {
 		window = buildFailureWindowMax
 	}
 	since := time.Now().Add(-window)
-
-	var rows []db.BuildLog
-	if err := s.db.WithContext(s.ctx).
+	query := s.tenantScope(s.db.WithContext(c.Request.Context()).Model(&db.BuildLog{}), c).
 		Where("status = ?", "failed").
 		Where("created_at >= ?", since).
 		Order("created_at desc").
-		Limit(2000).
-		Find(&rows).Error; err != nil {
+		Limit(2000)
+	var rows []db.BuildLog
+	if err := query.Find(&rows).Error; err != nil {
 		handleQueryError(c, err, "Failed to load build failures")
 		return
 	}

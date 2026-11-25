@@ -2,10 +2,12 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	forgecrypto "github.com/r0si/sovereign/internal/crypto"
@@ -119,70 +121,75 @@ func TestCookieExportDefaultsBrowserAll(t *testing.T) {
 	}
 }
 
-// TestProcessBrowserResultFailsClosedWithoutVault proves a vault failure
-// stores nothing rather than plaintext: with the loot key uninitialized the
-// per-credential encryption fails and the entry must be skipped.
-func TestProcessBrowserResultFailsClosedWithoutVault(t *testing.T) {
+// TestBeaconBrowserResultFailsClosedWithoutVault proves the authenticated
+// result pipeline stores neither a credential row nor plaintext task output
+// when the vault is unavailable.
+func TestBeaconBrowserResultFailsClosedWithoutVault(t *testing.T) {
 	if !lootUninitialized() {
 		t.Skip("loot key already initialized by another test in this binary")
 	}
 	gin.SetMode(gin.TestMode)
-	s := mustTenantServer(t)
+	s, database := newBeaconFinalityTestServer(t)
 	seedTenantAgent(t, s, "bc-res", 1)
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(
-		`{"task_id":1,"agent_id":"bc-res","credentials":["browser|https://x|alice|pw123|c=1"]}`)))
-	c.Request.Header.Set("Content-Type", "application/json")
-	s.handleProcessBrowserResult(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	task := db.Task{AgentID: "bc-res", TenantID: 1, Type: "browser_steal", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatalf("seed task: %v", err)
 	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"credentials": []string{"browser|https://x|alice|pw123|c=1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := db.Implant{ID: "bc-res", TenantID: 1}
+	s.processTaskResults(agent, []taskResult{{
+		TaskID: task.ID, Type: "browser_steal", Output: base64.StdEncoding.EncodeToString(payload),
+		Encoding: "base64", ResultID: "browser-no-vault",
+	}}, agent.ID, time.Now())
+
 	var n int64
-	if err := s.db.Model(&db.CredentialEntry{}).Count(&n).Error; err != nil {
+	if err := database.Model(&db.CredentialEntry{}).Count(&n).Error; err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if n != 0 {
 		t.Fatalf("vault failure stored %d credential row(s); fail-closed is broken", n)
 	}
-	var payload struct {
-		Created int `json:"created"`
+	var stored db.Task
+	if err := database.First(&stored, task.ID).Error; err != nil {
+		t.Fatal(err)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if payload.Created != 0 {
-		t.Fatalf("created=%d, want 0 when the vault is down", payload.Created)
+	if stored.Status != "failed" || stored.Result != "" {
+		t.Fatalf("vault failure did not fail closed: status=%q result=%q", stored.Status, stored.Result)
 	}
 }
 
-// TestProcessBrowserResultStoresEncrypted proves the happy path: each
-// credential is stored with encrypted notes (never the raw pipe string) and
-// the task is marked completed.
-func TestProcessBrowserResultStoresEncrypted(t *testing.T) {
+// TestBeaconBrowserResultStoresEncrypted proves an authenticated browser
+// result still populates the vault with encrypted notes and finalizes its task.
+func TestBeaconBrowserResultStoresEncrypted(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	forgecrypto.InitLootEncryption(tenantVisibilityMasterHex)
-	s := mustTenantServer(t)
+	s, database := newBeaconFinalityTestServer(t)
 	seedTenantAgent(t, s, "bc-res2", 1)
-	if err := s.db.Create(&db.Task{AgentID: "bc-res2", Type: "browser_steal", Status: "running"}).Error; err != nil {
+	task := db.Task{AgentID: "bc-res2", TenantID: 1, Type: "browser_steal", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
 		t.Fatalf("seed task: %v", err)
 	}
 
 	const raw = "browser|https://x|alice|pw123|c=1"
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(
-		`{"task_id":1,"agent_id":"bc-res2","credentials":["`+raw+`","browser|https://y|bob|pw456"]}`)))
-	c.Request.Header.Set("Content-Type", "application/json")
-	s.handleProcessBrowserResult(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	payload, err := json.Marshal(map[string]interface{}{
+		"credentials": []string{raw, "browser|https://y|bob|pw456"},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	agent := db.Implant{ID: "bc-res2", TenantID: 1}
+	s.processTaskResults(agent, []taskResult{{
+		TaskID: task.ID, Type: "browser_steal", Output: base64.StdEncoding.EncodeToString(payload),
+		Encoding: "base64", ResultID: "browser-encrypted",
+	}}, agent.ID, time.Now())
+
 	var rows []db.CredentialEntry
-	if err := s.db.Find(&rows).Error; err != nil {
+	if err := database.Find(&rows).Error; err != nil {
 		t.Fatalf("find: %v", err)
 	}
 	if len(rows) != 2 {
@@ -199,47 +206,50 @@ func TestProcessBrowserResultStoresEncrypted(t *testing.T) {
 			t.Fatalf("tenant = %d, want inheritance from the agent", r.TenantID)
 		}
 	}
-	// Decrypting back must recover the original string.
-	dec := decryptCredNotes(rows[0].Notes)
-	if dec != raw {
+	if dec := decryptCredNotes(rows[0].Notes); dec != raw {
 		t.Fatalf("round-trip mismatch: %q", dec)
 	}
-	var task db.Task
-	if err := s.db.First(&task, 1).Error; err != nil {
-		t.Fatalf("reload task: %v", err)
+	var stored db.Task
+	if err := database.First(&stored, task.ID).Error; err != nil {
+		t.Fatal(err)
 	}
-	if task.Status != "completed" {
-		t.Fatalf("task status = %q, want completed", task.Status)
+	if stored.Status != "completed" {
+		t.Fatalf("task status = %q, want completed", stored.Status)
 	}
 }
 
-// TestProcessWifiResultParsesSSIDWithColonPassword proves the SSID:password
-// split keeps colons inside the password and skips malformed entries.
-func TestProcessWifiResultParsesSSIDWithColonPassword(t *testing.T) {
+// TestBeaconWifiResultParsesSSIDWithColonPassword proves the authenticated
+// WiFi result keeps colons inside passwords and skips malformed entries.
+func TestBeaconWifiResultParsesSSIDWithColonPassword(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	forgecrypto.InitLootEncryption(tenantVisibilityMasterHex)
-	s := mustTenantServer(t)
+	s, database := newBeaconFinalityTestServer(t)
 	seedTenantAgent(t, s, "bc-wifi", 1)
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(
-		`{"task_id":1,"agent_id":"bc-wifi","networks":["HomeNet:p@ss:word","NoColonHere","Corp:secret"]}`)))
-	c.Request.Header.Set("Content-Type", "application/json")
-	s.handleProcessWifiResult(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	task := db.Task{AgentID: "bc-wifi", TenantID: 1, Type: "wifi_creds", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatalf("seed task: %v", err)
 	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"networks": []string{"HomeNet:p@ss:word", "NoColonHere", "Corp:secret"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := db.Implant{ID: "bc-wifi", TenantID: 1}
+	s.processTaskResults(agent, []taskResult{{
+		TaskID: task.ID, Type: "wifi_creds", Output: base64.StdEncoding.EncodeToString(payload),
+		Encoding: "base64", ResultID: "wifi-colon",
+	}}, agent.ID, time.Now())
+
 	var rows []db.CredentialEntry
-	if err := s.db.Find(&rows).Error; err != nil {
+	if err := database.Find(&rows).Error; err != nil {
 		t.Fatalf("find: %v", err)
 	}
 	if len(rows) != 2 {
 		t.Fatalf("stored %d rows, want 2 (the colonless entry must be skipped)", len(rows))
 	}
 	var home db.CredentialEntry
-	if err := s.db.Where("username = ?", "HomeNet").First(&home).Error; err != nil {
+	if err := database.Where("username = ?", "HomeNet").First(&home).Error; err != nil {
 		t.Fatalf("HomeNet row missing: %v", err)
 	}
 	if home.Password != "p@ss:word" {

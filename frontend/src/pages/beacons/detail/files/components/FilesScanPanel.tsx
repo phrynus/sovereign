@@ -5,6 +5,7 @@ import { paths } from "@/lib/api-paths";
 import { copyText } from "@/lib/clipboard";
 import { DataError } from "@/components/ui/data-state";
 import { Badge } from "@/components/ui/badge";
+import { Permission } from "@/components/ui/permission";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -189,6 +190,7 @@ export default function FilesScanPanel({ t, agentId, rootPath, onReveal }: Files
   }
 
   return (
+    <Permission perms="files.read">
     <div className="space-y-3">
       <Card className="p-(--card-spacing)">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -453,5 +455,6 @@ export default function FilesScanPanel({ t, agentId, rootPath, onReveal }: Files
         </Card>
       ) : null}
     </div>
+    </Permission>
   );
 }

@@ -5,7 +5,6 @@ import { Link } from "react-router-dom";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { timeAgo, formatTime } from "@/lib/utils";
-import type { AgentTaskRecord } from "@/types/agent";
 import { Activity, ArrowDown, ArrowUp, Camera, CheckCircle, ChevronDown, Clipboard, Clock, Copy, Database, Download, FileText, Folder, FolderPlus, GitBranch, Image, Info, Keyboard, Link2, ListChecks, Lock, Pencil, Search, Settings, Shield, ShieldCheck, Skull, Terminal, Trash2, Upload, Users, XCircle, Zap } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
@@ -21,6 +20,7 @@ import { copyText } from "@/lib/clipboard";
 import { toast } from "sonner";
 
 import { hueStyles, hueForTaskType } from "@/lib/ui/statusStyles";
+import type { TaskEntry } from "./agent-detail-utils";
 
 const MAX_VISIBLE_TASKS = 8;
 const EXPANDED_VISIBLE_TASKS = 20;
@@ -104,8 +104,9 @@ function useFullTaskResults() {
 }
 
 interface AgentTaskListProps {
-  tasks: AgentTaskRecord[];
   agentId: string;
+  tasks: TaskEntry[];
+  tasksRedacted?: boolean;
   expandedTaskId: string | number | null;
   onToggleExpand: (id: string | number) => void;
   totalTasks?: number;
@@ -125,7 +126,7 @@ function StatCell({ icon, label, value, tone }: { icon: React.ReactNode; label: 
 }
 
 export default memo(function AgentTaskList({
-  tasks, agentId, expandedTaskId, onToggleExpand,
+  tasks, tasksRedacted = false, agentId, expandedTaskId, onToggleExpand,
   totalTasks, completedTasks, pendingTasks, failedTasks,
 }: AgentTaskListProps) {
   const { t } = useI18n();
@@ -140,6 +141,7 @@ export default memo(function AgentTaskList({
   // snapshot, and re-fetch if that task is currently expanded.
   const lastResultRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
+    if (tasksRedacted) { lastResultRef.current.clear(); return; }
     for (const task of tasks) {
       const id = String(task.id ?? (task as unknown as { ID?: string | number }).ID ?? "");
       if (!id || id.startsWith("tmp-")) continue;
@@ -151,13 +153,14 @@ export default memo(function AgentTaskList({
       }
       lastResultRef.current.set(id, cur);
     }
-  }, [tasks, expandedTaskId, invalidate, load]);
+  }, [tasks, tasksRedacted, expandedTaskId, invalidate, load]);
 
   // Single-pass status/type aggregation: the old code filtered the whole
   // list 3x per render plus once more per badge below (O(n*m)).
   const statusCounts = useMemo(() => {
     const counts = { completed: 0, pending: 0, failed: 0 };
     const byType = new Map<string, number>();
+    if (tasksRedacted) return { ...counts, byType };
     for (const task of tasks) {
       if (task.status === "completed") counts.completed++;
       else if (task.status === "pending") counts.pending++;
@@ -166,7 +169,7 @@ export default memo(function AgentTaskList({
       if (type) byType.set(type, (byType.get(type) || 0) + 1);
     }
     return { ...counts, byType };
-  }, [tasks]);
+  }, [tasks, tasksRedacted]);
 
   const filterTypes = useMemo(() => {
     return [...statusCounts.byType.entries()]
@@ -182,14 +185,16 @@ export default memo(function AgentTaskList({
 
   const visibleTasks = useMemo(() => {
     let list = tasks;
-    if (filter) list = list.filter((task) => (task.type || "") === filter);
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      list = list.filter((task) => (task.command || "").toLowerCase().includes(q) || (task.type || "").toLowerCase().includes(q));
+    if (!tasksRedacted) {
+      if (filter) list = list.filter((task) => (task.type || "") === filter);
+      if (query.trim()) {
+        const q = query.trim().toLowerCase();
+        list = list.filter((task) => (task.command || "").toLowerCase().includes(q) || (task.type || "").toLowerCase().includes(q));
+      }
     }
     if (oldestFirst) list = [...list].reverse();
     return list.slice(0, visibleCount);
-  }, [tasks, filter, query, oldestFirst, visibleCount]);
+  }, [tasks, tasksRedacted, filter, query, oldestFirst, visibleCount]);
 
   if (tasks.length === 0) {
     return (
@@ -212,45 +217,52 @@ export default memo(function AgentTaskList({
         <Link to={`/events?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
       </div>
 
-      <div className="px-4 py-2.5 flex items-center gap-2 sm:gap-4 flex-wrap border-b border-border/70">
-        <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
+      {tasksRedacted ? (
+        <div className="px-4 py-2.5 flex items-center justify-between gap-2 border-b border-border/70">
           <StatCell icon={<ListChecks className="size-3 text-primary" />} label={t("agents.detail_total_tasks")} value={total} tone="text-foreground" />
-          <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<CheckCircle className="size-3 text-success-ink" />} label={t("agents.detail_completed")} value={completed} tone="text-success-ink" />
-          <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<Clock className="size-3 text-warning-ink" />} label={t("agents.detail_pending")} value={pending} tone="text-warning-ink" />
-          <div className="w-px h-3.5 bg-border" />
-          <StatCell icon={<XCircle className="size-3 text-destructive-ink" />} label={t("agents.detail_failed")} value={failed} tone="text-destructive-ink" />
+          <span className="text-micro-sm text-muted-foreground">{t("agents.tasks_redacted")}</span>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <div className="relative">
-            <Search className="size-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/85" aria-hidden="true" />
-            <Input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("agents.tasklist_search_placeholder")}
-              aria-label={t("agents.tasklist_search_placeholder")}
-              className="h-7 w-40 sm:w-52 pl-8 pr-2 text-xs font-mono"
-            />
+      ) : (
+        <div className="px-4 py-2.5 flex items-center gap-2 sm:gap-4 flex-wrap border-b border-border/70">
+          <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
+            <StatCell icon={<ListChecks className="size-3 text-primary" />} label={t("agents.detail_total_tasks")} value={total} tone="text-foreground" />
+            <div className="w-px h-3.5 bg-border" />
+            <StatCell icon={<CheckCircle className="size-3 text-success-ink" />} label={t("agents.detail_completed")} value={completed} tone="text-success-ink" />
+            <div className="w-px h-3.5 bg-border" />
+            <StatCell icon={<Clock className="size-3 text-warning-ink" />} label={t("agents.detail_pending")} value={pending} tone="text-warning-ink" />
+            <div className="w-px h-3.5 bg-border" />
+            <StatCell icon={<XCircle className="size-3 text-destructive-ink" />} label={t("agents.detail_failed")} value={failed} tone="text-destructive-ink" />
           </div>
-          <Tooltip>
-            <TooltipTrigger>
-              <Button
-                variant="outline"
-                size="icon-xs"
-                onClick={() => setOldestFirst((v) => !v)}
-                aria-label={oldestFirst ? t("agents.tasklist_sort_newest") : t("agents.tasklist_sort_oldest")}
-              >
-                {oldestFirst ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{oldestFirst ? t("agents.tasklist_sort_newest") : t("agents.tasklist_sort_oldest")}</TooltipContent>
-          </Tooltip>
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className="relative">
+              <Search className="size-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/85" aria-hidden="true" />
+              <Input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t("agents.tasklist_search_placeholder")}
+                aria-label={t("agents.tasklist_search_placeholder")}
+                className="h-7 w-40 sm:w-52 pl-8 pr-2 text-xs font-mono"
+              />
+            </div>
+            <Tooltip>
+              <TooltipTrigger>
+                <Button
+                  variant="outline"
+                  size="icon-xs"
+                  onClick={() => setOldestFirst((v) => !v)}
+                  aria-label={oldestFirst ? t("agents.tasklist_sort_newest") : t("agents.tasklist_sort_oldest")}
+                >
+                  {oldestFirst ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{oldestFirst ? t("agents.tasklist_sort_newest") : t("agents.tasklist_sort_oldest")}</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
-      </div>
+      )}
 
-      {filterTypes.length > 1 && (
+      {!tasksRedacted && filterTypes.length > 1 && (
         <div className="px-4 py-2 flex flex-wrap items-center gap-1.5 border-b border-border/70">
           {[null, ...filterTypes].map((type) => (
             <button
@@ -271,7 +283,23 @@ export default memo(function AgentTaskList({
 
       <div className="divide-y divide-border/70">
         {visibleTasks.map((task, i) => {
-          const taskId = String((task as unknown as { id?: unknown; ID?: unknown }).id ?? (task as unknown as { ID?: unknown }).ID ?? `tmp-${i}-${(task.command || "").slice(0, 8)}`);
+          const taskId = String(task.id ?? task.ID ?? `tmp-${i}`);
+          if (tasksRedacted) {
+            const createdAt = task.created_at ?? task.CreatedAt;
+            const updatedAt = task.updated_at ?? task.UpdatedAt;
+            return (
+              <div key={taskId} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 font-mono text-micro-sm">#{taskId}</span>
+                  <StatusBadge status={task.status || "pending"} />
+                </div>
+                <div className="flex items-center gap-2 text-micro-sm text-muted-foreground">
+                  <time dateTime={createdAt}>{createdAt ? formatTime(String(createdAt)) : "—"}</time>
+                  {updatedAt && <time dateTime={updatedAt} title={String(updatedAt)}>{formatTime(String(updatedAt))}</time>}
+                </div>
+              </div>
+            );
+          }
           const isExpanded = String(expandedTaskId ?? "") === taskId;
           const tType = task.type || "";
           const command = (task.command || "").substring(0, 60);

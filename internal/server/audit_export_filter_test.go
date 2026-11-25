@@ -65,30 +65,29 @@ func TestAuditExportFilters(t *testing.T) {
 		return out
 	}
 
-	// Unfiltered: the tenant's three rows, both hashes present, and the header says "not filtered".
+	// No explicit filter still selects one tenant from the global chain, so it
+	// must declare both the tenant scope and the continuity limitation.
 	w := call("")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d %s", w.Code, w.Body.String())
 	}
 	if got := rows(w); len(got) != 3 {
-		t.Fatalf("unfiltered rows = %d, want 3 (tenant isolation): %s", len(got), w.Body.String())
+		t.Fatalf("tenant rows = %d, want 3 (tenant isolation): %s", len(got), w.Body.String())
 	}
-	if w.Header().Get("X-Audit-Export-Filtered") != "false" {
-		t.Fatalf("unfiltered export reported filtered: %q", w.Header().Get("X-Audit-Export-Filtered"))
+	if w.Header().Get("X-Audit-Export-Filtered") != "true" {
+		t.Fatalf("tenant export reported filtered: %q", w.Header().Get("X-Audit-Export-Filtered"))
 	}
-	if w.Header().Get("Warning") != "" {
-		t.Fatalf("unfiltered export carried a warning: %q", w.Header().Get("Warning"))
+	if !strings.Contains(w.Header().Get("Warning"), "not a contiguous hash chain") {
+		t.Fatalf("tenant export carried no continuity warning: %q", w.Header().Get("Warning"))
 	}
 	if w.Header().Get("X-Audit-Export-Rows") != "3" {
 		t.Fatalf("row count header = %q", w.Header().Get("X-Audit-Export-Rows"))
 	}
-	// The filtered boolean says a selection was made; the scope says WHICH, so an investigator holding the file can reproduce
-	// it instead of guessing which of six filters produced it.
-	if got := w.Header().Get("X-Audit-Export-Scope"); got != "all" {
-		t.Fatalf("unfiltered scope = %q, want all", got)
+	if got := w.Header().Get("X-Audit-Export-Scope"); got != "tenant=1" {
+		t.Fatalf("tenant scope = %q, want tenant=1", got)
 	}
 	scopedRequest := call("?action=login&user=admin&since_id=1")
-	if got := scopedRequest.Header().Get("X-Audit-Export-Scope"); got != "action=login;since_id=1;user=admin" {
+	if got := scopedRequest.Header().Get("X-Audit-Export-Scope"); got != "action=login;since_id=1;tenant=1;user=admin" {
 		t.Fatalf("filtered scope = %q, want the sorted composition", got)
 	}
 	for _, row := range rows(w) {
@@ -138,9 +137,10 @@ func TestAuditExportFilters(t *testing.T) {
 		t.Fatalf("invalid since = %d, want 400", got.Code)
 	}
 
-	// since_id stays a contiguous continuation and is therefore NOT marked filtered.
-	if got := call("?since_id=1"); got.Header().Get("X-Audit-Export-Filtered") != "false" {
-		t.Fatalf("since_id was treated as a filter: %q", got.Header().Get("X-Audit-Export-Filtered"))
+	// since_id stays a contiguous continuation within the selected tenant, but
+	// the tenant selection itself still makes this a non-continuous global view.
+	if got := call("?since_id=1"); got.Header().Get("X-Audit-Export-Filtered") != "true" {
+		t.Fatalf("tenant since_id export lost its selection warning: %q", got.Header().Get("X-Audit-Export-Filtered"))
 	}
 }
 

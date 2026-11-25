@@ -48,6 +48,7 @@ const KINDS = ["task", "screenshot", "credential", "status"] as const;
 export default memo(function TimelineSection({ agentId, online }: { agentId: string; online: boolean }) {
   const { t } = useI18n();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [tasksRedacted, setTasksRedacted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [kinds, setKinds] = useState<Set<string>>(new Set());
@@ -62,10 +63,11 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
     setLoading(true);
     const params = new URLSearchParams({ limit: expanded ? "400" : "60" });
     if (kinds.size > 0) params.set("kinds", [...kinds].join(","));
-    api.get<{ events?: TimelineEvent[] }>(paths.agents.timeline(agentId, params.toString()))
+    api.get<{ events?: TimelineEvent[]; tasks_redacted?: boolean }>(paths.agents.timeline(agentId, params.toString()))
       .then((d) => {
         if (gen !== genRef.current) return;
         setEvents(d.events || []);
+        setTasksRedacted(d.tasks_redacted === true);
         setLoadError(null);
       })
       .catch((err: unknown) => {
@@ -144,6 +146,7 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
           <>
             <div className="relative space-y-0">
               {events.map((ev, i) => {
+                const redactedTask = tasksRedacted && ev.kind === "task";
                 const style = KIND_STYLES[ev.kind] || KIND_STYLES.task;
                 const Icon = style.icon;
                 return (
@@ -167,12 +170,16 @@ export default memo(function TimelineSection({ agentId, online }: { agentId: str
                             {ev.title}
                           </Badge>
                         )}
-                        <span className="text-xs text-foreground break-all">{ev.title}</span>
+                        {redactedTask ? (
+                          <span className="text-xs font-mono text-foreground">#{ev.ref_id}</span>
+                        ) : (
+                          <span className="text-xs text-foreground break-all">{ev.title}</span>
+                        )}
                       </div>
                       <div className="text-micro-sm text-muted-foreground mt-0.5 flex items-center gap-2">
                         <span title={formatTime(ev.time)}>{timeAgo(ev.time, t)}</span>
-                        {ev.detail && <span>· {ev.detail}</span>}
-                        {ev.type && ev.kind === "task" && <span className="font-mono">· {ev.type}</span>}
+                        {!redactedTask && ev.detail && <span>· {ev.detail}</span>}
+                        {!redactedTask && ev.type && ev.kind === "task" && <span className="font-mono">· {ev.type}</span>}
                       </div>
                     </div>
                   </div>

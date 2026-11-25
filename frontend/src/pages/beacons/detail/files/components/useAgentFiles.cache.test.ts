@@ -4,6 +4,7 @@ import { useAgentFiles } from "./useAgentFiles";
 import { api, pollTask } from "@/lib/api";
 
 vi.mock("@/lib/agent-files/file-transfer", () => ({
+  listTransfers: vi.fn(() => Promise.resolve([])),
   pushLocalFile: vi.fn(),
   pullRemoteFile: vi.fn(),
 }));
@@ -56,6 +57,8 @@ describe("useAgentFiles listing cache", () => {
     const { result } = renderHook(() => useAgentFiles("agent-1"));
     await flush();
     expect(lsCalls()).toHaveLength(1);
+    expect(mockedGet).toHaveBeenCalledWith("/agents/agent-1/files?format=json");
+    expect(mockedGet).not.toHaveBeenCalledWith("/agents/agent-1?format=json");
     expect(result.current.entries).toHaveLength(1);
 
     await act(async () => {
@@ -138,13 +141,13 @@ describe("useAgentFiles listing cache", () => {
     expect(result.current.showPreview).toBe(false);
   });
 
-  it("does not browse, and never assumes Windows, when OS detection fails", async () => {
-    mockedGet.mockRejectedValueOnce(new Error("agent endpoint down"));
+  it("does not browse, and never assumes Windows, when files-page OS detection fails", async () => {
+    mockedGet.mockRejectedValueOnce(new Error("files endpoint down"));
     const { result } = renderHook(() => useAgentFiles("agent-1"));
     await flush();
 
     expect(lsCalls()).toHaveLength(0);
-    expect(result.current.osError).toBe("agent endpoint down");
+    expect(result.current.osError).toBe("files endpoint down");
     expect(result.current.entries).toHaveLength(0);
   });
 

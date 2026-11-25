@@ -3,9 +3,10 @@ import { renderHook, act } from "@testing-library/react";
 import { toast } from "sonner";
 import { useAgentFiles } from "./useAgentFiles";
 import { api } from "@/lib/api";
-import { pushLocalFile } from "@/lib/agent-files/file-transfer";
+import { listTransfers, pushLocalFile } from "@/lib/agent-files/file-transfer";
 
 vi.mock("@/lib/agent-files/file-transfer", () => ({
+  listTransfers: vi.fn(() => Promise.resolve([])),
   pushLocalFile: vi.fn(),
   pullRemoteFile: vi.fn(),
 }));
@@ -173,5 +174,14 @@ describe("useAgentFiles error surfaces", () => {
     await flush();
 
     expect(result.current.osError).toBe("common.network_error");
+  });
+
+  it("surfaces transfer-list failures without treating them as an empty list", async () => {
+    vi.mocked(listTransfers).mockRejectedValueOnce(apiError(500, "boom"));
+    const { result } = renderHook(() => useAgentFiles("agent-1"));
+    await flush();
+
+    expect(result.current.transfersError).toBe("common.server_error");
+    expect(result.current.transfers).toEqual([]);
   });
 });

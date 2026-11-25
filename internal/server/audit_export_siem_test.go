@@ -56,6 +56,10 @@ func TestAuditExportSIEMProjections(t *testing.T) {
 	if warning := ecs.Header().Get("Warning"); !strings.Contains(warning, "cannot verify") {
 		t.Fatalf("ecs Warning = %q, want the projection caveat", warning)
 	}
+	warnings := strings.Join(ecs.Header().Values("Warning"), "\n")
+	if !strings.Contains(warnings, "not a contiguous hash chain") {
+		t.Fatalf("ecs warnings lost the tenant selection caveat: %q", warnings)
+	}
 	lines := strings.Split(strings.TrimSpace(ecs.Body.String()), "\n")
 	if len(lines) != 1 {
 		t.Fatalf("ecs lines = %d, want one per row", len(lines))
@@ -107,9 +111,10 @@ func TestAuditExportSIEMProjections(t *testing.T) {
 	if strings.Count(cefLine, "msg=") != 1 {
 		t.Fatalf("cef line has more than one msg field: %q", cefLine)
 	}
-	// 3. The verifiable export is unchanged and carries no projection warning.
+	// 3. The verifiable NDJSON export carries the tenant selection warning,
+	// but not the SIEM projection warning.
 	ndjson := call("ndjson")
-	if ndjson.Header().Get("Warning") != "" {
-		t.Fatalf("the verifiable export grew a warning: %q", ndjson.Header().Get("Warning"))
+	if warning := ndjson.Header().Get("Warning"); !strings.Contains(warning, "not a contiguous hash chain") || strings.Contains(warning, "cannot verify") {
+		t.Fatalf("ndjson Warning = %q, want only the selection caveat", warning)
 	}
 }

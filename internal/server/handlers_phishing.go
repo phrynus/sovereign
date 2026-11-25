@@ -24,6 +24,38 @@ func (s *Server) phishingScope(c *gin.Context, model any) (*gorm.DB, bool) {
 	return s.creatorScope(c, model, "created_by")
 }
 
+// phishingEventScope contains capture events through their owning campaign.
+// Campaigns have no tenant column, so their creator scope supplies the
+// campaign-id subquery rather than treating legacy events as global rows.
+func (s *Server) phishingEventScope(c *gin.Context) (*gorm.DB, bool) {
+	campaigns, ok := s.phishingScope(c, &db.PhishingCampaign{})
+	if !ok {
+		return nil, false
+	}
+	return s.db.Model(&db.PhishingEvent{}).
+		Where("campaign_id IN (?)", campaigns.Select("id")), true
+}
+
+// phishingTemplateForCampaign is shared by campaign creation and launch so a
+// campaign can never reference another tenant's credential-capture template.
+func (s *Server) phishingTemplateForCampaign(c *gin.Context, templateID uint) (db.PhishingTemplate, bool) {
+	var tpl db.PhishingTemplate
+	if templateID == 0 {
+		respondError(c, http.StatusBadRequest, "campaign template not found")
+		return tpl, false
+	}
+	scope, ok := s.phishingScope(c, &db.PhishingTemplate{})
+	if !ok {
+		respondError(c, http.StatusBadRequest, "campaign template not found")
+		return tpl, false
+	}
+	if err := scope.Where("id = ?", templateID).First(&tpl).Error; err != nil {
+		respondError(c, http.StatusBadRequest, "campaign template not found")
+		return tpl, false
+	}
+	return tpl, true
+}
+
 func (s *Server) handleAPIPhishingTemplates(c *gin.Context) {
 	scope, ok := s.phishingScope(c, &db.PhishingTemplate{})
 	if !ok {
@@ -55,8 +87,13 @@ func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
 }
 
 func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
+	scope, ok := s.phishingEventScope(c)
+	if !ok {
+		respond(c, []any{})
+		return
+	}
 	var events []db.PhishingEvent
-	if err := s.db.Where("event_type = ?", "capture").Order("created_at desc").Limit(500).Find(&events).Error; err != nil {
+	if err := scope.Where("event_type = ?", "capture").Order("created_at desc").Limit(500).Find(&events).Error; err != nil {
 		// An empty 200 here reads as "nobody clicked / nobody submitted
 		// credentials" — a failed read must not fabricate that.
 		handleQueryError(c, err, "Failed to query phishing captures")
@@ -218,6 +255,9 @@ func (s *Server) handleAPICreatePhishingCampaign(c *gin.Context) {
 	}
 	if req.Name == "" {
 		respondError(c, http.StatusBadRequest, "name is required")
+		return
+	}
+	if _, ok := s.phishingTemplateForCampaign(c, req.TemplateID); !ok {
 		return
 	}
 	if req.SMTPPort == 0 {
@@ -392,9 +432,8 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 	// from emailing every target twice — but claiming first meant a campaign
 	// that failed validation (no template, no targets, no smtp_host, no
 	// from_email) stayed "running" forever and could never be launched again.
-	var tpl db.PhishingTemplate
-	if camp.TemplateID == 0 || s.db.First(&tpl, camp.TemplateID).Error != nil {
-		respondError(c, http.StatusBadRequest, "campaign template not found")
+	tpl, ok := s.phishingTemplateForCampaign(c, camp.TemplateID)
+	if !ok {
 		return
 	}
 	targets := parsePhishingTargets(camp.TargetList)

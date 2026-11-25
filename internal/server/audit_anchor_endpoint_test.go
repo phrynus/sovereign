@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func anchorCtx() (*gin.Context, *httptest.ResponseRecorder) {
@@ -16,6 +17,7 @@ func anchorCtx() (*gin.Context, *httptest.ResponseRecorder) {
 	c.Set("user", "admin1")
 	c.Set("user_role", db.RoleAdmin)
 	c.Set("user_id", uint(1))
+	c.Set(middleware.TenantIDContextKey, uint(0))
 	return c, w
 }
 

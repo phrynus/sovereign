@@ -10,6 +10,8 @@ interface TaskUpdateFrame {
   task_id?: number;
   task_type?: string;
   status?: string;
+  created_at?: string;
+  updated_at?: string;
   command?: string;
   created_by?: string;
   result?: string;
@@ -100,6 +102,42 @@ export function applyTaskUpdate(
 
   const tasks = prev.tasks || [];
   const idx = tasks.findIndex((t) => Number(t.id ?? t.ID) === taskId);
+
+  if (prev.tasks_redacted) {
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      const existing = tasks[idx];
+      const status = frame.status || existing.status;
+      const updatedAt = frame.updated_at || existing.updated_at || existing.UpdatedAt || now;
+      if (status === existing.status && updatedAt === (existing.updated_at || existing.UpdatedAt)) return prev;
+      const updated: TaskEntry = {
+        id: existing.id ?? existing.ID,
+        status,
+        created_at: existing.created_at ?? existing.CreatedAt,
+        updated_at: updatedAt,
+      };
+      const next = [...tasks];
+      next[idx] = updated;
+      return { ...prev, tasks: next };
+    }
+
+    if (seenTaskIds?.has(taskId)) return prev;
+    const entry: TaskEntry = {
+      id: taskId,
+      status: frame.status ?? "pending",
+      created_at: frame.created_at || now,
+      updated_at: frame.updated_at || now,
+    };
+    if (seenTaskIds) {
+      seenTaskIds.add(taskId);
+      if (seenTaskIds.size > 2000) {
+        const ids = Array.from(seenTaskIds);
+        seenTaskIds.clear();
+        for (const kept of ids.slice(-1000)) seenTaskIds.add(kept);
+      }
+    }
+    return { ...prev, tasks: [entry, ...tasks] };
+  }
 
   if (idx >= 0) {
     const existing = tasks[idx];

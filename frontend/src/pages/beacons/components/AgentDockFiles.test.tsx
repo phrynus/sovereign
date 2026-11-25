@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { pullRemoteFile, pushLocalFile } from "@/lib/agent-files/file-transfer";
 import { AgentDockFiles } from "./AgentDockFiles";
+import { useAppStore } from "@/lib/store";
+import type { PermissionKey } from "@/lib/permission-keys";
 
 const { stableT } = vi.hoisted(() => ({ stableT: (key: string) => key }));
 
@@ -52,10 +54,27 @@ function renderDock() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAppStore.setState({ currentPermissions: null });
   vi.mocked(api.post).mockResolvedValue(listing());
 });
 
 describe("AgentDockFiles", () => {
+  it("keeps browsing and pull available to file-only operators but hides upload", async () => {
+    useAppStore.setState({ currentPermissions: ["files.read"] as PermissionKey[] });
+    renderDock();
+
+    await screen.findByText("a.txt");
+    expect(screen.getByRole("button", { name: "agents.files_pull" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "agents.files_upload" })).toBeNull();
+  });
+
+  it.each([["files.write"], ["agents.read"]])("does not mount or load files without files.read (%s)", (permission) => {
+    useAppStore.setState({ currentPermissions: [permission as PermissionKey] });
+    const { container } = renderDock();
+
+    expect(container.textContent).toBe("");
+    expect(api.post).not.toHaveBeenCalled();
+  });
   it("renders the normalized load failure inline instead of the raw message", async () => {
     vi.mocked(api.post).mockRejectedValue({ status: 500, message: "boom" });
 

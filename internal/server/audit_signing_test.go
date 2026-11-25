@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/auditchain"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 const auditTestSeed = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -103,6 +104,7 @@ func TestAuditExportCarriesRowSignatures(t *testing.T) {
 	c.Set("user", "admin1")
 	c.Set("user_role", db.RoleAdmin)
 	c.Set("user_id", uint(1))
+	c.Set(middleware.TenantIDContextKey, uint(0))
 	s.handleExportAuditChain(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("export status = %d", w.Code)

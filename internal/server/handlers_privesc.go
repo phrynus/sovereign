@@ -1,14 +1,17 @@
 package server
 
 import (
+	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
+	"gorm.io/gorm"
 )
 
 // handlePrivescCheck handles privilege escalation reconnaissance
@@ -50,97 +53,33 @@ func (s *Server) handlePrivescCheck(c *gin.Context) {
 	})
 }
 
-// handleProcessPrivescResult processes privesc check results from agent
-func (s *Server) handleProcessPrivescResult(c *gin.Context) {
-	var req struct {
-		TaskID            uint            `json:"task_id"`
-		AgentID           string          `json:"agent_id"`
-		OS                string          `json:"os"`
-		Vulnerabilities   []VulnInfo      `json:"vulnerabilities"`
-		Misconfigurations []MisconfigInfo `json:"misconfigurations"`
-		Suggestions       []string        `json:"suggestions"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request")
-		return
-	}
-
-	// Format results
-	result := "=== Privilege Escalation Check Results ===\n\n"
-	result += fmt.Sprintf("OS: %s\n\n", req.OS)
-
-	result += fmt.Sprintf("Found %d potential vulnerabilities:\n", len(req.Vulnerabilities))
-	for i, vuln := range req.Vulnerabilities {
-		result += fmt.Sprintf("%d. [%s] %s - %s (CVE: %s)\n",
-			i+1, vuln.Severity, vuln.Title, vuln.Description, vuln.CVE)
-	}
-
-	result += fmt.Sprintf("\nFound %d misconfigurations:\n", len(req.Misconfigurations))
-	for i, misconfig := range req.Misconfigurations {
-		result += fmt.Sprintf("%d. [%s] %s - %s\n",
-			i+1, misconfig.Severity, misconfig.Title, misconfig.Description)
-	}
-
-	result += "\nSuggestions:\n"
-	for i, suggestion := range req.Suggestions {
-		result += fmt.Sprintf("%d. %s\n", i+1, suggestion)
-	}
-
-	// Update task
-	s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(map[string]interface{}{
-		"status": "completed",
-		"result": result,
-	})
-
-	respond(c, gin.H{
-
-		"vulnerabilities":   len(req.Vulnerabilities),
-		"misconfigurations": len(req.Misconfigurations),
-		"message":           "Privilege escalation check completed",
-	})
-}
-
-// VulnInfo represents a potential privilege escalation vulnerability
-type VulnInfo struct {
-	CVE         string `json:"cve"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Severity    string `json:"severity"` // critical, high, medium, low
-	ExploitURL  string `json:"exploit_url"`
-}
-
-// MisconfigInfo represents a system misconfiguration
-type MisconfigInfo struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Severity    string `json:"severity"`
-	Remediation string `json:"remediation"`
-}
-
 // handlePrivescPage renders the privilege escalation page
 func (s *Server) handlePrivescPage(c *gin.Context) {
 	stats := s.getNavStats(c)
 
-	// Get available agents
 	var agents []db.Implant
-	if err := s.db.Where("status = 'online'").Limit(5000).Find(&agents).Error; err != nil {
-		slog.Error("Failed to query privesc agents", "err", err)
+	if err := s.tenantScope(s.db, c).Where("status = 'online'").Limit(5000).Find(&agents).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query agents")
+		return
 	}
 
 	var tasks []db.Task
-	s.db.Where("type IN ?", []string{"privesc_check", "privesc_execute"}).
-		Order("created_at desc").
-		Limit(50).
-		Find(&tasks)
+	if err := s.tenantScope(s.db, c).Where("type IN ?", []string{"privesc_check", "privesc_execute"}).
+		Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query privesc history")
+		return
+	}
 
 	data := gin.H{
-		"Title":     "Sovereign - Privilege Escalation",
-		"ActiveNav": "privesc",
-		"Stats":     stats,
-		"Agents":    agents,
-		"History":   s.buildPrivescHistory(tasks),
-		"Findings":  s.buildPrivescFindings(tasks),
+		"Title":          "Sovereign - Privilege Escalation",
+		"ActiveNav":      "privesc",
+		"Stats":          stats,
+		"Agents":         agents,
+		"History":        s.buildPrivescHistory(c, tasks),
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
+	}
+	if middleware.HasPermission(c, db.PermTasksRead) {
+		data["Findings"] = s.buildPrivescFindings(tasks)
 	}
 	s.renderPageOrJSON(c, data)
 }
@@ -149,10 +88,10 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 type privescHistoryEntry struct {
 	ID            uint      `json:"id"`
 	AgentID       string    `json:"agent_id"`
-	CheckType     string    `json:"check_type"`
+	CheckType     string    `json:"check_type,omitempty"`
 	Status        string    `json:"status"`
-	Result        string    `json:"result"`
-	FindingsCount int       `json:"findings_count"`
+	Result        string    `json:"result,omitempty"`
+	FindingsCount *int      `json:"findings_count,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -166,41 +105,57 @@ type privescHistoryEntry struct {
 // plus an agent handler, not an unregistered type.
 
 // buildPrivescHistory maps privesc tasks to the frontend history shape.
-func (s *Server) buildPrivescHistory(tasks []db.Task) []privescHistoryEntry {
+func (s *Server) buildPrivescHistory(c *gin.Context, tasks []db.Task) []privescHistoryEntry {
 	out := make([]privescHistoryEntry, 0, len(tasks))
 	for _, t := range tasks {
-		checkType := strings.TrimPrefix(t.Command, "privesc_check:")
-		if checkType == t.Command {
-			checkType = "all"
+		entry := privescHistoryEntry{
+			ID:        t.ID,
+			AgentID:   t.AgentID,
+			Status:    t.Status,
+			CreatedAt: t.CreatedAt,
 		}
-		out = append(out, privescHistoryEntry{
-			ID:            t.ID,
-			AgentID:       t.AgentID,
-			CheckType:     checkType,
-			Status:        t.Status,
-			Result:        t.Result,
-			FindingsCount: len(s.parsePrivescFindings(t.Result)),
-			CreatedAt:     t.CreatedAt,
-		})
+		if projected, ok := taskForOperator(c, t).(db.Task); ok {
+			entry.CheckType = strings.TrimPrefix(projected.Command, "privesc_check:")
+			if entry.CheckType == projected.Command {
+				entry.CheckType = "all"
+			}
+			entry.Result = projected.Result
+			findingsCount := len(s.parsePrivescFindings(projected.Result))
+			entry.FindingsCount = &findingsCount
+		}
+		out = append(out, entry)
 	}
 	return out
 }
 
 // handlePrivescHistory returns privesc check history for a single task.
 func (s *Server) handlePrivescHistory(c *gin.Context) {
-	id := c.Param("id")
-
-	var task db.Task
-	if err := s.db.Where("id = ? AND type IN ?", id, []string{"privesc_check", "privesc_execute"}).First(&task).Error; err != nil {
+	taskID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || taskID == 0 {
 		respondError(c, http.StatusNotFound, "privesc task not found")
 		return
 	}
 
-	respond(c, gin.H{
-		"tasks":    []privescHistoryEntry{s.buildPrivescHistory([]db.Task{task})[0]},
-		"findings": s.parsePrivescFindings(task.Result),
-		"total":    1,
-	})
+	var task db.Task
+	if err := s.tenantScope(s.db, c).
+		Where("id = ? AND type IN ?", taskID, []string{"privesc_check", "privesc_execute"}).First(&task).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			respondError(c, http.StatusNotFound, "privesc task not found")
+		} else {
+			respondError(c, http.StatusInternalServerError, "failed to query privesc task")
+		}
+		return
+	}
+
+	payload := gin.H{
+		"tasks":          s.buildPrivescHistory(c, []db.Task{task}),
+		"total":          1,
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
+	}
+	if middleware.HasPermission(c, db.PermTasksRead) {
+		payload["findings"] = s.parsePrivescFindings(task.Result)
+	}
+	respond(c, payload)
 }
 
 // buildPrivescFindings collects parsed findings across a set of privesc tasks.

@@ -2,11 +2,14 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	forgecrypto "github.com/r0si/sovereign/internal/crypto"
 	"github.com/r0si/sovereign/internal/db"
 )
 
@@ -106,52 +109,60 @@ func TestPrivescDispatchRejectsMissingFields(t *testing.T) {
 	assertNoTasksForAgent(t, s, "pv-val")
 }
 
-// TestProcessPrivescResultFormatsAndCompletes proves the result handler parses
-// the agent payload, formats the report text and marks the task completed.
-func TestProcessPrivescResultFormatsAndCompletes(t *testing.T) {
+// TestBeaconPrivescResultFormatsAndCompletes proves the authenticated beacon
+// pipeline preserves structured privesc formatting and task finality.
+func TestBeaconPrivescResultFormatsAndCompletes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	s := mustTenantServer(t)
-	if err := s.db.Create(&db.Task{AgentID: "pv-res", Type: "privesc_check", Status: "running"}).Error; err != nil {
+	forgecrypto.InitLootEncryption(tenantVisibilityMasterHex)
+	s, database := newBeaconFinalityTestServer(t)
+	seedTenantAgent(t, s, "pv-res", 1)
+	task := db.Task{AgentID: "pv-res", TenantID: 1, Type: "privesc_check", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
 		t.Fatalf("seed task: %v", err)
 	}
+	body := `{"os":"windows","vulnerabilities":[{"cve":"CVE-2021-4034","title":"PwnKit","description":"pkexec LPE","severity":"high"}],"misconfigurations":[{"title":"WeakACL","description":"C:\\ writable","severity":"medium"}],"suggestions":["patch"]}`
+	agent := db.Implant{ID: "pv-res", TenantID: 1}
+	s.processTaskResults(agent, []taskResult{{
+		TaskID: task.ID, Type: "privesc_check", Output: base64.StdEncoding.EncodeToString([]byte(body)),
+		Encoding: "base64", ResultID: "privesc-structured",
+	}}, agent.ID, time.Now())
 
-	body := `{"task_id":1,"agent_id":"pv-res","os":"windows","vulnerabilities":[{"cve":"CVE-2021-4034","title":"PwnKit","description":"pkexec LPE","severity":"high"}],"misconfigurations":[{"title":"WeakACL","description":"C:\\ writable","severity":"medium"}],"suggestions":["patch"]}`
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(body)))
-	c.Request.Header.Set("Content-Type", "application/json")
-	s.handleProcessPrivescResult(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	var stored db.Task
+	if err := database.First(&stored, task.ID).Error; err != nil {
+		t.Fatal(err)
 	}
-	var task db.Task
-	if err := s.db.First(&task, 1).Error; err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if task.Status != "completed" {
-		t.Fatalf("status = %q, want completed", task.Status)
+	if stored.Status != "completed" {
+		t.Fatalf("status = %q, want completed", stored.Status)
 	}
 	for _, want := range []string{"PwnKit", "CVE-2021-4034", "WeakACL", "patch", "1"} {
-		if !bytes.Contains([]byte(task.Result), []byte(want)) {
-			t.Fatalf("formatted result missing %q: %s", want, task.Result)
+		if !bytes.Contains([]byte(stored.Result), []byte(want)) {
+			t.Fatalf("formatted result missing %q: %s", want, stored.Result)
 		}
 	}
 }
 
-// TestProcessPrivescResultRejectsBadJSON proves a malformed payload is a 400,
-// not a silent 200 that leaves the task "running" forever.
-func TestProcessPrivescResultRejectsBadJSON(t *testing.T) {
+// TestBeaconPrivescMalformedStructuredResultKeepsAuthenticatedOutput proves
+// malformed optional JSON is retained as ordinary agent output rather than
+// rejecting an already-authenticated result frame.
+func TestBeaconPrivescMalformedStructuredResultKeepsAuthenticatedOutput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	s := mustTenantServer(t)
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
-	c.Request.Header.Set("Content-Type", "application/json")
-	s.handleProcessPrivescResult(c)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d, want 400", w.Code)
+	forgecrypto.InitLootEncryption(tenantVisibilityMasterHex)
+	s, database := newBeaconFinalityTestServer(t)
+	seedTenantAgent(t, s, "pv-text", 1)
+	task := db.Task{AgentID: "pv-text", TenantID: 1, Type: "privesc_check", Status: "running"}
+	if err := database.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	agent := db.Implant{ID: "pv-text", TenantID: 1}
+	s.processTaskResults(agent, []taskResult{{
+		TaskID: task.ID, Type: "privesc_check", Output: "not json", ResultID: "privesc-text",
+	}}, agent.ID, time.Now())
+	var stored db.Task
+	if err := database.First(&stored, task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "completed" || stored.Result != "not json" {
+		t.Fatalf("authenticated text result changed: status=%q result=%q", stored.Status, stored.Result)
 	}
 }
 
@@ -171,8 +182,7 @@ func TestPrivescHistoryEndpoint(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c, _ := tenantScopedAdminContext(s, t, "pv-history-reader", 0)
 	c.Params = gin.Params{{Key: "id", Value: "7"}}
 	s.handlePrivescHistory(c)
 	if w.Code != http.StatusOK {
@@ -187,13 +197,12 @@ func TestPrivescHistoryEndpoint(t *testing.T) {
 	if payload.Total != 1 || len(payload.Tasks) != 1 {
 		t.Fatalf("payload = %+v, want one task", payload)
 	}
-	if payload.Tasks[0].CheckType != "linux" || payload.Tasks[0].FindingsCount != 1 {
+	if payload.Tasks[0].CheckType != "linux" || payload.Tasks[0].FindingsCount == nil || *payload.Tasks[0].FindingsCount != 1 {
 		t.Fatalf("task summary = %+v, want linux/1 finding", payload.Tasks[0])
 	}
 
 	w2 := httptest.NewRecorder()
-	c2, _ := gin.CreateTestContext(w2)
-	c2.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c2, _ := tenantScopedAdminContext(s, t, "pv-history-reader", 0)
 	c2.Params = gin.Params{{Key: "id", Value: "8"}}
 	s.handlePrivescHistory(c2)
 	if w2.Code != http.StatusNotFound {
@@ -251,12 +260,13 @@ func TestParsePrivescFindings(t *testing.T) {
 // check type from the command and counts findings.
 func TestBuildPrivescHistoryMapsCheckType(t *testing.T) {
 	s := mustTenantServer(t)
+	c, _ := tenantScopedAdminContext(s, t, "pv-history-reader", 0)
 
 	tasks := []db.Task{
 		{ID: 1, AgentID: "a", Command: "privesc_check:windows", Status: "completed", Result: "[!] vuln"},
 		{ID: 2, AgentID: "a", Command: "privesc_execute", Status: "completed", Result: ""},
 	}
-	out := s.buildPrivescHistory(tasks)
+	out := s.buildPrivescHistory(c, tasks)
 	if len(out) != 2 {
 		t.Fatalf("history len = %d", len(out))
 	}
@@ -266,7 +276,7 @@ func TestBuildPrivescHistoryMapsCheckType(t *testing.T) {
 	if out[1].CheckType != "all" {
 		t.Fatalf("non-check command mapped to %q, want the default all", out[1].CheckType)
 	}
-	if out[0].FindingsCount != 1 || out[1].FindingsCount != 0 {
-		t.Fatalf("findings counts wrong: %d/%d", out[0].FindingsCount, out[1].FindingsCount)
+	if out[0].FindingsCount == nil || *out[0].FindingsCount != 1 || out[1].FindingsCount == nil || *out[1].FindingsCount != 0 {
+		t.Fatalf("findings counts wrong: %v/%v", out[0].FindingsCount, out[1].FindingsCount)
 	}
 }

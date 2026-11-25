@@ -283,19 +283,33 @@ func (s *Server) handleBuildDownload(c *gin.Context) {
 	serveFileSafe(c, cleanPath, s.extractAgentsDir(), sanitizeFilename(filepath.Base(cleanPath)))
 }
 
-// handleBuildList returns all active build jobs for the caller.
+// handleBuildList returns active build jobs visible to the caller.
 func (s *Server) handleBuildList(c *gin.Context) {
-	respond(c, gin.H{"builds": s.buildJobSnapshots()})
+	tid, ok := s.resolveTenant(c)
+	if !ok {
+		respond(c, gin.H{"builds": []gin.H{}})
+		return
+	}
+	respond(c, gin.H{"builds": s.buildJobSnapshotsForTenant(tid)})
 }
 
-// buildJobSnapshots returns a lock-protected snapshot of every active build
-// job in the same JSON shape used by handleBuildList. Copying every field
-// under the lock guarantees the build goroutine's mutations cannot race reads.
+// buildJobSnapshots is the global system-path snapshot. Operator callers use
+// buildJobSnapshotsForTenant so a reconnect cannot reveal another tenant's jobs.
 func (s *Server) buildJobSnapshots() []gin.H {
+	return s.buildJobSnapshotsForTenant(0)
+}
+
+// buildJobSnapshotsForTenant returns a lock-protected snapshot in the same
+// JSON shape used by handleBuildList. Tenant 0 is the global view; scoped
+// callers see only jobs carrying their tenant, never legacy tenant-0 jobs.
+func (s *Server) buildJobSnapshotsForTenant(tenantID uint) []gin.H {
 	s.buildJobsMu.RLock()
 	defer s.buildJobsMu.RUnlock()
 	resp := make([]gin.H, 0, len(s.buildJobs))
 	for _, j := range s.buildJobs {
+		if tenantID != 0 && j.TenantID != tenantID {
+			continue
+		}
 		entry := gin.H{
 			"id":           j.ID,
 			"status":       j.Status,
@@ -344,6 +358,7 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 		if cachedPath, ok := s.buildCache.Get(cacheKey); ok {
 			slog.Info("Build cache hit", "build_id", job.ID, "cache_key", cacheKey)
 			s.completeBuildJob(job, cachedPath, nil)
+			s.logBuildWithProfile(job.TenantID, platform, format, c2URL, listenerID, filename, "success", "", cachedPath, job.ProfileName, job.ProfileHash)
 			s.broadcastOperatorEvent(map[string]interface{}{
 				"type":      "build_update",
 				"build_id":  job.ID,
@@ -365,7 +380,7 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 			err := fmt.Errorf("panic in build: %v", r)
 			slog.Error("Async build panicked", "build_id", job.ID, "platform", platform, "format", format, "panic", r)
 			s.completeBuildJob(job, "", err)
-			s.logBuildWithProfile(platform, format, c2URL, listenerID, filename, "failed", err.Error(), "", job.ProfileName, job.ProfileHash)
+			s.logBuildWithProfile(job.TenantID, platform, format, c2URL, listenerID, filename, "failed", err.Error(), "", job.ProfileName, job.ProfileHash)
 			s.broadcastOperatorEvent(map[string]interface{}{
 				"type":         "build_update",
 				"build_id":     job.ID,
@@ -404,6 +419,11 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 		}
 	}
 	s.completeBuildJob(job, outPath, err)
+	if err != nil {
+		s.logBuildWithProfile(job.TenantID, platform, format, c2URL, listenerID, filename, "failed", buildFailureText(err), "", job.ProfileName, job.ProfileHash)
+	} else {
+		s.logBuildWithProfile(job.TenantID, platform, format, c2URL, listenerID, filename, "success", "", outPath, job.ProfileName, job.ProfileHash)
+	}
 	event := map[string]interface{}{
 		"type":     "build_update",
 		"build_id": job.ID,

@@ -15,7 +15,7 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 	var agent db.Implant
 	query := s.tenantScope(s.db.Model(&db.Implant{}), c)
 	if err := query.First(&agent, "id = ?", id).Error; err != nil {
-		c.Redirect(http.StatusFound, "/agents")
+		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
 

@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { timeAgo, formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import type { Beacon } from "./types";
 import { agentStatusBorderClass, osIcon, integrityTone } from "./types";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -52,6 +53,8 @@ export const AgentRow = memo(function AgentRow({
   const id = beacon.id || "";
   const { t } = useI18n();
   const { copiedField, copy } = useCopiedField();
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
   const hostname = beacon.hostname || "-";
   const username = beacon.username || "-";
   const ip = beacon.ip || "-";
@@ -313,15 +316,17 @@ export const AgentRow = memo(function AgentRow({
           >
             <Terminal className="size-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-            aria-label={t("agents.files_title")}
-            onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "files"); }}
-          >
-            <FolderOpen className="size-4" />
-          </Button>
+          {canReadFiles && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+              aria-label={t("agents.files_title")}
+              onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "files"); }}
+            >
+              <FolderOpen className="size-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"

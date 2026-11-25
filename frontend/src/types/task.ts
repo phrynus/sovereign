@@ -1,11 +1,17 @@
-export interface Task {
+/** Permission-safe task projection returned when task contents are redacted. */
+export interface TaskSummary {
   id: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Task extends TaskSummary {
   agent_id: string;
   type: string;
   command: string;
   shell?: string;
   path?: string;
-  status: string;
   result: string;
   error: string;
   progress?: number;
@@ -26,6 +32,4 @@ export interface Task {
   late_result?: boolean;
   late_result_status?: string;
   late_result_at?: string;
-  created_at: string;
-  updated_at: string;
 }

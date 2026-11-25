@@ -781,6 +781,49 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		// Build logs predate tenant stamping. A live listener is the only
+		// reliable parent: inherit its tenant when the association is known,
+		// and keep every other row at tenant 0 (global operators only).
+		ID: "2026-11-25-build-logs-tenant-id",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("build_logs") {
+				return nil
+			}
+			if !tx.Migrator().HasColumn("build_logs", "tenant_id") {
+				execMigration(tx, "ALTER TABLE build_logs ADD COLUMN tenant_id INTEGER DEFAULT 0", "add_build_logs_tenant_id")
+				if !tx.Migrator().HasColumn("build_logs", "tenant_id") {
+					return fmt.Errorf("add build_logs.tenant_id failed")
+				}
+			}
+			if err := tx.Exec("UPDATE build_logs SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+				return err
+			}
+			if tx.Migrator().HasTable("listeners") {
+				if err := tx.Exec(`UPDATE build_logs AS b
+					SET tenant_id = l.tenant_id
+					FROM listeners AS l
+					WHERE b.listener_id IS NOT NULL AND b.listener_id <> 0
+						AND b.listener_id = l.id
+						AND l.tenant_id IS NOT NULL AND l.tenant_id <> 0
+						AND (b.tenant_id IS NULL OR b.tenant_id = 0)`).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Exec("UPDATE build_logs SET tenant_id = 0 WHERE tenant_id IS NULL").Error; err != nil {
+				return err
+			}
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_build_logs_tenant_created ON build_logs(tenant_id, created_at)", "add_build_logs_tenant_created_index")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_build_logs_tenant_created", "drop_build_logs_tenant_created_index")
+			if tx.Migrator().HasColumn("build_logs", "tenant_id") {
+				execMigration(tx, "ALTER TABLE build_logs DROP COLUMN tenant_id", "drop_build_logs_tenant_id")
+			}
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 func (s *Server) handleDashboard(c *gin.Context) {
@@ -56,11 +57,18 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		slog.Error("Dashboard: failed to query recent agents", "err", err)
 	}
 
-	// Recent tasks
+	// Recent tasks are full records only for tasks.read holders. Redacted
+	// callers still receive the fixed status/time summary and fleet totals.
+	canViewTasks := middleware.HasPermission(c, db.PermTasksRead)
 	var recentTasks []db.Task
-	if err := s.tenantScope(s.db.Preload("Agent"), c).
-		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
+	recentTasksQuery := s.tenantScope(s.db, c).
+		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
+	if canViewTasks {
+		recentTasksQuery = recentTasksQuery.Preload("Agent")
+	} else {
+		recentTasksQuery = recentTasksQuery.Select("id, status, created_at, updated_at")
+	}
+	if err := recentTasksQuery.Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
 		slog.Error("Dashboard: failed to query recent tasks", "err", err)
 	}
 
@@ -70,20 +78,28 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		"ActiveNav":      "dashboard",
 		"TotalAgents":    counts.TotalAgents,
 		"OnlineAgents":   counts.OnlineAgents,
-		"TodayTasks":     counts.TodayTasks,
-		"RecentTasks":    recentTasks,
-		"PendingTasks":   counts.PendingTasks,
-		"FailedTasks":    counts.FailedTasks,
+		"TotalTasks":     counts.TotalTasks,
+		"RecentTasks":    tasksForOperator(c, recentTasks),
 		"TotalCreds":     counts.TotalCreds,
 		"TotalTokens":    counts.TotalTokens,
 		"TotalAudits":    counts.TotalAudits,
 		"TotalSocks":     counts.TotalSocks,
 		"TotalListeners": counts.TotalListeners,
-		"TotalTasks":     counts.TotalTasks,
 		"RecentAgents":   recentAgents,
+	}
+	if canViewTasks {
+		data["TodayTasks"] = counts.TodayTasks
+		data["PendingTasks"] = counts.PendingTasks
+		data["FailedTasks"] = counts.FailedTasks
+	}
+	if !canViewTasks {
+		data["TasksRedacted"] = true
 	}
 	for k, v := range stats {
 		data[k] = v
+	}
+	if !canViewTasks {
+		delete(data, "pending_count")
 	}
 
 	s.renderPageOrJSON(c, data)

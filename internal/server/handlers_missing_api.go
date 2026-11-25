@@ -159,8 +159,15 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 }
 
 func (s *Server) handleAPIMeshTopology(c *gin.Context) {
+	visible, ok := s.visibleAgentIDSubquery(c)
+	if !ok {
+		respond(c, gin.H{"nodes": []gin.H{}, "edges": []gin.H{}})
+		return
+	}
 	var peers []db.MeshPeer
-	if err := s.db.Limit(500).Find(&peers).Error; err != nil {
+	query := s.db.Where("agent_id IN (?)", visible).
+		Where("peer_id IN (?)", visible)
+	if err := query.Limit(500).Find(&peers).Error; err != nil {
 		// An empty 200 here draws a topology with no peers at all.
 		handleQueryError(c, err, "Failed to query mesh peers")
 		return
@@ -224,12 +231,13 @@ func (s *Server) handleAPIPrivesc(c *gin.Context) {
 	// straight into the JSON view struct served raw FC2ENC: ciphertext to the
 	// privesc panel whenever loot encryption was on.
 	var tasks []db.Task
-	s.db.Table("tasks").
+	query := s.tenantScope(s.db.Table("tasks"), c).
 		Select("id, agent_id, command, result, status, created_at").
-		Where("type = ?", "privesc_check").
-		Order("created_at DESC").
-		Limit(100).
-		Find(&tasks)
+		Where("type = ?", "privesc_check")
+	if err := query.Order("created_at DESC").Limit(100).Find(&tasks).Error; err != nil {
+		handleQueryError(c, err, "Failed to query privesc tasks")
+		return
+	}
 	results := make([]privescResult, 0, len(tasks))
 	for _, t := range tasks {
 		results = append(results, privescResult{
@@ -266,7 +274,7 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 		IP        string
 		Success   bool
 	}
-	if err := s.db.Table("audit_logs").
+	if err := s.auditTenantScope(s.db.Table("audit_logs"), c).
 		Select("id, created_at, \"user\", action, details, agent_id, ip, success").
 		Order("created_at DESC").Limit(200).Find(&auditLogs).Error; err != nil {
 		// The timeline merges two feeds; dropping one silently would show
@@ -287,7 +295,7 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 	// SensitiveTaskTypes; the bare struct rendered an "FC2ENC:..." blob as the
 	// event's action text.
 	var tasks []db.Task
-	if err := s.db.Table("tasks").
+	if err := s.tenantScope(s.db.Table("tasks"), c).
 		Select("id, created_at, agent_id, type, command, status").
 		Order("created_at DESC").Limit(200).Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query tasks for timeline")
@@ -307,9 +315,11 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 // buildChainEntries loads the agent parent/child relations for the chain
 // topology views. A failed read returns an error so callers answer 500
 // instead of drawing an empty topology that reads as "no agents".
-func (s *Server) buildChainEntries() ([]gin.H, error) {
+func (s *Server) buildChainEntries(c *gin.Context) ([]gin.H, error) {
 	var agents []db.Implant
-	if err := s.db.Select("id, hostname, parent_agent_id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).
+		Select("id, hostname, parent_agent_id").
+		Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
 		return nil, err
 	}
 	entries := make([]gin.H, 0, len(agents))
@@ -326,7 +336,7 @@ func (s *Server) buildChainEntries() ([]gin.H, error) {
 // respondChainEntries answers a chain-topology request, mapping a failed
 // relation load to a 500 (never an empty topology).
 func (s *Server) respondChainEntries(c *gin.Context, key string) {
-	entries, err := s.buildChainEntries()
+	entries, err := s.buildChainEntries(c)
 	if err != nil {
 		handleQueryError(c, err, "Failed to build chain entries")
 		return
@@ -345,7 +355,7 @@ func (s *Server) handleAPIChainList(c *gin.Context) {
 func (s *Server) handleDownloadBuild(c *gin.Context) {
 	id := c.Param("id")
 	var logEntry db.BuildLog
-	if err := s.db.First(&logEntry, "id = ?", id).Error; err != nil {
+	if err := s.tenantScope(s.db, c).First(&logEntry, "id = ?", id).Error; err != nil {
 		respondError(c, http.StatusNotFound, "build not found")
 		return
 	}
@@ -498,9 +508,9 @@ func (s *Server) handleAgentChainSet(c *gin.Context) {
 				return
 			}
 			seen[cur] = true
-			var parent db.Implant
-			if err := s.db.Select("id, parent_agent_id").First(&parent, "id = ?", cur).Error; err != nil {
-				break // unknown parent id — allow, agent may register later
+			parent, ok := s.getAgentOrFail(c, cur)
+			if !ok {
+				return
 			}
 			cur = parent.ParentAgentID
 		}
@@ -547,18 +557,32 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 	var req struct {
 		ParentID string `json:"parent_id"`
 	}
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
 	if req.ParentID != "" && req.ParentID != agentID {
+		if _, ok := s.getAgentOrFail(c, req.ParentID); !ok {
+			return
+		}
 		// Persist the requested mesh route on the implant record.
 		if err := s.tenantScope(s.db.Model(&db.Implant{}), c).Where("id = ?", agentID).
 			Update("parent_id", req.ParentID).Error; err != nil {
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Set mesh route"))
 			return
 		}
-		s.LogAuditRecord(nil, "mesh_route_set", "agents", agentID, fmt.Sprintf("Mesh parent set to %s", req.ParentID), true, nil)
+		s.LogAuditRecord(c, "mesh_route_set", "agents", agentID, fmt.Sprintf("Mesh parent set to %s", req.ParentID), true, nil)
+	}
+	visible, ok := s.visibleAgentIDSubquery(c)
+	if !ok {
+		respond(c, gin.H{"peers": []db.MeshPeer{}})
+		return
 	}
 	var peers []db.MeshPeer
-	if err := s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Limit(500).Find(&peers).Error; err != nil {
+	query := s.db.Where("(agent_id = ? OR peer_id = ?)", agentID, agentID).
+		Where("agent_id IN (?)", visible).
+		Where("peer_id IN (?)", visible)
+	if err := query.Limit(500).Find(&peers).Error; err != nil {
 		// An empty 200 here reads as "this agent has no mesh peers".
 		handleQueryError(c, err, "Failed to query mesh route")
 		return

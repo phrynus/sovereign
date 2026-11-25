@@ -25,11 +25,27 @@ function asTaskStatus(raw: unknown, fallback: TaskStatus = "pending"): TaskStatu
 export function applyTaskEvent(
   tasks: AgentTaskRecord[],
   msg: Record<string, unknown>,
+  redacted = false,
 ): AgentTaskRecord[] {
   const id = Number(msg.task_id ?? msg.id);
   if (!Number.isFinite(id) || id <= 0) return tasks;
   const idx = tasks.findIndex((t) => Number(t.id) === id);
   const prev = idx >= 0 ? tasks[idx] : undefined;
+
+  if (redacted) {
+    const now = new Date().toISOString();
+    const status = String(msg.type) === "task_output"
+      ? (msg.done === true ? "completed" : "running")
+      : asTaskStatus(msg.status, prev?.status ?? "pending");
+    const createdAt = prev?.created_at || String(msg.created_at ?? now);
+    const updatedAt = String(msg.updated_at ?? now);
+    if (idx >= 0 && prev && prev.status === status && prev.updated_at === updatedAt) return tasks;
+    const summary: AgentTaskRecord = { id, status, created_at: createdAt, updated_at: updatedAt };
+    if (idx < 0) return [summary, ...tasks];
+    const copy = tasks.slice();
+    copy[idx] = summary;
+    return copy;
+  }
 
   if (String(msg.type) === "task_output") {
     const chunk = String(msg.chunk ?? "");

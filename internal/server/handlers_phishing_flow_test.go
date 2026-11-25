@@ -288,7 +288,7 @@ func TestLaunchPhishingCampaignValidationDoesNotWedge(t *testing.T) {
 	}
 
 	// Targets missing.
-	tpl := db.PhishingTemplate{Name: "tpl", Subject: "s", Body: "b", FromEmail: "s@example.test", Type: "text"}
+	tpl := db.PhishingTemplate{Name: "tpl", Subject: "s", Body: "b", FromEmail: "s@example.test", Type: "text", CreatedBy: "admin"}
 	if err := s.db.Create(&tpl).Error; err != nil {
 		t.Fatal(err)
 	}

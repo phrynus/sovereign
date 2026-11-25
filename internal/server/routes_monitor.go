@@ -52,15 +52,24 @@ func (s *Server) registerDashboardCharts(auth *gin.RouterGroup) {
 	dashRead.Use(middleware.RequirePermission(db.PermAgentsRead))
 	dashRead.Use(middleware.CacheControl(5))
 	{
-		dashRead.GET("/api/dashboard/activity-heatmap", s.handleDashboardActivityHeatmap)
 		dashRead.GET("/api/dashboard/os-distribution", s.handleDashboardOSDistribution)
-		dashRead.GET("/api/dashboard/task-status", s.handleDashboardTaskStatus)
 		dashRead.GET("/api/dashboard/listener-traffic", s.handleDashboardListenerTraffic)
 		dashRead.GET("/api/dashboard/credential-types", s.handleDashboardCredentialTypes)
 		dashRead.GET("/api/dashboard/agent-geo", s.handleDashboardAgentGeo)
-		dashRead.GET("/api/dashboard/task-gantt", s.handleDashboardTaskGantt)
 		dashRead.GET("/api/dashboard/attack-path", s.handleDashboardAttackPath)
 		dashRead.GET("/api/dashboard/active-missions", s.handleActiveMissions)
+	}
+
+	// Task-derived charts expose types, status distribution, agent links and
+	// durations. They require the same tasks.read authority as the task list,
+	// not merely agents.read.
+	dashTasksRead := auth.Group("/")
+	dashTasksRead.Use(middleware.RequirePermission(db.PermTasksRead))
+	dashTasksRead.Use(middleware.CacheControl(5))
+	{
+		dashTasksRead.GET("/api/dashboard/activity-heatmap", s.handleDashboardActivityHeatmap)
+		dashTasksRead.GET("/api/dashboard/task-status", s.handleDashboardTaskStatus)
+		dashTasksRead.GET("/api/dashboard/task-gantt", s.handleDashboardTaskGantt)
 	}
 }
 

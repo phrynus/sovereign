@@ -502,7 +502,10 @@ type WSOperatorSession struct {
 	// CanViewScreen mirrors wsClientConn.canViewScreen so live screen frames
 	// never reach a read-only custom role through /ws/operator.
 	CanViewScreen bool
-	AgentView     string
+	// CanViewTasks mirrors wsClientConn.canViewTasks so task frames obey the
+	// same tasks.read gate on both operator endpoints.
+	CanViewTasks bool
+	AgentView    string
 	// lastSeenNano is atomic: the read pump writes it on every frame while
 	// presence scans read it concurrently (P3-10 data race fix).
 	lastSeenNano atomic.Int64
@@ -708,10 +711,10 @@ func (s *Server) broadcastOperatorPresence() {
 }
 
 // sendOperatorSyncSnapshot pushes the current state snapshot (active build
-// jobs) to a freshly-connected operator socket, so dashboards can render the
-// latest state without waiting for the next event and after a reconnect.
-func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn) {
-	msg, ok := marshalJSONSafe(gin.H{"type": "sync", "builds": s.buildJobSnapshots()})
+// jobs) to a freshly-connected operator socket, restricted to that operator's
+// tenant so reconnects converge without disclosing another tenant's builds.
+func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn, tenantID uint) {
+	msg, ok := marshalJSONSafe(gin.H{"type": "sync", "builds": s.buildJobSnapshotsForTenant(tenantID)})
 	if !ok {
 		return
 	}
@@ -727,6 +730,11 @@ func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn) {
 func (s *Server) handleOperatorWS(c *gin.Context) {
 	claims, tokenStr, ok := s.authenticateOperatorWS(c)
 	if !ok {
+		return
+	}
+	tenantID, tenantOK := s.tenantIDForUserStrict(claims.Username)
+	if !tenantOK {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "error": "tenant_unavailable"})
 		return
 	}
 
@@ -751,8 +759,9 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		// every tenant, and the screen gate mirrors agents.write. Without
 		// these, /ws/operator would either leak other tenants' agent events
 		// or miss the ones it is entitled to.
-		TenantID:      s.tenantIDForUser(claims.Username),
+		TenantID:      tenantID,
 		CanViewScreen: s.userCanViewScreen(claims.Username),
+		CanViewTasks:  s.userCanViewTasks(claims.Username),
 		send:          make(chan []byte, 256),
 		done:          make(chan struct{}),
 	}
@@ -767,7 +776,7 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 	// current build snapshot so a client that dropped events while offline
 	// converges immediately. Sent before registering the session so no
 	// broadcast can interleave with (and corrupt ordering of) the snapshot.
-	s.sendOperatorSyncSnapshot(conn)
+	s.sendOperatorSyncSnapshot(conn, tenantID)
 
 	s.operatorSessions.add(session)
 
@@ -780,7 +789,7 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 
 	// Re-check force-logout/disable/revoke while the socket is live so an
 	// admin action during the session actually disconnects the operator.
-	s.startWSAuthRecheck(tokenStr, claims, session.done, func() {
+	s.startWSAuthRecheck(tokenStr, claims, session.done, session.CanViewTasks, func() {
 		session.closeOnce.Do(func() { close(session.done) })
 		conn.Close()
 	})

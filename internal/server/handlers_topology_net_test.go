@@ -134,3 +134,55 @@ func TestTopologyServiceHelpers(t *testing.T) {
 		t.Fatal("malformed JSON must not panic nor be lateral")
 	}
 }
+
+func TestNetworkTopologyTenantScoped(t *testing.T) {
+	s := mustTenantServer(t)
+	if err := s.db.Create(&db.Implant{ID: "net-own", TenantID: 1, Hostname: "OWN-NET-HOST", IP: "10.77.0.1", Status: "online", ParentID: "net-foreign"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Create(&db.Implant{ID: "net-foreign", TenantID: 2, Hostname: "FOREIGN-NET-HOST", IP: "10.77.0.2", Status: "online", ParentID: "net-own"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, host := range []db.NetworkHost{
+		{AgentID: "net-own", IP: "10.77.1.1", Hostname: "OWN-DISCOVERY"},
+		{AgentID: "net-foreign", IP: "10.77.1.2", Hostname: "FOREIGN-DISCOVERY"},
+		{AgentID: "missing-agent", IP: "10.77.1.3", Hostname: "ORPHAN-DISCOVERY"},
+	} {
+		if err := s.db.Create(&host).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	c, w := tenantScopedAdminContext(s, t, "net-viewer", 1)
+	s.handleAPINetworkTopology(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("network topology status=%d body=%s", w.Code, w.Body.String())
+	}
+	var out struct {
+		Nodes []topologyNetNode `json:"nodes"`
+		Edges []topologyNetEdge `json:"edges"`
+		Stats map[string]int    `json:"stats"`
+	}
+	unmarshalData(t, w.Body.Bytes(), &out)
+	if len(out.Nodes) != 2 || len(out.Edges) != 1 {
+		t.Fatalf("network topology nodes=%+v edges=%+v", out.Nodes, out.Edges)
+	}
+	ids := nodeIDsOf(out.Nodes)
+	if !containsString(ids, "net-own") || !containsString(ids, "host-10.77.1.1") {
+		t.Fatalf("own topology nodes missing: %+v", ids)
+	}
+	for _, id := range ids {
+		if id == "net-foreign" || id == "host-10.77.1.2" || id == "host-10.77.1.3" {
+			t.Fatalf("foreign topology node leaked: %+v", ids)
+		}
+	}
+	if out.Edges[0].From != "net-own" || out.Edges[0].To != "host-10.77.1.1" || out.Stats["agents"] != 1 || out.Stats["hosts"] != 1 {
+		t.Fatalf("network topology relation/stats = %+v / %+v", out.Edges, out.Stats)
+	}
+}
+
+func TestNetworkTopologyQueryFailureIs500(t *testing.T) {
+	assertQueryFailureIs500(t, "network topology", "/api/topology/network", func(s *Server, c *gin.Context) {
+		s.handleAPINetworkTopology(c)
+	})
+}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AgentTaskRecord } from "@/types/agent";
 import { applyTaskEvent, canApproveOwnTask, canCancelTask, canReviewTask, isDockTaskEvent, shouldRevealTaskResult, taskEventId } from "./dock-tasks";
 
@@ -72,5 +72,47 @@ describe("applyTaskEvent", () => {
     expect(applyTaskEvent(start, { type: "task_update" })).toBe(start);
     expect(taskEventId({ task_id: 4 })).toBe(4);
     expect(taskEventId({})).toBeNull();
+  });
+
+  it("reduces redacted events to status and timestamps without reading contents", () => {
+    const readType = vi.fn(() => "SECRET_TYPE_MARKER");
+    const readCommand = vi.fn(() => "SECRET_COMMAND_MARKER");
+    const readResult = vi.fn(() => "SECRET_RESULT_MARKER");
+    const readCreator = vi.fn(() => "SECRET_CREATOR_MARKER");
+    const next = applyTaskEvent([row()], {
+      type: "task_update",
+      task_id: 1,
+      status: "completed",
+      updated_at: "2026-08-14T00:02:00Z",
+      get task_type() { return readType(); },
+      get command() { return readCommand(); },
+      get result() { return readResult(); },
+      get created_by() { return readCreator(); },
+    }, true);
+
+    expect(next[0]).toEqual({
+      id: 1,
+      status: "completed",
+      created_at: "2026-08-14T00:00:00Z",
+      updated_at: "2026-08-14T00:02:00Z",
+    });
+    expect(readType).not.toHaveBeenCalled();
+    expect(readCommand).not.toHaveBeenCalled();
+    expect(readResult).not.toHaveBeenCalled();
+    expect(readCreator).not.toHaveBeenCalled();
+  });
+
+  it("uses output completion only as a status signal in redacted mode", () => {
+    const readChunk = vi.fn(() => "SECRET_OUTPUT_MARKER");
+    const next = applyTaskEvent([row({ status: "running" })], {
+      type: "task_output",
+      task_id: 1,
+      done: true,
+      get chunk() { return readChunk(); },
+    }, true);
+
+    expect(next[0].status).toBe("completed");
+    expect(next[0].result).toBeUndefined();
+    expect(readChunk).not.toHaveBeenCalled();
   });
 });

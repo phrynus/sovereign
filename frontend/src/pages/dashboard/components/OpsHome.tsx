@@ -248,27 +248,31 @@ const DashboardStatTiles = memo(function DashboardStatTiles({ loading, healthUnk
   const { t } = useI18n();
   const stats = useAppStore((s) => s.stats);
   const s: Partial<DashboardStats> = stats ?? {};
-  const pending = s.pending_tasks ?? 0;
+  const tasksRedacted = stats?.tasks_redacted === true;
   const failed = s.failed_tasks ?? 0;
   const totalTasks = s.total_tasks ?? 0;
 
   return (
-    <MetricGrid count={5}>
+    <MetricGrid count={tasksRedacted ? 3 : 5}>
       <Link to="/beacons">
         <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={online === total && total > 0 ? t("dashboard.all_online") : t("dashboard.online_suffix")} tone="success" icon={<Radio className="size-5" />} trend={total > 0 ? <span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-success animate-pulse" />{t("dashboard.live_agents")}</span> : undefined} />
         </Card>
       </Link>
-      <Link to="/events?tab=tasks">
-        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
-          <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : "muted"} icon={<Clock className="size-5" />} trend={totalTasks > 0 ? `${Math.round((pending/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
-        </Card>
-      </Link>
-      <Link to="/events?tab=tasks">
-        <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
-          <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} icon={<Bug className="size-5" />} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
-        </Card>
-      </Link>
+      {!tasksRedacted && (
+        <>
+          <Link to="/events?tab=tasks">
+            <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
+              <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : s.pending_tasks ?? 0} tone={(s.pending_tasks ?? 0) > 0 ? "warning" : "muted"} icon={<Clock className="size-5" />} trend={totalTasks > 0 ? `${Math.round(((s.pending_tasks ?? 0)/totalTasks)*100)}% ${t("dashboard.queue_share")}` : undefined} />
+            </Card>
+          </Link>
+          <Link to="/events?tab=tasks">
+            <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
+              <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : "muted"} trend={failed > 0 ? t("dashboard.needs_attention") : t("dashboard.all_clear")} />
+            </Card>
+          </Link>
+        </>
+      )}
       <Link to="/listeners">
         <Card interactive className="p-(--card-spacing) hover:ring-1 hover:ring-primary/20">
           <StatTile label={t("dashboard.unhealthy_count")} value={loading || healthUnknown ? "…" : unhealthyCount} tone={healthUnknown ? "muted" : unhealthyCount > 0 ? "destructive" : "success"} icon={<Radio className="size-5" />} trend={healthUnknown ? t("dashboard.health_unknown") : unhealthyCount === 0 ? t("dashboard.all_healthy") : undefined} />

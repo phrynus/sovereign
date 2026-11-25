@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { applyTaskUpdate, frameAction } from "./useAgentTaskSync";
 import type { AgentDetailResponse, TaskEntry } from "../components/agent-detail-utils";
 
@@ -131,5 +131,65 @@ describe("applyTaskUpdate", () => {
     expect(next.tasks?.length).toBe(1);
     expect(next.total_tasks).toBe(3);
     expect(next.pending_tasks).toBe(1);
+  });
+
+  it("updates only status and timestamps for a redacted task", () => {
+    const readType = vi.fn(() => "SECRET_TYPE_MARKER");
+    const readCommand = vi.fn(() => "SECRET_COMMAND_MARKER");
+    const readResult = vi.fn(() => "SECRET_RESULT_MARKER");
+    const readError = vi.fn(() => "SECRET_ERROR_MARKER");
+    const readCreator = vi.fn(() => "SECRET_CREATOR_MARKER");
+    const prev = snapshot([{
+      id: 1,
+      status: "running",
+      created_at: "2026-08-14T00:00:00Z",
+      updated_at: "2026-08-14T00:01:00Z",
+    }], { tasks_redacted: true, total_tasks: 1, pending_tasks: 0, completed_tasks: 0, failed_tasks: 0 });
+
+    const next = applyTaskUpdate(prev, {
+      type: "task_update",
+      task_id: 1,
+      status: "completed",
+      updated_at: "2026-08-14T00:02:00Z",
+      get task_type() { return readType(); },
+      get command() { return readCommand(); },
+      get result() { return readResult(); },
+      get error() { return readError(); },
+      get created_by() { return readCreator(); },
+    });
+
+    expect(next.tasks?.[0]).toEqual({
+      id: 1,
+      status: "completed",
+      created_at: "2026-08-14T00:00:00Z",
+      updated_at: "2026-08-14T00:02:00Z",
+    });
+    expect(next.total_tasks).toBe(1);
+    expect(next.completed_tasks).toBe(0);
+    expect(readType).not.toHaveBeenCalled();
+    expect(readCommand).not.toHaveBeenCalled();
+    expect(readResult).not.toHaveBeenCalled();
+    expect(readError).not.toHaveBeenCalled();
+    expect(readCreator).not.toHaveBeenCalled();
+  });
+
+  it("inserts only a summary for a new redacted task without deriving counters", () => {
+    const prev = snapshot([], { tasks_redacted: true, total_tasks: 4, pending_tasks: 0, completed_tasks: 0, failed_tasks: 0 });
+    const next = applyTaskUpdate(prev, {
+      type: "task_update",
+      task_id: 2,
+      status: "pending",
+      created_at: "2026-08-14T00:00:00Z",
+      updated_at: "2026-08-14T00:00:00Z",
+    }, new Set());
+
+    expect(next.tasks?.[0]).toEqual({
+      id: 2,
+      status: "pending",
+      created_at: "2026-08-14T00:00:00Z",
+      updated_at: "2026-08-14T00:00:00Z",
+    });
+    expect(next.total_tasks).toBe(4);
+    expect(next.pending_tasks).toBe(0);
   });
 });

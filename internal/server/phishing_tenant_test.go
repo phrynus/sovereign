@@ -101,3 +101,103 @@ func TestPhishingAssetsAreTenantScoped(t *testing.T) {
 		t.Fatalf("tenant 2 launched tenant 1's campaign: %d (%s)", w.Code, w.Body.String())
 	}
 }
+
+// TestPhishingCapturesAndTemplateRefsAreTenantScoped proves captures inherit
+// campaign ownership and both campaign creation and launch reject a template
+// owned by another tenant before persisting or starting any work.
+func TestPhishingCapturesAndTemplateRefsAreTenantScoped(t *testing.T) {
+	s := newPhishingTestServer(t)
+	seedPhishingTenantUser(t, s, "capture-viewer", 1)
+	seedPhishingTenantUser(t, s, "capture-outsider", 2)
+
+	ownTemplate := db.PhishingTemplate{Name: "own-template", CreatedBy: "capture-viewer"}
+	foreignTemplate := db.PhishingTemplate{Name: "foreign-template", CreatedBy: "capture-outsider"}
+	for _, row := range []any{&ownTemplate, &foreignTemplate} {
+		if err := s.db.Create(row).Error; err != nil {
+			t.Fatalf("seed phishing template: %v", err)
+		}
+	}
+	ownCampaign := db.PhishingCampaign{Name: "own-campaign", TemplateID: ownTemplate.ID, CreatedBy: "capture-viewer"}
+	foreignCampaign := db.PhishingCampaign{Name: "foreign-campaign", TemplateID: foreignTemplate.ID, CreatedBy: "capture-outsider"}
+	for _, row := range []any{&ownCampaign, &foreignCampaign} {
+		if err := s.db.Create(row).Error; err != nil {
+			t.Fatalf("seed phishing campaign: %v", err)
+		}
+	}
+	for _, event := range []db.PhishingEvent{
+		{CampaignID: ownCampaign.ID, EventType: "capture", Email: "own@example.test", Payload: `{"username":"own-user","password":"OWN-CAPTURE-SECRET"}`},
+		{CampaignID: foreignCampaign.ID, EventType: "capture", Email: "foreign@example.test", Payload: `{"username":"foreign-user","password":"FOREIGN-CAPTURE-SECRET"}`},
+	} {
+		if err := s.db.Create(&event).Error; err != nil {
+			t.Fatalf("seed capture: %v", err)
+		}
+	}
+
+	c, w := tenantScopedAdminContext(s, t, "capture-viewer", 1)
+	s.handleAPIPhishingCaptures(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("captures status=%d body=%s", w.Code, w.Body.String())
+	}
+	var captures []struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	unmarshalData(t, w.Body.Bytes(), &captures)
+	if len(captures) != 1 || captures[0].Username != "own-user" || captures[0].Password != "OWN-CAPTURE-SECRET" {
+		t.Fatalf("tenant captures = %+v", captures)
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte("FOREIGN-CAPTURE-SECRET")) {
+		t.Fatalf("foreign capture leaked: %s", w.Body.String())
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "cross-template", "template_id": foreignTemplate.ID})
+	c, w = tenantScopedAdminContext(s, t, "capture-viewer", 1)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/phishing/campaigns", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	s.handleAPICreatePhishingCampaign(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("foreign template create status=%d body=%s", w.Code, w.Body.String())
+	}
+	var count int64
+	if err := s.db.Model(&db.PhishingCampaign{}).Where("name = ?", "cross-template").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("campaign referencing a foreign template was persisted")
+	}
+
+	// Legacy rows can already contain a bad reference. Launch must apply the
+	// same scoped template lookup and leave the campaign in draft.
+	foreignRef := db.PhishingCampaign{
+		Name: "legacy-foreign-ref", TemplateID: foreignTemplate.ID, Status: "draft",
+		TargetList: "target@example.test", SMTPHost: "127.0.0.1", CreatedBy: "capture-viewer",
+	}
+	if err := s.db.Create(&foreignRef).Error; err != nil {
+		t.Fatal(err)
+	}
+	c, w = tenantScopedAdminContext(s, t, "capture-viewer", 1)
+	c.Params = gin.Params{{Key: "id", Value: uintString(foreignRef.ID)}}
+	s.handleAPILaunchPhishingCampaign(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("foreign template launch status=%d body=%s", w.Code, w.Body.String())
+	}
+	var after db.PhishingCampaign
+	if err := s.db.First(&after, foreignRef.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after.Status != "draft" {
+		t.Fatalf("foreign template launch changed status to %q", after.Status)
+	}
+}
+
+func TestPhishingCapturesQueryFailureIs500(t *testing.T) {
+	s := closedDBServer(t)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/phishing/captures", nil)
+	c.Set(tenantIDContextKey, tenantResolution{tid: 1, ok: true})
+	s.handleAPIPhishingCaptures(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("captures query failure status=%d body=%s", w.Code, w.Body.String())
+	}
+}

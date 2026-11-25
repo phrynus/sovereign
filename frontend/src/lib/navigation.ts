@@ -155,6 +155,15 @@ export function filterNavByPermissions(
 /** Flat list of every top-level page. */
 export const NAV_ITEMS: NavItemDef[] = NAV_SECTIONS.flatMap((s) => s.items);
 
+/** Dynamic child routes whose permissions intentionally differ from their
+ *  parent navigation item. Longest-prefix nav matching cannot express :id. */
+export const ROUTE_PERMISSION_OVERRIDES: ReadonlyArray<{
+  pattern: RegExp;
+  perms: readonly PermissionKey[];
+}> = [
+  { pattern: /^\/beacons\/[^/]+\/files(?:\/|$)/, perms: ["files.read"] },
+];
+
 /** href -> labelKey for every top-level page. */
 export const NAV_BY_HREF: Record<string, string> = Object.fromEntries(
   NAV_ITEMS.map((i) => [i.href, i.labelKey]),

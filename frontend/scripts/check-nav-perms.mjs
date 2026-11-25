@@ -84,6 +84,9 @@ for (const line of nav.split("\n")) {
 // for mutations: that is exactly what check:nav-perms exists to catch.
 const PAGE_DATA_ROUTES = {
   "/beacons": ["/agents"], // GET agents list, agents.read
+  "/dashboard": ["/dashboard"], // main dashboard stats, agents.read; task charts are separately tasks.read
+  "/bof": ["/api/bof/list"], // BOF inventory read, agents.read
+  "/ai": ["/api/ai/runs"], // AI run history, ai.use
   "/events": ["/api/timeline/data"], // timeline stream, reconRead agents.read
   "/payload-generator": ["/api/listeners", "/api/generate/profiles"], // listeners.read + genRead agents.read
   "/privilege-escalation": ["/api/privesc/history/:id"], // privesc history, reconRead agents.read
@@ -118,7 +121,8 @@ for (const [path, perms] of routes) {
   const segment = m[1];
   const key = [...perms].sort().join("|");
   const current = segmentPerms.get(segment);
-  if (!current) segmentPerms.set(segment, { key, perms });
+  if (!segmentPerms.has(segment)) segmentPerms.set(segment, { key, perms });
+  else if (current === null) continue;
   else if (current.key !== key) segmentPerms.set(segment, null);
 }
 

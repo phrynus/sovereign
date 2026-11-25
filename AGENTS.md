@@ -14,7 +14,7 @@ The `bash` tool runs **PowerShell 5.1**, not bash. Adapt accordingly:
 
 "Done" for an optimization round = every applicable box checked, not "looks clean":
 
-- `npm run check` green (nav-perms 44/44, webdist byte-identical, bundle 662/675 kB public + 711/720 kB authenticated, coverage ≥ 39.5%).
+- `npm run check` green (nav-perms 44/44, webdist byte-identical, bundle 665/675 kB public + 713/720 kB authenticated, coverage ≥ 39.5%).
 - CI on the tip is `completed/success` (fuzz alone skipped).
 - When a container image ships, the demo host pins the new digest by UI or
   compose value and the boundary checks (read-only edges, 404 controls) pass.
@@ -428,7 +428,7 @@ Both sides carry a coverage floor, and **a floor that is never raised stops guar
 |---|---|---|---|
 | Go | **58%** | 59.1% (2026-11-07; was 51.5 at a 52.8 measurement — a 7-point regression would have passed) | `.github/workflows/ci.yml` "Coverage floor" |
 | frontend | **39.5%** | 40.26% statements / 25 947 (2026-11-19) | `frontend/scripts/check-coverage.mjs` (override with `COVERAGE_FLOOR`) |
-| first-paint bundle | **675 kB public / 720 kB authenticated** | 662 kB public, 711 kB authenticated (4.70 MB total under a 5.0 MB cap) | `frontend/scripts/check-bundle.mjs` |
+| first-paint bundle | **675 kB public / 720 kB authenticated** | 665 kB public, 713 kB authenticated (4.77 MB total under a 5.0 MB cap) | `frontend/scripts/check-bundle.mjs` |
 | server binary | **70 MiB** | 59.5 MiB (linux/amd64, stripped with `-s -w`; 80.7 MiB unstripped) | `release.yml` size budget; profile with `node scripts/binary-size.mjs --build` |
 
 Raise a floor in the same change that adds tests; lower it only as part of that change, never to make

@@ -86,7 +86,7 @@ func TestAPIPrivescTimelineChat(t *testing.T) {
 	// A sensitive command is encrypted at rest and must come back readable
 	// through the timeline (this is why the query targets db.Task).
 	secret := `net use \\dc01\c$ /user:corp\alice S3cret!`
-	if err := s.db.Create(&db.Task{AgentID: "api-agent", Type: "lateral", Command: secret, Status: "completed"}).Error; err != nil {
+	if err := s.db.Create(&db.Task{AgentID: "api-agent", TenantID: 1, Type: "lateral", Command: secret, Status: "completed"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	var rawAtRest string
@@ -98,7 +98,7 @@ func TestAPIPrivescTimelineChat(t *testing.T) {
 	}
 
 	s.db.Create(&db.AuditLog{User: "admin", Action: "login", Details: "signed in", Success: true})
-	s.db.Create(&db.Task{AgentID: "api-agent", Type: "privesc_check", Command: "whoami /priv", Status: "completed", Result: "SeDebugPrivilege enabled"})
+	s.db.Create(&db.Task{AgentID: "api-agent", TenantID: 1, Type: "privesc_check", Command: "whoami /priv", Status: "completed", Result: "SeDebugPrivilege enabled"})
 
 	c, w := missingAPICtx(http.MethodGet, "/api/timeline", "", nil)
 	s.handleAPITimelineData(c)
@@ -298,5 +298,191 @@ func TestAPISendChatMessageTooLong(t *testing.T) {
 	f.s.db.Model(&db.ChatMessage{}).Count(&count)
 	if count != 0 {
 		t.Fatalf("oversize message was stored: %d", count)
+	}
+}
+
+// TestMissingAPISurfacesAreTenantScoped exercises the relationship-backed
+// reads together: tasks/audits by tenant, mesh edges only when both endpoints
+// are visible, chain implants by tenant, and chain/mesh parent writes only to
+// visible agents.
+func TestMissingAPISurfacesAreTenantScoped(t *testing.T) {
+	forgecrypto.InitLootEncryption(tenantVisibilityMasterHex)
+	s := mustTenantServer(t)
+	seedMissingAPIAdmin(t, s)
+	for _, id := range []string{"scope-own-a", "scope-own-b"} {
+		seedTenantAgent(t, s, id, 1)
+	}
+	for _, id := range []string{"scope-foreign-a", "scope-foreign-b"} {
+		seedTenantAgent(t, s, id, 2)
+	}
+	for _, task := range []db.Task{
+		{AgentID: "scope-own-a", TenantID: 1, Type: "privesc_check", Command: "OWN-PRIVESC-MARKER", Status: "completed", Result: "OWN-PRIVESC-RESULT"},
+		{AgentID: "scope-foreign-a", TenantID: 2, Type: "privesc_check", Command: "FOREIGN-PRIVESC-MARKER", Status: "completed", Result: "FOREIGN-PRIVESC-RESULT"},
+		{AgentID: "scope-own-a", TenantID: 1, Type: "shell", Command: "OWN-TIMELINE-MARKER", Status: "completed", Result: "OWN-TIMELINE-RESULT"},
+		{AgentID: "scope-foreign-a", TenantID: 2, Type: "shell", Command: "FOREIGN-TIMELINE-MARKER", Status: "completed", Result: "FOREIGN-TIMELINE-RESULT"},
+	} {
+		if err := s.db.Create(&task).Error; err != nil {
+			t.Fatalf("seed task: %v", err)
+		}
+	}
+	for _, audit := range []db.AuditLog{
+		{User: "admin", TenantID: 1, Action: "own_audit", Details: "OWN-AUDIT-MARKER", Success: true},
+		{User: "outsider", TenantID: 2, Action: "foreign_audit", Details: "FOREIGN-AUDIT-MARKER", Success: true},
+		{User: "legacy", TenantID: 0, Action: "legacy_audit", Details: "LEGACY-AUDIT-MARKER", Success: true},
+	} {
+		if err := s.db.Create(&audit).Error; err != nil {
+			t.Fatalf("seed audit: %v", err)
+		}
+	}
+
+	c, w := missingAPICtx(http.MethodGet, "/api/privesc", "", nil)
+	s.handleAPIPrivesc(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("privesc status=%d body=%s", w.Code, w.Body.String())
+	}
+	var privesc struct {
+		Results []struct {
+			AgentID string `json:"agent_id"`
+			Result  string `json:"result"`
+		} `json:"results"`
+	}
+	unmarshalData(t, w.Body.Bytes(), &privesc)
+	if len(privesc.Results) != 1 || privesc.Results[0].AgentID != "scope-own-a" || privesc.Results[0].Result != "OWN-PRIVESC-RESULT" {
+		t.Fatalf("tenant privesc results = %+v", privesc.Results)
+	}
+	if strings.Contains(w.Body.String(), "FOREIGN-PRIVESC") {
+		t.Fatalf("foreign privesc task leaked: %s", w.Body.String())
+	}
+
+	c, w = missingAPICtx(http.MethodGet, "/api/timeline", "", nil)
+	s.handleAPITimelineData(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("timeline status=%d body=%s", w.Code, w.Body.String())
+	}
+	for _, want := range []string{"OWN-TIMELINE-MARKER", "OWN-AUDIT-MARKER", "LEGACY-AUDIT-MARKER"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("visible timeline marker %q missing: %s", want, w.Body.String())
+		}
+	}
+	for _, leak := range []string{"FOREIGN-TIMELINE-MARKER", "FOREIGN-AUDIT-MARKER"} {
+		if strings.Contains(w.Body.String(), leak) {
+			t.Fatalf("foreign timeline marker %q leaked: %s", leak, w.Body.String())
+		}
+	}
+
+	// The page/export builder shares the same tenant contract and additionally
+	// includes task output and agent hostnames.
+	c, _ = missingAPICtx(http.MethodGet, "/timeline", "", nil)
+	events, err := s.buildTimelineEvents(c, "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("build timeline: %v", err)
+	}
+	var timeline strings.Builder
+	for _, event := range events {
+		timeline.WriteString(event.Action + "|" + event.Details + "|" + event.AgentName + "|")
+	}
+	if !strings.Contains(timeline.String(), "OWN-TIMELINE-RESULT") || !strings.Contains(timeline.String(), "LEGACY-AUDIT-MARKER") {
+		t.Fatalf("visible shared timeline content missing: %s", timeline.String())
+	}
+	if strings.Contains(timeline.String(), "FOREIGN-TIMELINE") || strings.Contains(timeline.String(), "FOREIGN-AUDIT") || strings.Contains(timeline.String(), "H-scope-foreign") {
+		t.Fatalf("foreign shared timeline content leaked: %s", timeline.String())
+	}
+
+	for _, peer := range []db.MeshPeer{
+		{AgentID: "scope-own-a", PeerID: "scope-own-b"},
+		{AgentID: "scope-own-a", PeerID: "scope-foreign-b"},
+		{AgentID: "scope-foreign-a", PeerID: "scope-own-b"},
+		{AgentID: "scope-foreign-a", PeerID: "scope-foreign-b"},
+	} {
+		if err := s.db.Create(&peer).Error; err != nil {
+			t.Fatalf("seed mesh peer: %v", err)
+		}
+	}
+	c, w = missingAPICtx(http.MethodGet, "/api/mesh/topology", "", nil)
+	s.handleAPIMeshTopology(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("mesh topology status=%d body=%s", w.Code, w.Body.String())
+	}
+	var mesh struct {
+		Nodes []struct {
+			ID string `json:"id"`
+		} `json:"nodes"`
+		Edges []struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		} `json:"edges"`
+	}
+	unmarshalData(t, w.Body.Bytes(), &mesh)
+	if len(mesh.Nodes) != 2 || len(mesh.Edges) != 1 || mesh.Edges[0].From != "scope-own-a" || mesh.Edges[0].To != "scope-own-b" {
+		t.Fatalf("mesh topology was not double-scoped: %+v", mesh)
+	}
+
+	c, _ = missingAPICtx(http.MethodGet, "/api/chain", "", nil)
+	entries, err := s.buildChainEntries(c)
+	if err != nil {
+		t.Fatalf("build chain entries: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("chain entries = %+v, want only two visible implants", entries)
+	}
+	for _, entry := range entries {
+		if entry["id"] == "scope-foreign-a" || entry["id"] == "scope-foreign-b" {
+			t.Fatalf("foreign implant leaked into chain: %+v", entries)
+		}
+	}
+
+	c, w = missingAPICtx(http.MethodPost, "/api/agents/scope-own-a/chain", `{"parent_id":"scope-foreign-a"}`,
+		gin.Params{{Key: "id", Value: "scope-own-a"}})
+	s.handleAgentChainSet(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("foreign chain parent status=%d body=%s", w.Code, w.Body.String())
+	}
+	var own db.Implant
+	if err := s.db.First(&own, "id = ?", "scope-own-a").Error; err != nil {
+		t.Fatal(err)
+	}
+	if own.ParentAgentID != "" {
+		t.Fatalf("foreign chain parent landed: %q", own.ParentAgentID)
+	}
+
+	c, w = missingAPICtx(http.MethodPost, "/api/mesh/route/scope-own-a", `{"parent_id":"scope-foreign-a"}`,
+		gin.Params{{Key: "agentId", Value: "scope-own-a"}})
+	s.handleMeshRoute(c)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("foreign mesh parent status=%d body=%s", w.Code, w.Body.String())
+	}
+	if err := s.db.First(&own, "id = ?", "scope-own-a").Error; err != nil {
+		t.Fatal(err)
+	}
+	if own.ParentID != "" {
+		t.Fatalf("foreign mesh parent landed: %q", own.ParentID)
+	}
+
+	// A visible parent is accepted, but the returned peer list still excludes
+	// relationships whose other endpoint is foreign.
+	c, w = missingAPICtx(http.MethodPost, "/api/mesh/route/scope-own-a", `{"parent_id":"scope-own-b"}`,
+		gin.Params{{Key: "agentId", Value: "scope-own-a"}})
+	s.handleMeshRoute(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("visible mesh parent status=%d body=%s", w.Code, w.Body.String())
+	}
+	var route struct {
+		Peers []db.MeshPeer `json:"peers"`
+	}
+	unmarshalData(t, w.Body.Bytes(), &route)
+	if len(route.Peers) != 1 || route.Peers[0].AgentID != "scope-own-a" || route.Peers[0].PeerID != "scope-own-b" {
+		t.Fatalf("mesh route peers = %+v", route.Peers)
+	}
+}
+
+func TestPrivescQueryFailureIs500(t *testing.T) {
+	s := closedDBServer(t)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/privesc", nil)
+	c.Set(tenantIDContextKey, tenantResolution{tid: 1, ok: true})
+	s.handleAPIPrivesc(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("privesc query failure status=%d body=%s", w.Code, w.Body.String())
 	}
 }

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
 import { ArrowUp, FolderOpen, Monitor, Terminal } from "lucide-react";
 
@@ -21,6 +22,8 @@ interface AgentStatusBarProps {
  */
 export default memo(function AgentStatusBar({ agent, agentId, status }: AgentStatusBarProps) {
   const { t } = useI18n();
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
   const [visible, setVisible] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -58,12 +61,14 @@ export default memo(function AgentStatusBar({ agent, agentId, status }: AgentSta
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.shortcut_hint", { key: "S" })}</TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger>
-                  <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/files`} />} className="h-7 gap-1.5 text-xs"><FolderOpen className="size-3.5" /> {t("agents.files_title")}</Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("agents.shortcut_hint", { key: "F" })}</TooltipContent>
-              </Tooltip>
+              {canReadFiles && (
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/files`} />} className="h-7 gap-1.5 text-xs"><FolderOpen className="size-3.5" /> {t("agents.files_title")}</Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t("agents.shortcut_hint", { key: "F" })}</TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger>
                   <Button variant="outline" size="sm" render={<Link to={`/beacons/${agentId}/screen`} />} className="h-7 gap-1.5 text-xs"><Monitor className="size-3.5" /> {t("nav.beacon_screen")}</Button>

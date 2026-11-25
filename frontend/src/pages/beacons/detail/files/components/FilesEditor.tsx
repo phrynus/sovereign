@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { Permission } from "@/components/ui/permission";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTimestamp } from "@/lib/agent-files/types";
 import { useFileEditor } from "./useFileEditor";
@@ -20,7 +21,11 @@ interface FilesEditorProps {
   onSaved?: () => void;
 }
 
-export default function FilesEditor({ t, agentId, path, filename, onClose, onSaved }: FilesEditorProps) {
+export default function FilesEditor(props: FilesEditorProps) {
+  return <Permission perms="files.read"><FilesEditorContent {...props} /></Permission>;
+}
+
+function FilesEditorContent({ t, agentId, path, filename, onClose, onSaved }: FilesEditorProps) {
   const editor = useFileEditor({ agentId, path, t });
   const { confirm, modal } = useConfirm();
   const [showHistory, setShowHistory] = useState(false);
@@ -69,19 +74,25 @@ export default function FilesEditor({ t, agentId, path, filename, onClose, onSav
                 <Button variant="secondary" size="sm" onClick={() => { void editor.reload().catch(() => {}); }}>
                   {t("agents.files_editor_reload")}
                 </Button>
-                <Button variant="destructive" size="sm" onClick={() => { void handleOverwrite(); }}>
-                  {t("agents.files_editor_overwrite")}
-                </Button>
+                <Permission perms="files.write">
+                  <Button variant="destructive" size="sm" onClick={() => { void handleOverwrite(); }}>
+                    {t("agents.files_editor_overwrite")}
+                  </Button>
+                </Permission>
               </div>
             </div>
           )}
+          <Permission perms="files.write">
+            {canWrite => (
           <Textarea
             value={editor.draft}
             onChange={(e) => editor.changeDraft(e.target.value)}
             aria-label={t("agents.files_edit")}
             className="min-h-64 flex-1 font-mono text-xs"
-            disabled={editor.loading || editor.saving || !editor.baselineTaskId}
+            disabled={editor.loading || editor.saving || !editor.baselineTaskId || !canWrite}
           />
+            )}
+          </Permission>
           <DialogFooter>
             <Button
               variant="ghost"
@@ -93,12 +104,14 @@ export default function FilesEditor({ t, agentId, path, filename, onClose, onSav
               {t("agents.files_editor_history")}
             </Button>
             <Button variant="secondary" onClick={onClose}>{t("common.cancel")}</Button>
-            <Button
-              disabled={!editor.dirty || editor.saving || editor.loading || editor.baselineTaskId === 0}
-              onClick={() => { void handleSave(); }}
-            >
-              {editor.saving ? t("agents.files_editor_saving") : t("agents.files_editor_save")}
-            </Button>
+            <Permission perms="files.write">
+              <Button
+                disabled={!editor.dirty || editor.saving || editor.loading || editor.baselineTaskId === 0}
+                onClick={() => { void handleSave(); }}
+              >
+                {editor.saving ? t("agents.files_editor_saving") : t("agents.files_editor_save")}
+              </Button>
+            </Permission>
           </DialogFooter>
         </DialogContent>
       </Dialog>

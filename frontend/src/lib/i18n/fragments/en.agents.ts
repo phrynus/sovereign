@@ -1181,6 +1181,7 @@ export const enAgents: Record<string, string> = {
   "agents.tasklist_empty": "No tasks yet",
   "agents.tasklist_empty_hint":
     "Commands dispatched to this beacon will appear here.",
+  "agents.tasks_redacted": "Task details are hidden; only status and time are available.",
   "agents.title": "Beacons",
   "agents.toggle_columns_aria": "Toggle columns",
   "agents.token_actions": "Actions",

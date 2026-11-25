@@ -1,43 +1,42 @@
 package server
 
 import (
+	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleToolkitPage(c *gin.Context) {
 	stats := s.getNavStats(c)
 
 	var agents []db.Implant
-	if err := s.db.Order("last_seen desc").Limit(50).Find(&agents).Error; err != nil {
-		slog.Error("Toolkit: failed to query agents", "err", err)
+	if err := s.tenantScope(s.db, c).Order("last_seen desc").Limit(50).Find(&agents).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query agents")
+		return
 	}
 	for i := range agents {
 		agents[i].Status = s.agentStatus(agents[i]).Status
 	}
 
 	var recentTasks []db.Task
-	if err := s.db.Where("status IN ('completed','failed')").
+	if err := s.tenantScope(s.db, c).Where("status IN ('completed','failed')").
 		Order("created_at desc").Limit(20).Find(&recentTasks).Error; err != nil {
-		slog.Error("Toolkit: failed to query recent tasks", "err", err)
-	}
-
-	var agentTasks []db.Task
-	if err := s.db.Where("agent_id = ? AND status IN ('completed','failed')", "").
-		Order("created_at desc").Limit(10).Find(&agentTasks).Error; err != nil {
-		slog.Error("Toolkit: failed to query agent tasks", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query recent tasks")
+		return
 	}
 
 	data := gin.H{
-		"Title":       "Sovereign - Post-Exploitation Toolkit",
-		"ActiveNav":   "toolkit",
-		"Stats":       stats,
-		"Agents":      agents,
-		"RecentTasks": recentTasks,
+		"Title":          "Sovereign - Post-Exploitation Toolkit",
+		"ActiveNav":      "toolkit",
+		"Stats":          stats,
+		"Agents":         agents,
+		"RecentTasks":    tasksForOperator(c, recentTasks),
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
 	}
 	s.renderPageOrJSON(c, data)
 }
@@ -256,57 +255,86 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 
 func (s *Server) handleToolkitRecentResults(c *gin.Context) {
 	var tasks []db.Task
-	if err := s.db.Where("status IN ('completed','failed')").
+	if err := s.tenantScope(s.db, c).Where("status IN ('completed','failed')").
 		Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
-		slog.Error("Toolkit: failed to query recent results", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query recent results")
+		return
 	}
 
-	respond(c, gin.H{"tasks": tasks})
+	respond(c, gin.H{
+		"tasks":          tasksForOperator(c, tasks),
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
+	})
 }
 
 func (s *Server) handleToolkitAgentInfo(c *gin.Context) {
 	agentID := c.Param("id")
 
 	var agent db.Implant
-	if err := s.db.Where("id = ?", agentID).First(&agent).Error; err != nil {
-		respondError(c, http.StatusNotFound, "agent not found")
+	if err := s.tenantScope(s.db, c).Where("id = ?", agentID).First(&agent).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			respondError(c, http.StatusNotFound, "agent not found")
+		} else {
+			respondError(c, http.StatusInternalServerError, "failed to query agent")
+		}
 		return
 	}
 
-	var completedCount, failedCount int64
-	if err := s.db.Model(&db.Task{}).Where("agent_id = ? AND status = 'completed'", agentID).Count(&completedCount).Error; err != nil {
-		slog.Error("Failed to count completed tasks", "agent_id", agentID, "err", err)
-	}
-	if err := s.db.Model(&db.Task{}).Where("agent_id = ? AND status = 'failed'", agentID).Count(&failedCount).Error; err != nil {
-		slog.Error("Failed to count failed tasks", "agent_id", agentID, "err", err)
-	}
-	terminal := completedCount + failedCount
-	var successRateStr string
-	if terminal == 0 {
-		successRateStr = "N/A"
-	} else {
-		successRateStr = fmt.Sprintf("%.1f", float64(completedCount)/float64(terminal)*100)
-	}
 	var taskCount int64
-	if err := s.db.Model(&db.Task{}).Where("agent_id = ?", agentID).Count(&taskCount).Error; err != nil {
-		slog.Error("Failed to count agent tasks", "agent_id", agentID, "err", err)
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("agent_id = ?", agentID).Count(&taskCount).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to count agent tasks")
+		return
 	}
 
-	respond(c, gin.H{
-		"agent":        agent,
-		"task_count":   taskCount,
-		"success_rate": successRateStr,
-	})
+	payload := gin.H{
+		"agent":          agent,
+		"task_count":     taskCount,
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
+	}
+	if middleware.HasPermission(c, db.PermTasksRead) {
+		var completedCount, failedCount int64
+		if err := s.tenantScope(s.db.Model(&db.Task{}), c).
+			Where("agent_id = ? AND status = 'completed'", agentID).Count(&completedCount).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to count completed tasks")
+			return
+		}
+		if err := s.tenantScope(s.db.Model(&db.Task{}), c).
+			Where("agent_id = ? AND status = 'failed'", agentID).Count(&failedCount).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to count failed tasks")
+			return
+		}
+		terminal := completedCount + failedCount
+		if terminal == 0 {
+			payload["success_rate"] = "N/A"
+		} else {
+			payload["success_rate"] = fmt.Sprintf("%.1f", float64(completedCount)/float64(terminal)*100)
+		}
+	}
+
+	respond(c, payload)
 }
 
 func (s *Server) handleToolkitAgentTasks(c *gin.Context) {
 	agentID := c.Param("id")
-
-	var tasks []db.Task
-	if err := s.db.Where("agent_id = ?", agentID).
-		Order("created_at desc").Limit(30).Find(&tasks).Error; err != nil {
-		slog.Error("Toolkit: failed to query agent tasks", "err", err)
+	var agent db.Implant
+	if err := s.tenantScope(s.db, c).Select("id").Where("id = ?", agentID).First(&agent).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			respondError(c, http.StatusNotFound, "agent not found")
+		} else {
+			respondError(c, http.StatusInternalServerError, "failed to query agent")
+		}
+		return
 	}
 
-	respond(c, gin.H{"tasks": tasks})
+	var tasks []db.Task
+	if err := s.tenantScope(s.db, c).Where("agent_id = ?", agentID).
+		Order("created_at desc").Limit(30).Find(&tasks).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to query agent tasks")
+		return
+	}
+
+	respond(c, gin.H{
+		"tasks":          tasksForOperator(c, tasks),
+		"tasks_redacted": !middleware.HasPermission(c, db.PermTasksRead),
+	})
 }

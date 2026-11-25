@@ -48,7 +48,7 @@ export default function AuditPage() {
   const [users, setUsers] = useState<{ username: string }[]>([]);
   const [verifyState, setVerifyState] = useState<{
     running: boolean;
-    result: { ok: boolean; checked: number; first_bad_id: number; reason: string } | null;
+    result: { ok: boolean; checked: number; first_bad_id: number; reason: string; scope?: string; anchor_applicable?: boolean } | null;
   }>({ running: false, result: null });
   // The page header's export belongs to the events table. It must disappear on
   // the login tab: otherwise two identical "Export page CSV" buttons are
@@ -151,6 +151,8 @@ export default function AuditPage() {
           checked: Number(payload.checked) || 0,
           first_bad_id: Number(payload.first_bad_id) || 0,
           reason: typeof payload.reason === "string" ? payload.reason : "",
+          scope: typeof payload.scope === "string" ? payload.scope : undefined,
+          anchor_applicable: payload.anchor_applicable === false ? false : undefined,
         },
       });
     } catch {
@@ -222,11 +224,14 @@ export default function AuditPage() {
       {verifyState.result && (
         <div className="flex flex-wrap items-center gap-2">
           {verifyState.result.ok ? (
-            <Badge variant="success">{t("audit.verify_ok", { n: verifyState.result.checked })}</Badge>
+            <Badge variant="success">{verifyState.result.scope === "tenant" ? t("audit.verify_tenant_ok", { n: verifyState.result.checked }) : t("audit.verify_ok", { n: verifyState.result.checked })}</Badge>
           ) : (
             <Badge variant="destructive" title={verifyState.result.reason}>
               {t("audit.verify_failed", { id: verifyState.result.first_bad_id })}
             </Badge>
+          )}
+          {verifyState.result.ok && verifyState.result.scope === "tenant" && (
+            <span className="text-xs text-muted-foreground">{t("audit.verify_tenant_scope")}</span>
           )}
         </div>
       )}

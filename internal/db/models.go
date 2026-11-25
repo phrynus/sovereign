@@ -352,10 +352,14 @@ type Task struct {
 	// a key that already has a live (pending/pending_approval/running) task
 	// on the same agent returns the existing task instead of a duplicate.
 	// Empty = no dedup. Terminal tasks never block reuse of a key.
-	IdempotencyKey string    `gorm:"size:64;index" json:"idempotency_key,omitempty"`
-	CreatedAt      time.Time `gorm:"index;index:idx_tasks_agent_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_tenant_created,priority:2" json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
+	IdempotencyKey string `gorm:"size:64;index" json:"idempotency_key,omitempty"`
+	// IdempotentReplay is set only on the in-memory task returned by a dedup
+	// hit. It is never persisted or serialized; creation audit paths use it to
+	// avoid recording a second task_create for the same row.
+	IdempotentReplay bool      `gorm:"-" json:"-"`
+	CreatedAt        time.Time `gorm:"index;index:idx_tasks_agent_created,priority:2;index:idx_tasks_status_created,priority:2;index:idx_tasks_tenant_created,priority:2" json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	Agent            Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }
 
 // SensitiveTaskTypes are task types whose Command/Data fields carry secrets
@@ -949,6 +953,7 @@ type BuildLog struct {
 	Format      string    `json:"format"`   // exe, ps1, linux, stager
 	C2URL       string    `json:"c2_url"`
 	ListenerID  uint      `json:"listener_id"`
+	TenantID    uint      `gorm:"index;index:idx_build_logs_tenant_created,priority:1" json:"tenant_id"` // 0 = legacy/unscoped, global operators only
 	Filename    string    `json:"filename"`
 	User        string    `json:"user"`   // operator username
 	Status      string    `json:"status"` // success, failed
@@ -956,7 +961,7 @@ type BuildLog struct {
 	OutputPath  string    `json:"output_path"`
 	ProfileName string    `json:"profile_name,omitempty"`
 	ProfileHash string    `json:"profile_hash,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt   time.Time `gorm:"index;index:idx_build_logs_tenant_created,priority:2" json:"created_at"`
 }
 
 func (BuildLog) TableName() string { return "build_logs" }

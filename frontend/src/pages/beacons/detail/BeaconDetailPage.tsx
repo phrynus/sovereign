@@ -26,12 +26,13 @@ import { PageContainer } from "@/components/ui/page-container";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { logger } from "@/lib/logger";
 import { useInteractStore } from "@/lib/interact-store";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug } from "lucide-react";
 import { Banner } from "@/components/ui/banner";
-import { AgentStatus, AgentDetail as AgentDetailExt, AgentTaskRecord } from "@/types/agent";
+import { AgentStatus, AgentDetail as AgentDetailExt } from "@/types/agent";
 
 import AgentHeader from "./components/AgentHeader";
 import AgentDetailChrome from "./components/AgentDetailChrome";
@@ -99,6 +100,8 @@ interface BeaconDetailPageProps {
 export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }: BeaconDetailPageProps = {}) {
   const { t } = useI18n();
   const { toastError, warnError } = useErrorToast();
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
   const params = useParams();
   const navigate = useNavigate();
   const id = agentIdProp || (params?.id as string);
@@ -263,7 +266,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
       if (confirmOpenRef.current) return;
       if (onCloseRef.current && e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key === "s") navigate(`/beacons/${id}/shell`);
-      else if (e.key === "f") navigate(`/beacons/${id}/files`);
+      else if (e.key === "f" && canReadFiles) navigate(`/beacons/${id}/files`);
       else if (e.key === "d") navigate(`/beacons/${id}/screen`);
       else if (e.key === "Escape") navigate("/beacons");
       else if (e.key >= "1" && e.key <= String(AGENT_DETAIL_TABS.length)) {
@@ -273,7 +276,7 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [navigate, id]);
+  }, [canReadFiles, navigate, id]);
 
   // t only appears in this effect's catch toast, so keep the effect stable
   // on [id] via a ref. Named tRef so the i18n checker's ref-usage pattern
@@ -601,7 +604,8 @@ export default memo(function BeaconDetailPage({ agentId: agentIdProp, onClose }:
 
             <TabsContent value="tasks">
               <AgentTaskList
-                tasks={tasks as AgentTaskRecord[]}
+                tasks={tasks}
+                tasksRedacted={data?.tasks_redacted === true}
                 agentId={id}
                 expandedTaskId={expandedTask}
                 onToggleExpand={onToggleExpand}

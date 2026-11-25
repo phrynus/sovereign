@@ -193,6 +193,20 @@ func (s *Server) tenantIDForUser(username string) uint {
 	return user.TenantID
 }
 
+// tenantIDForUserStrict resolves a named user's tenant without conflating a
+// legitimate legacy tenant 0 with a missing row or database failure. Security-
+// sensitive connection setup (operator WebSockets) must fail closed on !ok.
+func (s *Server) tenantIDForUserStrict(username string) (uint, bool) {
+	if s == nil || s.db == nil || username == "" {
+		return 0, false
+	}
+	var user db.User
+	if err := s.db.Select("tenant_id").Where("username = ?", username).First(&user).Error; err != nil {
+		return 0, false
+	}
+	return user.TenantID, true
+}
+
 // resolveVisibleAgentID resolves an id-or-hostname within the caller's tenant
 // scope. The shared resolveAgentID stays unscoped for system paths (beacons,
 // sweeps); interactive handlers must use this so one tenant's operator cannot

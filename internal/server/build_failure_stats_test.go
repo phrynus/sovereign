@@ -26,7 +26,7 @@ func TestBuildFailureStatsGroupsByCause(t *testing.T) {
 
 	seed := func(platform, errorText string, at time.Time) {
 		if err := s.db.Create(&db.BuildLog{
-			Platform: platform, Format: "exe", Status: "failed", Error: errorText, CreatedAt: at,
+			TenantID: 1, Platform: platform, Format: "exe", Status: "failed", Error: errorText, CreatedAt: at,
 		}).Error; err != nil {
 			t.Fatalf("seed: %v", err)
 		}
@@ -38,7 +38,7 @@ func TestBuildFailureStatsGroupsByCause(t *testing.T) {
 	seed("windows", "go build failed: exit status 1\n./agent.go:42:2: undefined: ResolveNtSyscalls", now.Add(-3*time.Hour))
 	seed("windows", "something nobody has seen before", now.Add(-4*time.Hour))
 	if err := s.db.Create(&db.BuildLog{
-		Platform: "windows", Format: "exe", Status: "success", CreatedAt: now.Add(-30 * time.Minute),
+		TenantID: 1, Platform: "windows", Format: "exe", Status: "success", CreatedAt: now.Add(-30 * time.Minute),
 	}).Error; err != nil {
 		t.Fatalf("seed success: %v", err)
 	}

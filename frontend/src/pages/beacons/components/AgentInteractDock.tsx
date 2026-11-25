@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from "react
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { firstArray } from "@/lib/envelope";
-import { useI18n } from "@/lib/i18n";
+import { asRecord, firstArray } from "@/lib/envelope";
+import { formatTime } from "@/lib/utils";
 import { errorText } from "@/lib/errors";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
+import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { useWS } from "@/lib/wsContext";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -60,18 +62,26 @@ export function AgentInteractDock({
 }: AgentInteractDockProps) {
   const { t } = useI18n();
   const { toastError } = useErrorToast();
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
+  const activeTab = !canReadFiles && tab === "files" ? "shell" : tab;
   const id = beacon.id || "";
   const os = (beacon.os || "").toLowerCase();
   const osType = os.includes("linux") || os.includes("darwin") ? "linux" : "windows";
   const [tasks, setTasks] = useState<AgentTaskRecord[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksRedacted, setTasksRedacted] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [shotKey, setShotKey] = useState(0);
   const [diffOpen, setDiffOpen] = useState(false);
   const revealId = useInteractStore((s) => s.expandedTaskId);
   const { subscribe, connected } = useWS();
   const currentUsername = useAppStore((s) => s.currentUsername);
+
+  useEffect(() => {
+    if (!canReadFiles && tab === "files") onTabChange("shell");
+  }, [canReadFiles, onTabChange, tab]);
 
   const loadTasks = useCallback(async (silent = false) => {
     if (!id) return;
@@ -82,6 +92,8 @@ export function AgentInteractDock({
     try {
       const data = await api.get(paths.agents.tasks(id));
       const raw = firstArray(data, ["tasks", "data", "Tasks"]);
+      const redacted = asRecord(data)?.tasks_redacted === true;
+      setTasksRedacted(redacted);
       setTasks(raw as AgentTaskRecord[]);
       setTasksError(null);
     } catch (e) {
@@ -107,21 +119,21 @@ export function AgentInteractDock({
   }, [loadTasks]);
 
   useEffect(() => {
-    if (!revealId) return;
+    if (!revealId || tasksRedacted) return;
     // Reveal is handled incrementally by the WS applyTaskEvent handler below;
     // a full reload here was redundant (and re-rendered the whole dock).
     setExpandedId(revealId);
     setDiffOpen(false);
     onTabChange("tasks");
-  }, [revealId, onTabChange]);
+  }, [revealId, onTabChange, tasksRedacted]);
 
   useEffect(() => {
     if (!id) return;
     return subscribe((msg) => {
       if (!isDockTaskEvent(msg, id)) return;
-      setTasks((prev) => applyTaskEvent(prev, msg));
+      setTasks((prev) => applyTaskEvent(prev, msg, tasksRedacted));
       if (shouldRefreshDockShot(msg)) setShotKey((n) => n + 1);
-      if (shouldRevealTaskResult(msg)) {
+      if (!tasksRedacted && shouldRevealTaskResult(msg)) {
         // Completion reveals the result in place — highlight the task but
         // don't steal focus from the tab the operator is actually using
         // (tab switching is reserved for freshly-queued pending tasks).
@@ -129,7 +141,7 @@ export function AgentInteractDock({
         if (tid) setExpandedId(tid);
       }
     });
-  }, [id, subscribe]);
+  }, [id, subscribe, tasksRedacted]);
 
   // While the socket is down, poll the task list in the background (pauses
   // when the tab is hidden; standalone fetches are gated by the guard).
@@ -168,6 +180,7 @@ export function AgentInteractDock({
   }, [id, t, toastError]);
 
   const openTask = useCallback(async (taskId: number) => {
+    if (tasksRedacted) return;
     if (expandedId === taskId) {
       setExpandedId(null);
       setDiffOpen(false);
@@ -190,21 +203,21 @@ export function AgentInteractDock({
     } catch {
       /* keep preview from the list / WS */
     }
-  }, [expandedId, id]);
+  }, [expandedId, id, tasksRedacted]);
 
   const expandedTask = useMemo(
-    () => (expandedId == null ? undefined : tasks.find((t) => Number(t.id) === expandedId)),
-    [expandedId, tasks],
+    () => (tasksRedacted || expandedId == null ? undefined : tasks.find((t) => Number(t.id) === expandedId)),
+    [expandedId, tasks, tasksRedacted],
   );
   const previousResult = useMemo(
-    () => (expandedTask ? previousComparableTask(tasks, expandedTask) : null),
-    [expandedTask, tasks],
+    () => (!tasksRedacted && expandedTask ? previousComparableTask(tasks, expandedTask) : null),
+    [expandedTask, tasks, tasksRedacted],
   );
   const resultDiff = useMemo(() => {
-    if (!diffOpen || !expandedTask || !previousResult) return null;
+    if (tasksRedacted || !diffOpen || !expandedTask || !previousResult) return null;
     if (!resultLooksComparable(expandedTask.result) || !resultLooksComparable(previousResult.result)) return null;
     return diffResults(previousResult.result || "", expandedTask.result || "");
-  }, [diffOpen, expandedTask, previousResult]);
+  }, [diffOpen, expandedTask, previousResult, tasksRedacted]);
 
   const onResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -281,6 +294,15 @@ export function AgentInteractDock({
               intervalHint={beacon.current_interval}
               jitterHint={beacon.current_jitter}
               onQueued={(queued) => {
+                if (tasksRedacted) {
+                  setTasks((prev) => applyTaskEvent(prev, {
+                    type: "task_created",
+                    task_id: queued.task_id,
+                    status: "pending",
+                    agent_id: id,
+                  }, true));
+                  return;
+                }
                 useInteractStore.getState().revealTask(id, queued.task_id);
                 setTasks((prev) => applyTaskEvent(prev, {
                   type: "task_created",
@@ -295,10 +317,10 @@ export function AgentInteractDock({
           </Suspense>
         )}
         {id && <Suspense fallback={null}><AgentDockShot agentId={id} refreshKey={shotKey} /></Suspense>}
-        <Tabs value={tab} onValueChange={(v) => { if (v === "shell" || v === "files" || v === "tasks") onTabChange(v); }} className="flex min-h-0 flex-1 flex-col gap-0">
+        <Tabs value={activeTab} onValueChange={(v) => { if (v === "shell" || v === "files" || v === "tasks") onTabChange(v); }} className="flex min-h-0 flex-1 flex-col gap-0">
           <TabsList className="mb-0 h-8 w-full justify-start rounded-none border-b bg-transparent px-2">
             <TabsTrigger value="shell" className="h-7 text-xs">{t("agents.dock_tab_shell")} <span className="ml-1 text-muted-foreground/85">1</span></TabsTrigger>
-            <TabsTrigger value="files" className="h-7 text-xs">{t("agents.dock_tab_files")} <span className="ml-1 text-muted-foreground/85">2</span></TabsTrigger>
+            {canReadFiles && <TabsTrigger value="files" className="h-7 text-xs">{t("agents.dock_tab_files")} <span className="ml-1 text-muted-foreground/85">2</span></TabsTrigger>}
             <TabsTrigger value="tasks" className="h-7 text-xs">{t("agents.dock_tab_tasks")} <span className="ml-1 text-muted-foreground/85">3</span></TabsTrigger>
           </TabsList>
           <TabsContent value="shell" keepMounted className="mt-0 min-h-0 flex-1 p-0">
@@ -324,7 +346,7 @@ export function AgentInteractDock({
             )}
           </TabsContent>
           <TabsContent value="files" keepMounted className="mt-0 min-h-0 flex-1 p-0">
-            {id && <Suspense fallback={null}><AgentDockFiles agentId={id} osType={osType} /></Suspense>}
+            {canReadFiles && id && <Suspense fallback={null}><AgentDockFiles agentId={id} osType={osType} /></Suspense>}
           </TabsContent>
           <TabsContent value="tasks" className="mt-0 min-h-0 flex-1 p-0">
             {tasksLoading ? (
@@ -339,23 +361,37 @@ export function AgentInteractDock({
               <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("agents.dock_no_tasks")}</p>
             ) : (
               <ScrollArea className="h-full">
+                {tasksRedacted && (
+                  <p className="px-3 py-2 text-micro-sm text-muted-foreground">{t("agents.tasks_redacted")}</p>
+                )}
                 <ul className="divide-y divide-border">
                   {tasks.slice(0, 40).map((task) => {
-                    const open = expandedId === Number(task.id);
+                    const open = !tasksRedacted && expandedId === Number(task.id);
                     return (
                       <li key={task.id}>
-                        <button
-                          type="button"
-                          onClick={() => { void openTask(Number(task.id)); }}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-secondary/50"
-                        >
-                          <Badge variant="secondary" className="font-mono">{task.type}</Badge>
-                          <StatusBadge status={task.status} />
-                          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">{task.command}</span>
-                          {task.created_by && (
-                            <span className="hidden shrink-0 font-mono text-muted-foreground sm:inline">{task.created_by}</span>
-                          )}
-                        </button>
+                        {tasksRedacted ? (
+                          <div className="flex w-full items-center gap-2 px-3 py-1.5 text-xs">
+                            <span className="font-mono text-muted-foreground">#{task.id}</span>
+                            <StatusBadge status={task.status} />
+                            <span className="ml-auto text-muted-foreground">
+                              {task.created_at ? formatTime(task.created_at) : "—"}
+                              {task.updated_at ? ` · ${formatTime(task.updated_at)}` : ""}
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { void openTask(Number(task.id)); }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-secondary/50"
+                          >
+                            <Badge variant="secondary" className="font-mono">{task.type}</Badge>
+                            <StatusBadge status={task.status} />
+                            <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">{task.command}</span>
+                            {task.created_by && (
+                              <span className="hidden shrink-0 font-mono text-muted-foreground sm:inline">{task.created_by}</span>
+                            )}
+                          </button>
+                        )}
                         {open && (
                           <div className="space-y-2 border-t border-border bg-muted/20 px-3 py-2">
                             {task.created_by && (

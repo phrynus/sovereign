@@ -1,4 +1,5 @@
 import type { AgentStatus, TaskStatus } from "@/lib/status";
+import type { TaskSummary } from "./task";
 
 export type { AgentStatus, TaskStatus } from "@/lib/status";
 
@@ -54,7 +55,7 @@ export type AgentDetail = Partial<AgentBase> & { kill_date?: string; parent_agen
 
 export interface AgentDetailData {
   agent?: AgentDetail;
-  tasks?: AgentTaskRecord[];
+  tasks_redacted?: boolean;
   uptime?: string;
   time_since_last_seen?: string;
   success_rate?: number;
@@ -67,16 +68,24 @@ export interface TaskStats {
   failed: number;
 }
 
-export interface AgentTaskRecord {
-  id: number;
-  type: string;
-  command: string;
+export interface AgentTaskRecord extends Omit<TaskSummary, "updated_at"> {
+  updated_at?: string;
   status: TaskStatus;
-  created_at: string;
+  /** Absent from the permission-safe task summary. */
+  type?: string;
+  /** Absent from the permission-safe task summary. */
+  command?: string;
   result?: string;
   error?: string;
   created_by?: string;
   agent_id?: string;
+}
+
+export interface DashboardRecentTask extends TaskSummary {
+  /** Absent from the permission-safe task summary. */
+  type?: string;
+  /** Absent from the permission-safe task summary. */
+  command?: string;
 }
 
 export interface NormalizedAgent {
@@ -116,5 +125,7 @@ export interface DashboardStats {
   protocol_compat_window?: number;
   /** Agents that speak a protocol version the server would refuse. */
   protocol_outdated_agents?: number;
-  recent_tasks: { status: TaskStatus; type: string; command: string; created_at: string }[];
+  /** Task contents are permission-redacted; recent rows contain only the summary fields. */
+  tasks_redacted?: boolean;
+  recent_tasks: DashboardRecentTask[];
 }

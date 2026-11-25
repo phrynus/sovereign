@@ -36,4 +36,50 @@ describe("TimelineSection", () => {
 
     expect(await screen.findByText("ran whoami")).toBeTruthy();
   });
+
+  it("keeps task title, detail and type for an authorized projection", async () => {
+    getMock.mockResolvedValue({
+      events: [{
+        time: "2026-08-14T00:00:00Z",
+        kind: "task",
+        title: "ran whoami",
+        detail: "operator detail",
+        type: "shell",
+        status: "completed",
+        ref_id: 12,
+      }],
+    });
+    render(<TimelineSection agentId="a1" online />);
+
+    expect(await screen.findByText("ran whoami")).toBeTruthy();
+    expect(screen.getByText(/operator detail/)).toBeTruthy();
+    expect(screen.getByText(/shell/)).toBeTruthy();
+  });
+
+  it("does not read or render task contents in a redacted timeline", async () => {
+    const readTitle = vi.fn(() => "SECRET_TITLE_MARKER");
+    const readDetail = vi.fn(() => "SECRET_DETAIL_MARKER");
+    const readType = vi.fn(() => "SECRET_TYPE_MARKER");
+    getMock.mockResolvedValue({
+      tasks_redacted: true,
+      events: [{
+        time: "2026-08-14T00:00:00Z",
+        kind: "task",
+        status: "completed",
+        ref_id: 12,
+        get title() { return readTitle(); },
+        get detail() { return readDetail(); },
+        get type() { return readType(); },
+      }],
+    });
+    const { container } = render(<TimelineSection agentId="a1" online />);
+
+    expect(await screen.findByText("#12")).toBeTruthy();
+    expect(screen.getByText("completed")).toBeTruthy();
+    expect(container.textContent).not.toContain("SECRET_");
+    expect(readTitle).not.toHaveBeenCalled();
+    expect(readDetail).not.toHaveBeenCalled();
+    expect(readType).not.toHaveBeenCalled();
+    expect(getMock).toHaveBeenCalledTimes(1);
+  });
 });

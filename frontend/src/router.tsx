@@ -17,10 +17,10 @@ import { useZhFragment } from "@/lib/i18n";
 import { WebSocketProvider } from "@/lib/wsContext";
 import NotFound from "@/pages/NotFound";
 import Forbidden from "@/pages/forbidden/ForbiddenPage";
-import { NAV_ITEMS } from "@/lib/navigation";
 import { ROUTE_PAGE_IMPORTS } from "@/lib/route-imports";
 import { useAppStore } from "@/lib/store";
 import { canAny } from "@/lib/permissions";
+import { NAV_ITEMS, ROUTE_PERMISSION_OVERRIDES } from "@/lib/navigation";
 import type { PermissionKey } from "@/lib/permission-keys";
 
 const lazyPage = (imp: () => Promise<{ default: unknown }>) =>
@@ -194,7 +194,9 @@ const ROUTE_PERMS: Record<string, PermissionKey[] | undefined> = Object.fromEntr
   NAV_ITEMS.map((i) => [i.href, i.perms]),
 );
 
-function requiredPerms(pathname: string): PermissionKey[] | undefined {
+export function requiredPerms(pathname: string): PermissionKey[] | undefined {
+  const override = ROUTE_PERMISSION_OVERRIDES.find(({ pattern }) => pattern.test(pathname));
+  if (override) return [...override.perms];
   let best = "";
   for (const [href, perms] of Object.entries(ROUTE_PERMS)) {
     if (perms && pathname.startsWith(href) && href.length > best.length) best = href;

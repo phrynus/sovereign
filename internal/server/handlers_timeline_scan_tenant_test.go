@@ -33,22 +33,51 @@ func TestTimelineTenantScoped(t *testing.T) {
 	}
 	seedTimelineTask(t, s, 91001, "tl-own", "own-secret-cmd", 1)
 	seedTimelineTask(t, s, 91002, "tl-foreign", "foreign-secret-cmd", 2)
+	for _, audit := range []db.AuditLog{
+		{User: "tl-viewer", TenantID: 1, Action: "own_audit", Details: "OWN-AUDIT-DETAIL", Success: true},
+		{User: "tl-outsider", TenantID: 2, Action: "foreign_audit", Details: "FOREIGN-AUDIT-DETAIL", Success: true},
+		{User: "legacy", TenantID: 0, Action: "legacy_audit", Details: "LEGACY-AUDIT-DETAIL", Success: true},
+	} {
+		if err := s.db.Create(&audit).Error; err != nil {
+			t.Fatalf("seed audit: %v", err)
+		}
+	}
 
 	c, _ := tenantScopedAdminContext(s, t, "tl-viewer", 1)
-	events := s.buildTimelineEvents(c, "", "", "", "", "")
+	events, err := s.buildTimelineEvents(c, "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("build timeline: %v", err)
+	}
 	var sb strings.Builder
 	for _, ev := range events {
 		sb.WriteString(ev.Type + "|" + ev.Action + "|" + ev.Details + "|" + ev.AgentName + "|")
 	}
 	blob := sb.String()
-	for _, want := range []string{"own-secret-cmd", "OWN-TL-HOST"} {
+	for _, want := range []string{"own-secret-cmd", "OWN-TL-HOST", "OWN-AUDIT-DETAIL", "LEGACY-AUDIT-DETAIL"} {
 		if !strings.Contains(blob, want) {
 			t.Fatalf("own-tenant content %q missing from timeline", want)
 		}
 	}
-	for _, leak := range []string{"foreign-secret-cmd", "result-of-foreign-secret-cmd", "FOREIGN-TL-HOST"} {
+	for _, leak := range []string{"foreign-secret-cmd", "result-of-foreign-secret-cmd", "FOREIGN-TL-HOST", "FOREIGN-AUDIT-DETAIL"} {
 		if strings.Contains(blob, leak) {
 			t.Fatalf("foreign-tenant content %q leaked into timeline", leak)
+		}
+	}
+}
+
+func TestTimelineTaskQueryFailureIs500(t *testing.T) {
+	s := mustTenantServer(t)
+	if err := s.db.Migrator().DropTable("tasks"); err != nil {
+		t.Fatalf("drop tasks: %v", err)
+	}
+	for name, invoke := range map[string]func(*gin.Context){
+		"page data": s.handleTimelineData,
+		"api data":  s.handleAPITimelineData,
+	} {
+		c, w := tenantScopedAdminContext(s, t, "tl-failure-viewer", 1)
+		invoke(c)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("%s task query failure status=%d body=%s", name, w.Code, w.Body.String())
 		}
 	}
 }

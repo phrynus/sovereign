@@ -18,9 +18,43 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/auditchain"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// auditReadTenant resolves the caller for audit read endpoints without
+// treating a missing named user as a legitimate tenant-0 global operator.
+// System/no-identity calls remain global; authenticated middleware values are
+// trusted, and a named identity otherwise requires a real user row.
+func (s *Server) auditReadTenant(c *gin.Context) (uint, bool) {
+	if c == nil {
+		return 0, true
+	}
+	if v, ok := c.Get(tenantIDContextKey); ok {
+		if r, ok := v.(tenantResolution); ok {
+			return r.tid, r.ok
+		}
+	}
+	if v, ok := c.Get(middleware.TenantIDContextKey); ok {
+		if tid, ok := v.(uint); ok {
+			return tid, true
+		}
+	}
+	if v, ok := c.Get("user"); ok {
+		if username, ok := v.(string); ok && username != "" {
+			return s.tenantIDForUserStrict(username)
+		}
+	}
+	return 0, true
+}
+
+func auditReadScope(query *gorm.DB, tenantID uint) *gorm.DB {
+	if tenantID == 0 {
+		return query
+	}
+	return query.Where("tenant_id = ? OR tenant_id = ?", tenantID, uint(0))
+}
 
 // Async audit pipeline tuning: request goroutines never touch the DB.
 // A single worker owns the hash chain (in-memory lastHash) and persists
@@ -96,31 +130,45 @@ func (s *Server) LogAuditRecords(c *gin.Context, entries []auditEntry) {
 }
 
 func (s *Server) buildAuditEntries(c *gin.Context, entries []auditEntry) []db.AuditLog {
+	if len(entries) == 0 {
+		return nil
+	}
 	var user, ip string
 	tenantID := uint(0)
 	if c != nil {
+		user = "system"
 		if u, exists := c.Get("user"); exists {
-			if us, ok := u.(string); ok {
+			if us, ok := u.(string); ok && us != "" {
 				user = us
-			} else {
-				user = "system"
 			}
-		} else {
-			user = "system"
 		}
 		ip = c.ClientIP()
-		if ip == "" {
+		if ip == "" && c.Request != nil {
 			ip = c.Request.RemoteAddr
 		}
-		// Stamp the owning tenant so audit reads can be scoped. A failed
-		// tenant lookup stays 0 (legacy/unscoped) rather than inventing a
-		// scope: the entry is still written, and the fallback stays visible
-		// to unscoped admins instead of vanishing.
-		if tid, ok := s.resolveTenant(c); ok {
-			tenantID = tid
+		resolvedTenant, resolvedOK := s.resolveTenant(c)
+		tenantID = resolvedTenant
+		// resolveTenant historically treated a named user with no row as
+		// legacy tenant 0. Audit attribution must distinguish that from a real
+		// tenant-0 user, and must retry a failed context lookup through the
+		// strict resolver before dropping the business entry.
+		if user != "system" && (!resolvedOK || tenantID == 0) {
+			if tid, ok := s.tenantIDForUserStrict(user); ok {
+				tenantID = tid
+			} else {
+				slog.Warn("Dropping audit entry: caller tenant could not be attributed", "user", user)
+				return []db.AuditLog{{
+					User:     user,
+					Action:   "audit_attribution_failure",
+					Resource: "audit",
+					TenantID: 0,
+					IP:       ip,
+					Success:  false,
+					Error:    "caller tenant could not be resolved",
+					Details:  "original audit entry dropped; target and details withheld",
+				}}
+			}
 		}
-	} else {
-		user = "system"
 	}
 
 	result := make([]db.AuditLog, 0, len(entries))
@@ -242,6 +290,11 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 		respondError(c, http.StatusServiceUnavailable, "database is not initialized")
 		return
 	}
+	tenantID, tenantOK := s.auditReadTenant(c)
+	if !tenantOK {
+		respondError(c, http.StatusForbidden, "caller tenant could not be resolved")
+		return
+	}
 	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "ndjson")))
 	if format != "ndjson" && format != "json" && format != "ecs" && format != "cef" {
 		respondError(c, http.StatusBadRequest, `invalid format (expected "ndjson", "json", "ecs" or "cef")`)
@@ -256,16 +309,16 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 	// whole table again. Ids are monotonic, so the anchor is simply "greater than".
 	sinceID := uint(atoiDefault(c.Query("since_id"), 0))
 
-	query := s.auditTenantScope(s.db.Model(&db.AuditLog{}), c)
+	query := auditReadScope(s.db.Model(&db.AuditLog{}), tenantID)
 	if sinceID > 0 {
 		query = query.Where("id > ?", sinceID)
 	}
 
 	// Investigation filters. They are deliberately separate from since_id: since_id keeps the chain
 	// CONTIGUOUS (it is a prefix continuation), while these skip rows, so a filtered export is a
-	// selection and not a verifiable chain. The response says so in headers rather than by injecting
-	// a metadata line into the NDJSON, because a verifier must be able to treat every line as a row.
-	filtered := false
+	// selection and not a verifiable chain. A non-zero tenant scope is also a selection from the
+	// single global chain, even when no explicit investigation filter was supplied.
+	filtered := tenantID != 0
 	if actor := strings.TrimSpace(c.Query("user")); actor != "" {
 		// "user" quoted: it is a PostgreSQL reserved word (resolves to the
 		// current_user() function unquoted), and this is the audit_logs.user
@@ -374,29 +427,33 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 	} else {
 		c.Header("X-Audit-Export-Truncated", "false")
 	}
+	selectionWarning := ""
 	if filtered {
 		name = "sovereign-audit-chain_filtered_" + time.Now().Format("2006-01-02_150405") + ".ndjson"
 		c.Header("X-Audit-Export-Filtered", "true")
 		// 199 is the "miscellaneous warning" class; the text is what a human reads.
-		c.Header("Warning", `199 - "filtered export: rows are a selection, not a contiguous hash chain; verify the unfiltered export"`)
+		selectionWarning = `199 - "filtered export: rows are a selection, not a contiguous hash chain; verify the unfiltered export"`
+		c.Header("Warning", selectionWarning)
 	} else {
 		c.Header("X-Audit-Export-Filtered", "false")
 	}
 	// The boolean above says a selection was made; the scope says WHICH selection, so an investigator can reproduce it instead of
 	// guessing which of six filters produced the file. Same shape as the task export's header.
-	if scope := auditExportScope(c); scope != "" {
-		c.Header(auditExportScopeHeader, scope)
-		applyExportScope(c, scope)
-	} else {
-		c.Header(auditExportScopeHeader, "all")
-		applyExportScope(c, "all")
+	scope := auditExportScope(c, tenantID)
+	if scope == "" {
+		scope = "all"
 	}
+	c.Header(auditExportScopeHeader, scope)
+	applyExportScope(c, scope)
 	// SIEM projections come BEFORE the json branch: they are alternatives to the verifiable export, not variants of it.
 	if format == "ecs" || format == "cef" {
 		name = strings.TrimSuffix(name, ".ndjson") + siemFormatFilename(format)
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		// Stated as a header, not only in the docs: a projection looks like an export and cannot verify anything.
 		c.Header("Warning", fmt.Sprintf(`199 - %s"`, siemProjectionNote(format)))
+		if selectionWarning != "" {
+			c.Writer.Header().Add("Warning", selectionWarning)
+		}
 		var buf strings.Builder
 		for i := range rows {
 			row := auditChainExportRow{
@@ -442,11 +499,14 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 		name = strings.TrimSuffix(name, ".ndjson") + ".json"
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		c.JSON(http.StatusOK, gin.H{
-			"count":     len(payload),
-			"truncated": len(rows) >= limit || byteLimited,
-			"filtered":  filtered,
-			"format":    "json",
-			"rows":      payload,
+			"count":            len(payload),
+			"truncated":        len(rows) >= limit || byteLimited,
+			"filtered":         filtered,
+			"scope":            scope,
+			"chain_contiguous": !filtered,
+			"warning":          selectionWarning,
+			"format":           "json",
+			"rows":             payload,
 		})
 		return
 	}
@@ -467,6 +527,66 @@ type auditChainVerdict struct {
 	// chain entry, an Ed25519 bundle signature, a plugin package signature and a normalised failure shape - and a reader who
 	// takes this one for a keyed signature believes the chain proves more than it does.
 	SignatureKind string `json:"signature_kind"`
+	// Scope is global for the single hash chain, or tenant for a selection view.
+	Scope string `json:"scope,omitempty"`
+	// AnchorApplicable is false for tenant views: the global anchor and its
+	// continuity proof do not apply to a selection of the global chain.
+	AnchorApplicable *bool `json:"anchor_applicable,omitempty"`
+	// EntryHashValid and SignatureValid describe the newest visible row in a
+	// tenant view. An absent legacy signature reports false but is not a failure.
+	EntryHashValid *bool `json:"entry_hash_valid,omitempty"`
+	SignatureValid *bool `json:"signature_valid,omitempty"`
+}
+
+// verifyAuditTenantRows verifies only the self-hash and optional signature of
+// rows visible to a non-zero tenant. It deliberately does not compare PrevHash:
+// other tenants' rows are part of the single global chain but absent from this
+// selection, so a tenant view is not a continuity proof.
+func (s *Server) verifyAuditTenantRows(tenantID uint, limit int) auditChainVerdict {
+	anchorApplicable := false
+	verdict := auditChainVerdict{Scope: "tenant", AnchorApplicable: &anchorApplicable}
+	if s == nil || s.db == nil {
+		verdict.OK = true
+		return verdict
+	}
+	if limit <= 0 || limit > 5000 {
+		limit = 1000
+	}
+	var rows []db.AuditLog
+	if err := auditReadScope(s.db.Model(&db.AuditLog{}), tenantID).Order("id DESC").Limit(limit).Find(&rows).Error; err != nil {
+		verdict.Reason = "audit rows could not be read"
+		return verdict
+	}
+	if len(rows) == 0 {
+		verdict.OK = true
+		return verdict
+	}
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	latest := &rows[len(rows)-1]
+	entryHashValid := latest.EntryHash == auditEntryHash(latest)
+	signatureValid, _ := auditchain.VerifyRow(auditChainRow(latest))
+	verdict.EntryHashValid = &entryHashValid
+	verdict.SignatureValid = &signatureValid
+	for i := range rows {
+		row := &rows[i]
+		if row.EntryHash != auditEntryHash(row) {
+			verdict.FirstBadID = row.ID
+			verdict.Reason = "entry content does not match its hash"
+			return verdict
+		}
+		if row.Signature != "" {
+			if valid, _ := auditchain.VerifyRow(auditChainRow(row)); !valid {
+				verdict.FirstBadID = row.ID
+				verdict.Reason = "entry signature is invalid (content edited or key changed)"
+				return verdict
+			}
+		}
+		verdict.Checked++
+	}
+	verdict.OK = true
+	return verdict
 }
 
 // auditHealthCacheTTL bounds how often the UI health endpoint re-walks the chain.
@@ -699,6 +819,12 @@ type auditChainHead struct {
 	ID        uint   `json:"id"`
 	EntryHash string `json:"entry_hash"`
 	CreatedAt string `json:"created_at,omitempty"`
+	Scope     string `json:"scope"`
+	// AnchorApplicable is true only for the global tenant-0 view.
+	AnchorApplicable bool `json:"anchor_applicable"`
+	// Validity describes the newest visible row, never the global anchor.
+	EntryHashValid bool `json:"entry_hash_valid"`
+	SignatureValid bool `json:"signature_valid"`
 	// AnchorMatches is false when the anchor file disagrees with the table, which
 	// is the signature of a rewritten or replaced audit table.
 	AnchorMatches bool `json:"anchor_matches"`
@@ -720,9 +846,19 @@ func (s *Server) handleAuditChainAnchor(c *gin.Context) {
 		respondError(c, http.StatusServiceUnavailable, "database is not initialized")
 		return
 	}
+	tenantID, tenantOK := s.auditReadTenant(c)
+	if !tenantOK {
+		respondError(c, http.StatusForbidden, "caller tenant could not be resolved")
+		return
+	}
 	var newest db.AuditLog
-	head := auditChainHead{AnchorMatches: true}
-	query := s.auditTenantScope(s.db.Model(&db.AuditLog{}), c)
+	head := auditChainHead{Scope: "global", AnchorApplicable: true, AnchorMatches: true}
+	if tenantID != 0 {
+		head.Scope = "tenant"
+		head.AnchorApplicable = false
+		head.AnchorMatches = false
+	}
+	query := auditReadScope(s.db.Model(&db.AuditLog{}), tenantID)
 	if err := query.Order("id DESC").Limit(1).Find(&newest).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to read the audit chain")
 		return
@@ -732,12 +868,16 @@ func (s *Server) handleAuditChainAnchor(c *gin.Context) {
 		head.EntryHash = newest.EntryHash
 		head.Signature = newest.Signature
 		head.CreatedAt = newest.CreatedAt.UTC().Format(time.RFC3339Nano)
+		head.EntryHashValid = newest.EntryHash == auditEntryHash(&newest)
+		head.SignatureValid, _ = auditchain.VerifyRow(auditChainRow(&newest))
 	}
-	anchored, anchorID, anchorTS, anchorSig, hasAnchor := s.auditAnchorRecord()
-	if hasAnchor {
-		head.AnchorRecorded = true
-		head.AnchorMatches = head.EntryHash == "" || anchored == head.EntryHash
-		head.AnchorID, head.AnchorTimestamp, head.AnchorSignature = anchorID, anchorTS, anchorSig
+	if tenantID == 0 {
+		anchored, anchorID, anchorTS, anchorSig, hasAnchor := s.auditAnchorRecord()
+		if hasAnchor {
+			head.AnchorRecorded = true
+			head.AnchorMatches = head.EntryHash == "" || anchored == head.EntryHash
+			head.AnchorID, head.AnchorTimestamp, head.AnchorSignature = anchorID, anchorTS, anchorSig
+		}
 	}
 	respond(c, head)
 }
@@ -745,7 +885,21 @@ func (s *Server) handleAuditChainAnchor(c *gin.Context) {
 // handleVerifyAuditChain reports whether the audit chain is intact. Read-only:
 // it exists so an investigator can prove the log was not edited after the fact.
 func (s *Server) handleVerifyAuditChain(c *gin.Context) {
-	verdict := s.verifyAuditChain(atoiDefault(c.Query("limit"), 1000))
+	tenantID, tenantOK := s.auditReadTenant(c)
+	if !tenantOK {
+		respondError(c, http.StatusForbidden, "caller tenant could not be resolved")
+		return
+	}
+	limit := atoiDefault(c.Query("limit"), 1000)
+	var verdict auditChainVerdict
+	if tenantID == 0 {
+		anchorApplicable := true
+		verdict = s.verifyAuditChain(limit)
+		verdict.Scope = "global"
+		verdict.AnchorApplicable = &anchorApplicable
+	} else {
+		verdict = s.verifyAuditTenantRows(tenantID, limit)
+	}
 	// Say which of the four "signatures" this verdict is about, so nobody reads it as a keyed signature.
 	verdict.SignatureKind = auditSignatureKind
 	if verdict.OK {
@@ -1096,43 +1250,31 @@ type OperatorAction struct {
 
 // LogOperatorAction records a structured audit trail entry for high-value operator actions.
 func (s *Server) LogOperatorAction(c *gin.Context, action OperatorAction) {
-	user := "system"
-	ip := ""
-	if c != nil {
-		if u, exists := c.Get("user"); exists {
-			if us, ok := u.(string); ok {
-				user = us
-			}
-		}
-		ip = c.ClientIP()
-	}
-
-	details := sanitizeDetails(action.Details)
+	details := action.Details
 	if action.TargetID != "" {
 		details = "target=" + action.TargetID + " " + details
 	}
-
-	logEntry := db.AuditLog{
-		User:     user,
-		Action:   "operator:" + action.Action,
-		Resource: action.Resource,
-		AgentID:  action.TargetID,
-		IP:       ip,
-		Success:  true,
-		Details:  details,
+	entries := s.buildAuditEntries(c, []auditEntry{{
+		action:   "operator:" + action.Action,
+		resource: action.Resource,
+		agentID:  action.TargetID,
+		details:  details,
+		success:  true,
+	}})
+	s.flushAuditEntries(entries)
+	if len(entries) == 0 {
+		return
 	}
-
-	// Route through the chained flush path so operator actions are part of the
-	// same tamper-evident hash chain as beacon-triggered entries.
-	s.flushAuditEntries([]db.AuditLog{logEntry})
-
+	// Log the persisted projection, not the original target: an attribution
+	// failure deliberately withholds target details from every audit sink.
+	entry := entries[0]
 	slog.Warn("Operator action",
-		"user", user,
-		"action", action.Action,
-		"resource", action.Resource,
-		"target", action.TargetID,
+		"user", entry.User,
+		"action", entry.Action,
+		"resource", entry.Resource,
+		"target", entry.AgentID,
 		"risk", action.RiskLevel,
-		"ip", ip,
+		"ip", entry.IP,
 	)
 }
 

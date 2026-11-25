@@ -15,6 +15,9 @@ import (
 func TestSessionRevokeWritesAuditLog(t *testing.T) {
 	s := newWSAuthTestServer(t)
 	user := seedWSAuthUser(t, s, "revoke-audit-user")
+	if err := s.db.Create(&db.User{Username: "admin-operator", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 	issueWSAuthToken(t, s, user)
 
 	var sess db.UserSession
@@ -49,6 +52,9 @@ func TestSessionRevokeWritesAuditLog(t *testing.T) {
 func TestSessionRevokeAllWritesAuditLog(t *testing.T) {
 	s := newWSAuthTestServer(t)
 	user := seedWSAuthUser(t, s, "revoke-all-audit")
+	if err := s.db.Create(&db.User{Username: "admin-operator", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 	if err := s.createSession("tok-a", user.ID, "1.1.1.1", "a", "", 3600); err != nil {
 		t.Fatal(err)
 	}

@@ -62,7 +62,7 @@ func TestRelayedTaskBroadcastKeepsResultPlaintext(t *testing.T) {
 		t.Fatalf("create task: %v", err)
 	}
 
-	client := &wsClientConn{ch: make(chan []byte, 1), done: make(chan struct{})}
+	client := &wsClientConn{ch: make(chan []byte, 1), done: make(chan struct{}), canViewTasks: true}
 	s.wsClients[nil] = client
 	s.agentPendingTasks[child] = 1
 	s.processRelayedResults([]relayedData{{
@@ -98,7 +98,7 @@ func TestRelayedTaskBroadcastKeepsResultPlaintext(t *testing.T) {
 func TestBroadcastTaskUpdateDecryptsAtRestResult(t *testing.T) {
 	crypto.InitLootEncryption(testStorageKeyHex)
 	s, _ := newBeaconFinalityTestServer(t)
-	client := &wsClientConn{ch: make(chan []byte, 1), done: make(chan struct{})}
+	client := &wsClientConn{ch: make(chan []byte, 1), done: make(chan struct{}), canViewTasks: true}
 	s.wsClients[nil] = client
 
 	ciphertext, err := crypto.EncryptLoot(`DOMAIN\\operator`)

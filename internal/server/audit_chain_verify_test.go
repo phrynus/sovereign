@@ -117,6 +117,9 @@ func TestVerifyAuditChainDetectsReordering(t *testing.T) {
 // answers ok=true, a broken one answers 200 with ok=false (a finding, not a 500).
 func TestHandleVerifyAuditChainEndpoint(t *testing.T) {
 	s := mustTenantServer(t)
+	if err := s.db.Create(&db.User{Username: "admin1", Role: db.RoleAdmin, TenantID: 0, IsActive: true}).Error; err != nil {
+		t.Fatalf("seed audit user: %v", err)
+	}
 	rows := seedAuditChain(t, s, 3)
 
 	call := func() (*httptest.ResponseRecorder, auditChainVerdict) {

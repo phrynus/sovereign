@@ -232,7 +232,7 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	filterPlatform := c.Query("platform")
 	filterListener := c.Query("listener_id")
 
-	query := s.db.Model(&db.BuildLog{})
+	query := s.tenantScope(s.db.Model(&db.BuildLog{}), c)
 	if filterStatus != "" {
 		query = query.Where("status = ?", filterStatus)
 	}
@@ -256,11 +256,11 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	}
 
 	var successCount, failedCount int64
-	if err := s.db.Model(&db.BuildLog{}).Where("status = ?", "success").Count(&successCount).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.BuildLog{}), c).Where("status = ?", "success").Count(&successCount).Error; err != nil {
 		handleQueryError(c, err, "Failed to count successful builds")
 		return
 	}
-	if err := s.db.Model(&db.BuildLog{}).Where("status = ?", "failed").Count(&failedCount).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.BuildLog{}), c).Where("status = ?", "failed").Count(&failedCount).Error; err != nil {
 		handleQueryError(c, err, "Failed to count failed builds")
 		return
 	}
@@ -295,14 +295,15 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 }
 
 // logBuild creates a build log entry
-func (s *Server) logBuild(platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath string) {
-	s.logBuildWithProfile(platform, format, c2URL, listenerID, filename, status, errStr, outputPath, "", "")
+func (s *Server) logBuild(tenantID uint, platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath string) {
+	s.logBuildWithProfile(tenantID, platform, format, c2URL, listenerID, filename, status, errStr, outputPath, "", "")
 }
 
 // logBuildWithProfile additionally records the malleable profile for audit.
-func (s *Server) logBuildWithProfile(platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath, profileName, profileHash string) {
+func (s *Server) logBuildWithProfile(tenantID uint, platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath, profileName, profileHash string) {
 	user := "system"
 	if err := s.db.Create(&db.BuildLog{
+		TenantID:    tenantID,
 		Platform:    platform,
 		Format:      format,
 		C2URL:       c2URL,

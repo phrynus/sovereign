@@ -2,16 +2,14 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/r0si/sovereign/internal/crypto"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 )
 
 // ── Operator WebSocket hub + broadcast fan-out ────────────────────────────
@@ -31,6 +29,11 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return
 	}
 	username := claims.Username
+	tenantID, tenantOK := s.tenantIDForUserStrict(username)
+	if !tenantOK {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "error": "tenant_unavailable"})
+		return
+	}
 
 	conn, err := s.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -45,12 +48,14 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return nil
 	})
 
+	canViewTasks := s.userCanViewTasks(username)
 	session := UserSession{Username: username, ConnectedAt: time.Now()}
 	client := &wsClientConn{
 		conn:          conn,
 		session:       session,
-		tenantID:      s.tenantIDForUser(username),
+		tenantID:      tenantID,
 		canViewScreen: s.userCanViewScreen(username),
+		canViewTasks:  canViewTasks,
 		ch:            make(chan []byte, wsWriteChanSize),
 		done:          make(chan struct{}),
 	}
@@ -66,7 +71,7 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	s.wsMutex.Unlock()
 
 	// Re-check force-logout/disable/revoke while the socket is live.
-	s.startWSAuthRecheck(tokenStr, claims, client.done, func() {
+	s.startWSAuthRecheck(tokenStr, claims, client.done, client.canViewTasks, func() {
 		conn.Close()
 	})
 
@@ -113,7 +118,8 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	// Reconnect sync: push the current build snapshot so a dashboard that was
 	// offline (reconnect) or connected mid-build converges instantly. Routed
 	// through the writer goroutine, never written from the reader.
-	if msg, ok := marshalJSONSafe(gin.H{"type": "sync", "builds": s.buildJobSnapshots()}); ok {
+	builds := s.buildJobSnapshotsForTenant(tenantID)
+	if msg, ok := marshalJSONSafe(gin.H{"type": "sync", "builds": builds}); ok {
 		select {
 		case client.ch <- msg:
 		default:
@@ -182,8 +188,11 @@ type wsClientConn struct {
 	// (agents.write): live screen frames are pushed over this same socket, so
 	// a read-only custom role must not receive them just by connecting /ws.
 	canViewScreen bool
-	ch            chan []byte
-	done          chan struct{}
+	// canViewTasks mirrors the tasks.read gate on task HTTP APIs. Task
+	// updates and output frames must never reach a subscriber without it.
+	canViewTasks bool
+	ch           chan []byte
+	done         chan struct{}
 }
 
 const wsWriteChanSize = 64
@@ -227,14 +236,16 @@ type wsSubscriber struct {
 	TenantID uint
 	// CanViewScreen mirrors the screenshot APIs' agents.write gate.
 	CanViewScreen bool
+	// CanViewTasks mirrors the tasks.read gate on task HTTP APIs.
+	CanViewTasks bool
 }
 
 func (c *wsClientConn) subscriber() wsSubscriber {
-	return wsSubscriber{TenantID: c.tenantID, CanViewScreen: c.canViewScreen}
+	return wsSubscriber{TenantID: c.tenantID, CanViewScreen: c.canViewScreen, CanViewTasks: c.canViewTasks}
 }
 
 func (s *WSOperatorSession) subscriber() wsSubscriber {
-	return wsSubscriber{TenantID: s.TenantID, CanViewScreen: s.CanViewScreen}
+	return wsSubscriber{TenantID: s.TenantID, CanViewScreen: s.CanViewScreen, CanViewTasks: s.CanViewTasks}
 }
 
 // broadcastToClients sends a message to all connected WebSocket clients.
@@ -267,6 +278,21 @@ func (s *Server) userCanViewScreen(username string) bool {
 		return false
 	}
 	return db.RoleHasPermissionDB(s.db, user.Role, db.PermAgentsWrite)
+}
+
+// userCanViewTasks reports whether a username may receive task frames on an
+// operator socket. It uses the same operator-role gate and current DB-backed
+// permission resolution as the HTTP APIs; lookup failures fail closed.
+func (s *Server) userCanViewTasks(username string) bool {
+	var user db.User
+	if err := s.db.Select("role").Where("username = ?", username).First(&user).Error; err != nil {
+		return false
+	}
+	if !s.roleGrantsOperator(user.Role) {
+		return false
+	}
+	allowed, err := middleware.UserHasPermission(s.db, username, db.PermTasksRead)
+	return err == nil && allowed
 }
 
 // broadcastToTenant sends an agent-scoped message only to clients allowed to
@@ -493,7 +519,7 @@ func (s *Server) broadcastAgentDataUpdate(agentID string, data map[string]interf
 
 // broadcastTaskUpdate pushes task status (and result if completed) to WS clients
 func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
-	task = taskForOperator(task)
+	task = taskForAuthorizedOperator(task)
 	payload := map[string]interface{}{
 		"type":       "task_update",
 		"agent_id":   agentID,
@@ -542,49 +568,9 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 	// Reliable: this frame is the only signal that a task finished. Dropping it
 	// leaves the operator's spinner (and the live shell stream) waiting forever,
 	// so a full client queue costs that client its socket instead.
-	s.broadcastToTenantReliable(notification, agentID)
-}
-
-// taskForOperator is the final storage-boundary guard for task output. Most DB
-// reads are decrypted by db.Task.AfterFind, but result objects created by map
-// updates or passed directly from write paths may still contain FC2ENC values.
-// Never expose that at-rest representation through REST or WebSocket APIs.
-func taskForOperator(task db.Task) db.Task {
-	for fieldName, field := range map[string]*string{
-		"result":  &task.Result,
-		"error":   &task.Error,
-		"command": &task.Command,
-		"shell":   &task.Shell,
-		"data":    &task.Data,
-	} {
-		if !strings.HasPrefix(*field, "FC2ENC:") {
-			continue
-		}
-		plain, err := crypto.DecryptLoot(*field)
-		if err != nil {
-			slog.Error("Failed to decrypt task field for operator response", "task_id", task.ID, "field", fieldName, "error", err)
-			*field = ""
-			continue
-		}
-		*field = plain
-	}
-	// A referenced task's real arguments never leave the server. The safe
-	// template and the human-readable vault label are the only public fields.
-	if task.CredentialID != nil && *task.CredentialID != 0 {
-		task.Command = fmt.Sprintf("@cred:%d", *task.CredentialID)
-		task.Shell = ""
-		task.Data = ""
-		return task
-	}
-	// File bytes and editor drafts are held in Data at rest; the dedicated
-	// revisions endpoint is the only place that may return them.
-	if task.Type == "upload" || task.Type == "write" {
-		task.Data = ""
-	}
-	if db.SensitiveShellTypes[task.Type] {
-		task.Shell = ""
-	}
-	return task
+	s.broadcastToTenantWhere(notification, agentID, true, func(sub wsSubscriber) bool {
+		return sub.CanViewTasks
+	})
 }
 
 // TaskOutputStreamThreshold: results above this size are chunked into
@@ -628,7 +614,9 @@ func (s *Server) broadcastTaskOutputFrames(agentID string, task db.Task) {
 			slog.Error("Failed to marshal task output frame", "err", err)
 			return
 		}
-		s.broadcastToTenant(raw, agentID)
+		s.broadcastToTenantWhere(raw, agentID, false, func(sub wsSubscriber) bool {
+			return sub.CanViewTasks
+		})
 		start = end
 	}
 }

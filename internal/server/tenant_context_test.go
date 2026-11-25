@@ -83,3 +83,36 @@ func TestScopedRequestSeesOnlyItsTenantWithContextTenant(t *testing.T) {
 		t.Fatalf("scoped query returned %d rows (%+v), want only the caller's tenant", len(rows), rows)
 	}
 }
+
+// TestTenantIDForUserStrict separates a legitimate tenant-0 identity from a
+// missing row or database failure; WebSocket registration relies on this.
+func TestTenantIDForUserStrictDistinguishesLegacyFromMissing(t *testing.T) {
+	s := mustTenantServer(t)
+	for _, u := range []db.User{
+		{Username: "strict-legacy", Role: db.RoleUser, TenantID: 0},
+		{Username: "strict-tenant", Role: db.RoleUser, TenantID: 7},
+	} {
+		if err := s.db.Create(&u).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if tid, ok := s.tenantIDForUserStrict("strict-legacy"); !ok || tid != 0 {
+		t.Fatalf("legacy user = (%d,%v), want (0,true)", tid, ok)
+	}
+	if tid, ok := s.tenantIDForUserStrict("strict-tenant"); !ok || tid != 7 {
+		t.Fatalf("tenant user = (%d,%v), want (7,true)", tid, ok)
+	}
+	if _, ok := s.tenantIDForUserStrict("missing-user"); ok {
+		t.Fatal("missing user reported a valid tenant")
+	}
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.tenantIDForUserStrict("strict-tenant"); ok {
+		t.Fatal("database failure reported a valid tenant")
+	}
+}

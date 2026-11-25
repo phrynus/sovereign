@@ -18,6 +18,7 @@ import {
 import { api, pollTask } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Permission } from "@/components/ui/permission";
 import { DataError } from "@/components/ui/data-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -391,6 +392,7 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
   const canThumb = result?.hits.some((hit) => isThumbCandidate(hit.category)) ?? false;
 
   return (
+    <Permission perms="files.read">
     <div className="space-y-3">
       <Card className="p-(--card-spacing)">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -742,5 +744,6 @@ export default function FilesMediaPanel({ t, agentId, rootPath, onReveal }: File
         </DialogContent>
       </Dialog>
     </div>
+    </Permission>
   );
 }

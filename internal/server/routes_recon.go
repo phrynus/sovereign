@@ -57,11 +57,6 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 	{
 		reconWrite.POST("/loot/bulk-delete", s.handleLootBulkDelete)
 		reconWrite.POST("/api/scan", s.handleScanTask)
-		reconWrite.POST("/api/scan/result", s.handleProcessScanResult)
-		reconWrite.POST("/api/browser/result", s.handleProcessBrowserResult)
-		reconWrite.POST("/api/wifi/result", s.handleProcessWifiResult)
-		reconWrite.POST("/api/lateral/result", s.handleProcessLateralResult)
-		reconWrite.POST("/api/privesc/result", s.handleProcessPrivescResult)
 		reconWrite.POST("/api/privesc/run", s.handlePrivescRun)
 		reconWrite.POST("/toolkit/agents/:id/action", s.handleToolkitQuickAction)
 		reconWrite.POST("/api/report/generate", s.handleGenerateReport)

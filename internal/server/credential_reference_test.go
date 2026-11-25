@@ -69,7 +69,7 @@ func TestCredentialReferenceMaterializesAllowedTypes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("createTask: %v", err)
 			}
-			projected := taskForOperator(*task)
+			projected := taskForAuthorizedOperator(*task)
 			if projected.Command != "@cred:"+refID(cred.ID) || projected.Shell != "" {
 				t.Fatalf("stored command = %q/%q", projected.Command, projected.Shell)
 			}
@@ -156,7 +156,7 @@ func TestCredentialReferencePublicProjectionRedactsSecrets(t *testing.T) {
 	if !strings.HasPrefix(rawResolved, "FC2ENC:") {
 		t.Fatalf("resolved command at rest = %q", rawResolved)
 	}
-	projected := taskForOperator(*task)
+	projected := taskForAuthorizedOperator(*task)
 	if projected.Command != "@cred:"+refID(cred.ID) || projected.Shell != "" || projected.Data != "" {
 		t.Fatalf("projection = %+v", projected)
 	}

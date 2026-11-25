@@ -76,6 +76,7 @@ export interface AgentDetailResponse {
   tasks?: TaskEntry[];
   screenshots?: string[];
   logs?: LogEntry[];
+  tasks_redacted?: boolean;
   total_tasks?: number;
   completed_tasks?: number;
   pending_tasks?: number;
@@ -119,9 +120,9 @@ export function buildAgentMarkdown(
   const status = (agent.status || "offline") as AgentStatus;
   const uptime = data.uptime || "—";
   const totalTasks = data.total_tasks ?? 0;
-  const completedTasks = data.completed_tasks ?? 0;
-  const pendingTasks = data.pending_tasks ?? 0;
-  const failedTasks = data.failed_tasks ?? 0;
+  const taskSummary = data.tasks_redacted
+    ? `| Tasks | ${totalTasks} |`
+    : `| Tasks | ${totalTasks} (${data.completed_tasks ?? 0} completed, ${data.pending_tasks ?? 0} pending, ${data.failed_tasks ?? 0} failed) |`;
   return [
     `# Agent: ${hostname}`,
     "",
@@ -135,7 +136,7 @@ export function buildAgentMarkdown(
     `| User | ${username} |`,
     `| Status | ${status} |`,
     `| Uptime | ${uptime} |`,
-    `| Tasks | ${totalTasks} (${completedTasks} completed, ${pendingTasks} pending, ${failedTasks} failed) |`,
+    taskSummary,
     "",
   ].join("\n");
 }
@@ -152,9 +153,9 @@ export function buildAgentCopyText(data: AgentDetailResponse): string {
   const status = (agent.status || "offline") as AgentStatus;
   const uptime = data.uptime || "—";
   const totalTasks = data.total_tasks ?? 0;
-  const completedTasks = data.completed_tasks ?? 0;
-  const pendingTasks = data.pending_tasks ?? 0;
-  const failedTasks = data.failed_tasks ?? 0;
+  const taskSummary = data.tasks_redacted
+    ? `Tasks: ${totalTasks}`
+    : `Tasks: ${totalTasks} (${data.completed_tasks ?? 0} completed, ${data.pending_tasks ?? 0} pending, ${data.failed_tasks ?? 0} failed)`;
   return [
     `Agent: ${hostname} (${agentID})`,
     `OS: ${os} ${arch}`,
@@ -162,6 +163,6 @@ export function buildAgentCopyText(data: AgentDetailResponse): string {
     `User: ${username}`,
     `Status: ${status}`,
     `Uptime: ${uptime}`,
-    `Tasks: ${totalTasks} (${completedTasks} completed, ${pendingTasks} pending, ${failedTasks} failed)`,
+    taskSummary,
   ].join("\n");
 }

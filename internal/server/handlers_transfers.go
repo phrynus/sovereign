@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/crypto"
 	"github.com/r0si/sovereign/internal/db"
+	"github.com/r0si/sovereign/internal/server/middleware"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -16,8 +17,9 @@ import (
 	"time"
 )
 
-// Transfer HTTP surface. All handlers are mounted by main in the agents.write
-// (create/chunk/pause/resume/cancel) and agents.read (list/detail/file) groups.
+// Transfer HTTP surface. Create accepts either file permission and re-checks
+// the requested direction in the handler. Chunk/pause/cancel require
+// files.write; list/detail/file/resume require files.read.
 // Every payload uses the canonical respond/respondError envelope.
 
 func transferParamID(c *gin.Context) (uint, error) {
@@ -79,6 +81,14 @@ func (s *Server) handleCreateTransfer(c *gin.Context) {
 	req.Direction = strings.ToLower(strings.TrimSpace(req.Direction))
 	if req.Direction != transferDirectionPush && req.Direction != transferDirectionPull {
 		respondError(c, http.StatusBadRequest, "direction must be push or pull")
+		return
+	}
+	permission := db.PermFilesRead
+	if req.Direction == transferDirectionPush {
+		permission = db.PermFilesWrite
+	}
+	if !middleware.HasPermission(c, permission) {
+		respondError(c, http.StatusForbidden, permission+" required")
 		return
 	}
 	if req.TotalSize < 0 || req.TotalSize > MaxTransferBytes {

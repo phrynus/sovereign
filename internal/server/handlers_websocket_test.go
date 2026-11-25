@@ -107,10 +107,11 @@ func TestBroadcastTaskUpdate_StreamsLargeShellOutput(t *testing.T) {
 	}
 
 	client := &wsClientConn{
-		conn:    &websocket.Conn{},
-		session: UserSession{Username: "legacy-client"},
-		ch:      make(chan []byte, 64),
-		done:    make(chan struct{}),
+		conn:         &websocket.Conn{},
+		session:      UserSession{Username: "legacy-client"},
+		canViewTasks: true,
+		ch:           make(chan []byte, 64),
+		done:         make(chan struct{}),
 	}
 	s.wsMutex.Lock()
 	s.wsClients[client.conn] = client
@@ -256,7 +257,7 @@ func TestOperatorWS_SyncSnapshotOnConnect(t *testing.T) {
 		operatorSessions: &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},
 	}
 
-	user := db.User{Username: "op-ws-sync", Role: "admin", IsActive: true}
+	user := db.User{Username: "op-ws-sync", Role: "admin", TenantID: 1, IsActive: true}
 	if err := database.Create(&user).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -264,6 +265,9 @@ func TestOperatorWS_SyncSnapshotOnConnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
+	s.buildJobs["sync-own"] = &BuildJob{ID: "sync-own", TenantID: 1, Filename: "own.exe"}
+	s.buildJobs["sync-foreign"] = &BuildJob{ID: "sync-foreign", TenantID: 2, Filename: "foreign.exe"}
+	s.buildJobs["sync-legacy"] = &BuildJob{ID: "sync-legacy", TenantID: 0, Filename: "legacy.exe"}
 	if err := s.createSession(token, user.ID, "127.0.0.1", "test", "", 86400); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -288,8 +292,10 @@ func TestOperatorWS_SyncSnapshotOnConnect(t *testing.T) {
 		t.Fatalf("read sync snapshot: %v", err)
 	}
 	var msg struct {
-		Type   string  `json:"type"`
-		Builds []gin.H `json:"builds"`
+		Type   string `json:"type"`
+		Builds []struct {
+			ID string `json:"id"`
+		} `json:"builds"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		t.Fatalf("invalid sync json %q: %v", data, err)
@@ -299,6 +305,9 @@ func TestOperatorWS_SyncSnapshotOnConnect(t *testing.T) {
 	}
 	if msg.Builds == nil {
 		t.Fatalf("sync snapshot missing builds list")
+	}
+	if len(msg.Builds) != 1 || msg.Builds[0].ID != "sync-own" {
+		t.Fatalf("sync snapshot leaked another tenant: %+v", msg.Builds)
 	}
 }
 
@@ -318,13 +327,14 @@ func TestHandleWebSocket_PingPong(t *testing.T) {
 		db:               database,
 		cfg:              cfg,
 		ctx:              context.Background(),
+		buildJobs:        make(map[string]*BuildJob),
 		wsClients:        make(map[*websocket.Conn]*wsClientConn),
 		wsMutex:          sync.RWMutex{},
 		wsUpgrader:       websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 		operatorSessions: &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},
 	}
 
-	user := db.User{Username: "ping-pong-user", Role: "admin", IsActive: true}
+	user := db.User{Username: "ping-pong-user", Role: "admin", TenantID: 1, IsActive: true}
 	if err := database.Create(&user).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -332,6 +342,9 @@ func TestHandleWebSocket_PingPong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
+	s.buildJobs["legacy-sync-own"] = &BuildJob{ID: "legacy-sync-own", TenantID: 1, Filename: "own.exe"}
+	s.buildJobs["legacy-sync-foreign"] = &BuildJob{ID: "legacy-sync-foreign", TenantID: 2, Filename: "foreign.exe"}
+	s.buildJobs["legacy-sync-unscoped"] = &BuildJob{ID: "legacy-sync-unscoped", TenantID: 0, Filename: "legacy.exe"}
 	if err := s.createSession(token, user.ID, "127.0.0.1", "test", "", 86400); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -356,18 +369,31 @@ func TestHandleWebSocket_PingPong(t *testing.T) {
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	// The connection may deliver broadcast frames (e.g. user_online) ahead
 	// of the pong; drain until we see the heartbeat reply.
+	sawSync := false
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			t.Fatalf("read pong: %v", err)
 		}
 		var msg struct {
-			Type string `json:"type"`
+			Type   string `json:"type"`
+			Builds []struct {
+				ID string `json:"id"`
+			} `json:"builds"`
 		}
 		if err := json.Unmarshal(data, &msg); err != nil {
 			t.Fatalf("invalid message json %q: %v", data, err)
 		}
+		if msg.Type == "sync" {
+			sawSync = true
+			if len(msg.Builds) != 1 || msg.Builds[0].ID != "legacy-sync-own" {
+				t.Fatalf("legacy sync snapshot leaked another tenant: %+v", msg.Builds)
+			}
+		}
 		if msg.Type == "pong" {
+			if !sawSync {
+				t.Fatal("legacy socket did not receive its tenant-scoped sync snapshot")
+			}
 			return
 		}
 	}

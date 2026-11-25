@@ -37,10 +37,10 @@ func (s *Server) handleBuildEffectiveness(c *gin.Context) {
 		User       string    `json:"user"`
 		CreatedAt  time.Time `json:"created_at"`
 	}
-	if err := s.db.Table("build_logs").
+	buildQuery := s.tenantScope(s.db.Table("build_logs"), c).
 		Select("id, platform, format, filename, c2_url, listener_id, \"user\", created_at").
-		Where("status = ? AND created_at >= ?", "success", since).
-		Order("created_at desc").Limit(500).Scan(&builds).Error; err != nil {
+		Where("status = ? AND created_at >= ?", "success", since)
+	if err := buildQuery.Order("created_at desc").Limit(500).Scan(&builds).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "query failed")
 		return
 	}
@@ -109,8 +109,14 @@ func (s *Server) handleBuildEffectiveness(c *gin.Context) {
 	}
 
 	var successCount, failedCount int64
-	s.db.Table("build_logs").Where("status = ? AND created_at >= ?", "success", since).Count(&successCount)
-	s.db.Table("build_logs").Where("status = ? AND created_at >= ?", "failed", since).Count(&failedCount)
+	if err := s.tenantScope(s.db.Table("build_logs"), c).Where("status = ? AND created_at >= ?", "success", since).Count(&successCount).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if err := s.tenantScope(s.db.Table("build_logs"), c).Where("status = ? AND created_at >= ?", "failed", since).Count(&failedCount).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "query failed")
+		return
+	}
 
 	respond(c, gin.H{
 		"builds":          buildRows,

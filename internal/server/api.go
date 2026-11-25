@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -135,14 +134,11 @@ func (s *Server) apiListTasks(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "database error")
 		return
 	}
-	for i := range tasks {
-		tasks[i] = taskForOperator(tasks[i])
-	}
 	// Documented REST v1 list shape: {"success": true, "data": [...], "total": n}
 	// (api/openapi.yaml). The sibling total is part of the published scripting
 	// contract, so these list endpoints stay off respond()'s payload wrapping;
 	// single-object endpoints above use respond() and are byte-identical.
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": tasks, "total": len(tasks)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": tasksForOperator(c, tasks), "total": len(tasks)})
 }
 
 func (s *Server) apiGetTask(c *gin.Context) {
@@ -171,7 +167,7 @@ func (s *Server) apiGetTask(c *gin.Context) {
 			return
 		}
 	}
-	respond(c, taskForOperator(task))
+	respond(c, taskForOperator(c, task))
 }
 
 func (s *Server) apiCreateTask(c *gin.Context) {
@@ -233,13 +229,7 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "task creation failed")
 		return
 	}
-	if username := s.currentUsername(c); username != "" {
-		s.persistTaskCreator(task, username)
-		if task.CredentialID != nil {
-			s.LogAuditRecord(c, "credential_task_create", "agent", req.AgentID,
-				fmt.Sprintf("task #%d: %s (%s)", task.ID, task.Command, task.CredentialLabel), true, nil)
-		}
-	}
+	s.auditTaskCreation(c, task)
 
 	// Per-task result encryption (P2): mint a per-task AES-256-GCM key, store it
 	// on the task row, and the agent will seal this task's result with it.
@@ -425,17 +415,21 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 	}
 	onlineUsers := int64(len(onlineUsersList))
 
+	canViewTasks := middleware.HasPermission(c, db.PermTasksRead)
 	var recentTasks []db.Task
 	recentTasksQuery := s.db.WithContext(c.Request.Context())
 	if tid != 0 {
 		recentTasksQuery = recentTasksQuery.Where("tenant_id = ?", tid)
+	}
+	if !canViewTasks {
+		recentTasksQuery = recentTasksQuery.Select("id, status, created_at, updated_at")
 	}
 	if err := recentTasksQuery.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
 		handleQueryError(c, err, "API: failed to query recent tasks")
 		return
 	}
-	if len(recentTasks) > 0 {
+	if canViewTasks && len(recentTasks) > 0 {
 		agentIDs := make([]string, 0, len(recentTasks))
 		for _, t := range recentTasks {
 			if t.AgentID != "" {
@@ -483,9 +477,6 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 	stats := gin.H{
 		"total_agents":             ac.Total,
 		"online_agents":            ac.Online,
-		"today_tasks":              tc.Today,
-		"pending_tasks":            tc.Pending,
-		"failed_tasks":             tc.Failed,
 		"total_tasks":              tc.Total,
 		"total_creds":              totalCreds,
 		"total_tokens":             totalTokens,
@@ -495,15 +486,22 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		"stale_count":              ac.Stale,
 		"offline_count":            ac.Offline,
 		"listener_count":           totalListeners,
-		"pending_count":            tc.Pending,
 		"online_users":             onlineUsers,
-		"completed_tasks":          tc.Completed,
 		"server_version":           ServerVersion,
 		"protocol_version":         protocol.CurrentProtocolVersion,
 		"protocol_compat_window":   s.protocolCompatWindow(),
 		"protocol_outdated_agents": outdatedAgents,
 		"protocol":                 s.protocolState(),
-		"recent_tasks":             recentTasks,
+		"recent_tasks":             tasksForOperator(c, recentTasks),
+	}
+	if canViewTasks {
+		stats["today_tasks"] = tc.Today
+		stats["pending_tasks"] = tc.Pending
+		stats["failed_tasks"] = tc.Failed
+		stats["pending_count"] = tc.Pending
+		stats["completed_tasks"] = tc.Completed
+	} else {
+		stats["tasks_redacted"] = true
 	}
 
 	respond(c, stats)

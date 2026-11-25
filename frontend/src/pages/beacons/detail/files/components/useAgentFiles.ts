@@ -63,6 +63,7 @@ export function useAgentFiles(agentId: string) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [transfers, setTransfers] = useState<TransferSession[]>([]);
+  const [transfersError, setTransfersError] = useState<string | null>(null);
   const [transferBusyId, setTransferBusyId] = useState<number | null>(null);
   const [pullName, setPullName] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState<TransferProgress | null>(null);
@@ -108,12 +109,13 @@ export function useAgentFiles(agentId: string) {
       // The server is authoritative after reloads: raw committed offsets only.
       const rows = await listTransfers(agentId);
       setTransfers((prev) => prev.length === 0 && rows.length === 0 ? prev : rows);
-    } catch {
+      setTransfersError(null);
+    } catch (err) {
       // Keep the last known sessions; a transient list failure is not a
       // transfer failure and must not render as an empty transfer list.
+      setTransfersError(errorText(t, err, () => t("common.load_failed")));
     }
-  }, [agentId]);
-
+  }, [agentId, t]);
   const loadDirectory = useCallback(
     async (path: string, opts?: { refresh?: boolean }) => {
       if (!agentId) return;
@@ -171,7 +173,7 @@ export function useAgentFiles(agentId: string) {
       const data = await api.get<{
         Agent?: { os?: string; OS?: string };
         agent?: { os?: string; OS?: string };
-      }>(`${paths.agents.one(agentId)}?format=json`);
+      }>(`${paths.agents.one(agentId)}/files?format=json`);
       const agentData = data.agent || data.Agent || {};
       const os = String(agentData.os || agentData.OS || "").toLowerCase();
       if (os.includes("linux") || os.includes("darwin") || os.includes("unix")) {
@@ -779,6 +781,7 @@ export function useAgentFiles(agentId: string) {
     uploading,
     pullName,
     transfers,
+    transfersError,
     transferBusyId,
     loadTransfers,
     pauseTransfer,

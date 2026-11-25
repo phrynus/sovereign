@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { copyTextAsync } from "@/lib/clipboard";
 import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { useInteractStore } from "@/lib/interact-store";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import type { Beacon } from "./types";
 import type { AgentConfirmType } from "./useAgentModals";
 import type { AgentMenuAction, AgentMenuPoint } from "./agent-menu-actions";
@@ -31,7 +32,8 @@ function toastQueued(t: TKey) {
 export function useAgentMenuAction(deps: MenuActionDeps) {
   const { t, navigate, setSelectedAgentId, setMenuPoint, openQuickSleep, openNotesEdit, setConfirm } = deps;
   const { toastError } = useErrorToast();
-
+  const { can, permissions } = usePermissions();
+  const canReadFiles = permissions == null || can("files.read");
   const handleMenuAction = useCallback((action: AgentMenuAction, point: AgentMenuPoint) => {
     const id = point.beacon.id || "";
     switch (action) {
@@ -74,7 +76,7 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         openNotesEdit(point.beacon);
         break;
       case "files":
-        navigate(`/beacons/${id}/files`);
+        if (canReadFiles) navigate(`/beacons/${id}/files`);
         break;
       case "tokens":
         navigate(`/beacons/${id}/token`);
@@ -97,13 +99,13 @@ export function useAgentMenuAction(deps: MenuActionDeps) {
         break;
     }
     setMenuPoint(null);
-  }, [t, openQuickSleep, openNotesEdit, navigate, setConfirm, setMenuPoint, setSelectedAgentId, toastError]);
+  }, [canReadFiles, t, openQuickSleep, openNotesEdit, navigate, setConfirm, setMenuPoint, setSelectedAgentId, toastError]);
 
   const handleQuickNav = useCallback((beacon: Beacon, view: "shell" | "files" | "screen") => {
     const id = beacon.id || "";
-    if (!id) return;
+    if (!id || (view === "files" && !canReadFiles)) return;
     navigate(`/beacons/${id}/${view}`);
-  }, [navigate]);
+  }, [canReadFiles, navigate]);
 
   return { handleMenuAction, handleQuickNav };
 }
