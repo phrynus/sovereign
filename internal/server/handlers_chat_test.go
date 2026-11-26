@@ -384,10 +384,10 @@ func TestApprovalChatUpsertAndTenantFanout(t *testing.T) {
 	taskID := uint(77)
 	summary := "task 77 | cred_check | host-1"
 	metadata := `{"task_id":77,"type":"cred_check"}`
-	if err := postSystemChat(f.s.db, 1, eng.ID, "approval", summary, &taskID, metadata); err != nil {
+	if _, err := postSystemChat(f.s.db, 1, eng.ID, "approval", summary, &taskID, metadata); err != nil {
 		t.Fatalf("post approval: %v", err)
 	}
-	if err := postSystemChat(f.s.db, 1, eng.ID, "approval", "changed-"+summary, &taskID, `{"task_id":77,"status":"approved"}`); err != nil {
+	if _, err := postSystemChat(f.s.db, 1, eng.ID, "approval", "changed-"+summary, &taskID, `{"task_id":77,"status":"approved"}`); err != nil {
 		t.Fatalf("repost approval: %v", err)
 	}
 	var approvals []db.ChatMessage
@@ -434,7 +434,8 @@ func TestApprovalChatUpsertAndTenantFanout(t *testing.T) {
 				t.Fatalf("frame decode: %v", err)
 			}
 			if decoded["type"] != "chat" || decoded["tenant_id"] != float64(1) ||
-				decoded["engagement_id"] != float64(eng.ID) || decoded["channel_slug"] != "system" {
+				decoded["engagement_id"] != float64(eng.ID) || decoded["channel_slug"] != "system" ||
+				decoded["id"] == nil || decoded["channel_id"] == nil || decoded["metadata"] == nil {
 				t.Fatalf("unexpected frame: %s", frame)
 			}
 			if !strings.Contains(fmt.Sprint(decoded["message"]), "engagement window warning") {

@@ -2,7 +2,7 @@ import { registerFragment, useI18n } from "@/lib/i18n";
 import { enChat } from "@/lib/i18n/fragments/en.chat";
 registerFragment(enChat);
 
-import { type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { MessageSquare } from "lucide-react";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ function MessageRow({
         <span className="font-medium text-foreground">{author}</span>
         <span>{formatTime(message.created_at)}</span>
         {isApproval && <span className="uppercase">{t("chat.approval")}</span>}
+        {message.pending && <span className="text-muted-foreground">{t("chat.sending")}</span>}
       </div>
       {/* Plain text only: chat messages are operator-authored data, never HTML
           or Markdown, and no sanitizer-dependent rendering is needed. */}
@@ -108,6 +109,31 @@ function ChannelButton({
 export default function ChatPage() {
   const { t } = useI18n();
   const chat = useChatWorkspace();
+  const transcriptRef = useRef<HTMLOListElement>(null);
+  const atBottomRef = useRef(true);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+
+  const scrollToBottom = useCallback(() => {
+    const transcript = transcriptRef.current;
+    atBottomRef.current = true;
+    setNewMessageCount(0);
+    if (transcript && typeof transcript.scrollTo === "function") {
+      transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
+    }
+  }, []);
+
+  useEffect(() => {
+    atBottomRef.current = true;
+    setNewMessageCount(0);
+  }, [chat.channelId, chat.search]);
+
+  useEffect(() => {
+    if (atBottomRef.current) {
+      scrollToBottom();
+    } else {
+      setNewMessageCount((n) => n + 1);
+    }
+  }, [chat.messages.length, scrollToBottom]);
   const { engagementId, channelId, activeChannel } = chat;
 
   const submitMessage = (event: FormEvent) => {
@@ -221,7 +247,12 @@ export default function ChatPage() {
               </>
             )}
           </div>
-          {!chat.connected && <p className="text-micro text-muted-foreground">{t("chat.loading")}</p>}
+          {!chat.connected && (
+            <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-warning/40 px-3 py-2 text-compact text-warning-ink">
+              <span>{chat.reconnectFailed ? t("chat.offline") : t("chat.reconnecting")}</span>
+              {chat.reconnectFailed && <Button size="sm" variant="outline" onClick={chat.reconnect}>{t("chat.reconnect")}</Button>}
+            </div>
+          )}
 
           <form onSubmit={submitSearch} className="flex flex-wrap gap-2">
             <Input
@@ -241,7 +272,25 @@ export default function ChatPage() {
             )}
           </form>
 
-          <ol className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto" aria-label={t("chat.title")}>
+          <ol
+            ref={transcriptRef}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              if (atBottomRef.current) setNewMessageCount(0);
+            }}
+            role="log"
+            aria-live="polite"
+            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto"
+            aria-label={t("chat.title")}
+          >
+            {newMessageCount > 0 && (
+              <li>
+                <Button size="sm" variant="outline" onClick={scrollToBottom}>
+                  {t("chat.new_messages", { count: newMessageCount })}
+                </Button>
+              </li>
+            )}
             {chat.nextBeforeId != null && (
               <li>
                 <Button size="sm" variant="ghost" onClick={() => void chat.loadOlder()}>

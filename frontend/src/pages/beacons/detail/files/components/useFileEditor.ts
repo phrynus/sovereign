@@ -31,9 +31,10 @@ export interface FileRevision {
 }
 
 interface Baseline {
-  taskId: number;
-  hash: string;
-  mtime: number;
+	taskId: number;
+	hash: string;
+	mtime: number;
+	size: number;
 }
 
 /**
@@ -45,7 +46,7 @@ export function useFileEditor(opts: { agentId: string; path: string; t: TFn }) {
   const { agentId, path, t } = opts;
   const [draft, setDraft] = useState("");
   const [original, setOriginal] = useState("");
-  const [baseline, setBaseline] = useState<Baseline>({ taskId: 0, hash: "", mtime: 0 });
+	const [baseline, setBaseline] = useState<Baseline>({ taskId: 0, hash: "", mtime: 0, size: 0 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
@@ -114,24 +115,27 @@ export function useFileEditor(opts: { agentId: string; path: string; t: TFn }) {
       const ack = await api.post(paths.agents.filesRead(agentId), { path }, { signal: ac.signal });
       const taskId = fileTaskId(ack);
       if (!taskId) throw new Error(t("agents.files_read_waiting"));
-      const status = await pollTask(agentId, taskId, { signal: ac.signal, timeoutMs: TASK_HARD_TIMEOUT_MS });
-      if (status.status === "failed") throw new Error(status.error || t("agents.files_read_failed"));
-      const editor = editorStatus(status);
-      let hash = editor.result_sha256 ?? "";
-      const mtime = editor.result_mtime ?? 0;
-      if (!hash) {
-        const rows = await loadHistory();
-        hash = rows.find((r) => r.task_id === taskId && r.sha256)?.sha256 ?? "";
-      }
-      if (!hash) throw new Error(t("agents.files_editor_baseline_missing"));
-      if (ac.signal.aborted) return null;
-      const content = status.status === "completed" ? status.result ?? "" : "";
-      if (new TextEncoder().encode(content).length > EDITOR_MAX_BYTES) {
-        throw new Error(t("agents.files_preview_too_large"));
-      }
-      applyBaseline({ taskId, hash, mtime }, options?.keepDraft ? undefined : content);
-      if (!options?.keepDraft) setRevisionText(null);
-      return { taskId, hash, mtime };
+		const status = await pollTask(agentId, taskId, { signal: ac.signal, timeoutMs: TASK_HARD_TIMEOUT_MS });
+		if (status.status === "failed") throw new Error(status.error || t("agents.files_read_failed"));
+		const content = status.status === "completed" ? status.result ?? "" : "";
+		let size = new TextEncoder().encode(content).length;
+		if (size > EDITOR_MAX_BYTES) {
+			throw new Error(t("agents.files_preview_too_large"));
+		}
+		const editor = editorStatus(status);
+		let hash = editor.result_sha256 ?? "";
+		const mtime = editor.result_mtime ?? 0;
+		if (!hash) {
+			const rows = await loadHistory();
+			const revision = rows.find((r) => r.task_id === taskId && r.sha256);
+			hash = revision?.sha256 ?? "";
+			size = revision?.size ?? size;
+		}
+		if (!hash) throw new Error(t("agents.files_editor_baseline_missing"));
+		if (ac.signal.aborted) return null;
+		applyBaseline({ taskId, hash, mtime, size }, options?.keepDraft ? undefined : content);
+		if (!options?.keepDraft) setRevisionText(null);
+		return { taskId, hash, mtime, size };
     } catch (err) {
       if (ac.signal.aborted) throw err;
       if (mountedRef.current) setError(errorText(t, err, () => t("agents.files_read_failed")));
@@ -151,6 +155,8 @@ export function useFileEditor(opts: { agentId: string; path: string; t: TFn }) {
     setError(null);
     setConflict(false);
     try {
+      const draftSize = new TextEncoder().encode(draftRef.current).length;
+      if (draftSize > EDITOR_MAX_BYTES) throw new Error(t("agents.files_editor_too_large", { max: "1 MiB" }));
       const content = utf8ToBase64(draftRef.current);
       const ack = await api.post(paths.agents.filesWrite(agentId), {
         path,
@@ -166,17 +172,22 @@ export function useFileEditor(opts: { agentId: string; path: string; t: TFn }) {
         throw new Error(status.error || t("agents.files_editor_save_failed"));
       }
       const editor = editorStatus(status);
-      let hash = editor.result_sha256 ?? "";
-      if (!hash) {
-        const rows = await loadHistory();
-        hash = rows.find((r) => r.task_id === taskId && r.sha256)?.sha256 ?? "";
-      }
-      if (ac.signal.aborted) return null;
-      const next: Baseline = {
-        taskId,
-        hash: hash || base.hash,
-        mtime: editor.result_mtime || base.mtime,
-      };
+		let hash = editor.result_sha256 ?? "";
+		let size = new TextEncoder().encode(draftRef.current).length;
+		if (!hash) {
+			const rows = await loadHistory();
+			const revision = rows.find((r) => r.task_id === taskId && r.sha256);
+			hash = revision?.sha256 ?? "";
+			size = revision?.size ?? size;
+		}
+		if (!hash) throw new Error(t("agents.files_editor_save_unverified"));
+		if (ac.signal.aborted) return null;
+		const next: Baseline = {
+			taskId,
+			hash,
+			mtime: editor.result_mtime ?? base.mtime,
+			size,
+		};
       applyBaseline(next);
       originalRef.current = draftRef.current;
       setOriginal(draftRef.current);
@@ -217,6 +228,7 @@ export function useFileEditor(opts: { agentId: string; path: string; t: TFn }) {
     baselineTaskId: baseline.taskId,
     baselineHash: baseline.hash,
     mtime: baseline.mtime,
+    size: baseline.size,
     revisions, revisionText,
     changeDraft, open, save, reload, overwrite, loadHistory, viewRevision,
     clearRevision: () => setRevisionText(null),

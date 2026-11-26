@@ -11,63 +11,44 @@ import (
 // branch threw away the ExecutionResult, so a script that failed on every event (a typo, a
 // permission the automation role lacks, a timeout) left no trace at all - the rule "ran", the event
 // was consumed, and the only symptom was whatever the script was supposed to do not happening.
-func TestAutomationScriptFailureIsLogged(t *testing.T) {
+func TestAutomationScriptFailureIsLoggedAndReturned(t *testing.T) {
 	s := mustTenantServer(t)
-
 	var logs bytes.Buffer
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(previous) })
-
-	// executeAction reports dispatch failures only; a script that fails at
-	// runtime is logged, not returned, so every call here must still succeed
-	// at dispatch. Asserting the nil pins that distinction: if a later change
-	// starts returning script errors, the log assertions below should be told
-	// to expect them.
-	execMust := func(action RuleAction, evt Event) {
+	run := func(action RuleAction, evt Event) error {
 		t.Helper()
-		if err := s.executeAction(AutomationRule{ID: "test"}, action, evt); err != nil {
-			t.Fatalf("executeAction(%s) dispatch failed: %v", action.Type, err)
-		}
+		return s.executeAction(AutomationRule{ID: "test"}, action, evt)
 	}
 
-	action := RuleAction{
-		Type:   ActionRunScript,
-		Params: []byte(`{"code":"throw new Error('boom')"}`),
+	err := run(RuleAction{Type: ActionRunScript, Params: []byte(`{"code":"throw new Error('boom')"}`)},
+		Event{Type: EventImplantCheckin, AgentID: "a-1", TenantID: 1})
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("failing script error = %v", err)
 	}
-	execMust(action, Event{Type: EventImplantCheckin, AgentID: "a-1", TenantID: 1})
-
 	out := logs.String()
-	if !strings.Contains(out, "script failed") {
-		t.Fatalf("a failing automation script left no log line; got %q", out)
-	}
-	if !strings.Contains(out, "boom") {
-		t.Fatalf("the log line does not carry the script error: %q", out)
-	}
-	if !strings.Contains(out, "a-1") {
-		t.Fatalf("the log line does not identify the agent: %q", out)
+	if !strings.Contains(out, "script failed") || !strings.Contains(out, "boom") || !strings.Contains(out, "a-1") {
+		t.Fatalf("failing automation script log is incomplete: %q", out)
 	}
 
-	// A rule that cannot act must say so too: skipping used to be indistinguishable from a rule
-	// that never matched.
 	logs.Reset()
-	execMust(RuleAction{Type: ActionCreateTask, Params: []byte(`{"type":"shell","command":"whoami"}`)},
+	err = run(RuleAction{Type: ActionCreateTask, Params: []byte(`{"type":"shell","command":"whoami"}`)},
 		Event{Type: EventImplantCheckin, TenantID: 1})
-	if !strings.Contains(logs.String(), "create_task skipped") {
-		t.Fatalf("a create_task action with no target was skipped silently: %q", logs.String())
+	if err == nil || !strings.Contains(err.Error(), "create_task") {
+		t.Fatalf("targetless create_task error = %v", err)
+	}
+	err = run(RuleAction{Type: ActionSetSleep, Params: []byte(`{"agent_id":"a-1","interval":0}`)},
+		Event{Type: EventImplantCheckin, AgentID: "a-1", TenantID: 1})
+	if err == nil || !strings.Contains(err.Error(), "set_sleep") {
+		t.Fatalf("invalid set_sleep error = %v", err)
 	}
 
 	logs.Reset()
-	execMust(RuleAction{Type: ActionSetSleep, Params: []byte(`{"agent_id":"a-1","interval":0}`)},
-		Event{Type: EventImplantCheckin, AgentID: "a-1", TenantID: 1})
-	if !strings.Contains(logs.String(), "set_sleep skipped") {
-		t.Fatalf("a set_sleep action with interval 0 was skipped silently: %q", logs.String())
+	if err := run(RuleAction{Type: ActionRunScript, Params: []byte(`{"code":"1 + 1"}`)},
+		Event{Type: EventImplantCheckin, AgentID: "a-1", TenantID: 1}); err != nil {
+		t.Fatalf("successful automation script returned error: %v", err)
 	}
-
-	// A successful run stays at debug level, so routine automation does not spam the log.
-	logs.Reset()
-	execMust(RuleAction{Type: ActionRunScript, Params: []byte(`{"code":"1 + 1"}`)},
-		Event{Type: EventImplantCheckin, AgentID: "a-1", TenantID: 1})
 	if !strings.Contains(logs.String(), "script ran") {
 		t.Fatalf("a successful automation script was not logged at debug: %q", logs.String())
 	}

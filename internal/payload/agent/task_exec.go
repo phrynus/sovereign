@@ -64,7 +64,12 @@ func workerLoop() {
 	for task := range taskQueue {
 		result := runTask(task)
 		if task.Key != "" {
-			applyTaskKeyEncryption(task.Key, &result)
+			if err := applyTaskKeyEncryption(task.Key, &result); err != nil {
+				result.Output = ""
+				result.Encoding = ""
+				result.EncryptedWithTaskKey = false
+				result.Error = "result encryption failed"
+			}
 		}
 		ensureResultID(&result)
 		enqueueResult(result)

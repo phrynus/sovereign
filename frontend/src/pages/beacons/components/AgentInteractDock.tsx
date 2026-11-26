@@ -200,10 +200,10 @@ export function AgentInteractDock({
         error: data.error ?? t.error,
         created_by: data.created_by || t.created_by,
       })));
-    } catch {
-      /* keep preview from the list / WS */
+    } catch (err) {
+      toastError(err, "agents.dock_task_detail_failed");
     }
-  }, [expandedId, id, tasksRedacted]);
+  }, [expandedId, id, tasksRedacted, toastError]);
 
   const expandedTask = useMemo(
     () => (tasksRedacted || expandedId == null ? undefined : tasks.find((t) => Number(t.id) === expandedId)),

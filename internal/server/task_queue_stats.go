@@ -58,12 +58,12 @@ func (s *Server) handleTaskQueueStats(c *gin.Context) {
 	}
 	query := s.tenantScope(s.db.WithContext(s.ctx).Model(&db.Task{}), c).
 		Select(`agent_id,
-			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+			SUM(CASE WHEN status IN ('pending', 'pending_approval') THEN 1 ELSE 0 END) AS pending,
 			SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running,
-			COALESCE(MAX(CASE WHEN status = 'pending'
+			COALESCE(MAX(CASE WHEN status IN ('pending', 'pending_approval')
 				THEN `+secondsSinceExpr(s.db, "?", "created_at")+` END), 0) AS oldest_age`,
 			now.UTC().Format("2006-01-02 15:04:05")).
-		Where("status IN ?", []string{"pending", "running"}).
+		Where("status IN ?", []string{"pending", TaskStatusPendingApproval, "running"}).
 		Group("agent_id")
 	if scopedByEngagement {
 		query = query.Where("agent_id IN ?", engagementAgents)

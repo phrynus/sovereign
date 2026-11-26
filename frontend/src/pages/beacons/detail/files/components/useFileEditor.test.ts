@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { api, pollTask } from "@/lib/api";
 import { useFileEditor } from "./useFileEditor";
+import { EDITOR_MAX_BYTES } from "@/lib/agent-files/file-task";
 
 vi.mock("@/lib/api", () => ({
   api: { get: vi.fn(), post: vi.fn(), postJson: vi.fn() },
@@ -44,6 +45,7 @@ describe("useFileEditor", () => {
     const { result } = editor();
     await act(async () => { await result.current.open(); });
     expect(result.current.baselineTaskId).toBe(READ_TASK);
+    expect(result.current.size).toBe(new TextEncoder().encode("old text").length);
     expect(result.current.baselineHash).toBe(HASH);
     expect(result.current.draft).toBe("old text");
     expect(result.current.dirty).toBe(false);
@@ -67,6 +69,31 @@ describe("useFileEditor", () => {
     expect((writeCall?.[1] as { content: string }).content).toBe(btoa("hello"));
     await waitFor(() => expect(result.current.dirty).toBe(false));
     expect(result.current.baselineTaskId).toBe(WRITE_TASK);
+  });
+
+  it("does not mark a write clean when no new hash can be verified", async () => {
+    const { result } = editor();
+    await act(async () => { await result.current.open(); });
+    act(() => result.current.changeDraft("unverified draft"));
+    vi.mocked(pollTask).mockImplementation(async (_agent, taskId) => {
+      if (taskId === READ_TASK) {
+        return { task_id: READ_TASK, status: "completed", result: "old text", result_sha256: HASH } as never;
+      }
+      return { task_id: WRITE_TASK, status: "completed", result: "" } as never;
+    });
+    await act(async () => { await expect(result.current.save()).rejects.toThrow("agents.files_editor_save_unverified"); });
+    expect(result.current.dirty).toBe(true);
+    expect(result.current.baselineTaskId).toBe(READ_TASK);
+    expect(result.current.draft).toBe("unverified draft");
+  });
+
+  it("rejects an oversized draft before queueing a write", async () => {
+    const { result } = editor();
+    await act(async () => { await result.current.open(); });
+    act(() => result.current.changeDraft("x".repeat(EDITOR_MAX_BYTES + 1)));
+    await act(async () => { await expect(result.current.save()).rejects.toThrow("agents.files_editor_too_large"); });
+    expect(vi.mocked(api.post).mock.calls.filter(([p]) => String(p).includes("/files/write"))).toHaveLength(0);
+    expect(result.current.dirty).toBe(true);
   });
 
   it("keeps the draft and flags conflict on file_conflict", async () => {

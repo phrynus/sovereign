@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { runTask, ApiError, formatThrownError } from "@/lib/api";
-import { paths } from "@/lib/api-paths";
+import { api, pollTask, ApiError, formatThrownError, type TaskStatus } from "@/lib/api";
 import { TASK_HARD_TIMEOUT_MS } from "@/lib/task-poll";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { copyText } from "@/lib/clipboard";
 import { getCompletions } from "@/lib/completions";
-import { highlightOutput } from "@/lib/highlight";
+import { paths } from "@/lib/api-paths";
+import { fetchTaskSpecs, formatCompletionList, getCompletions, type TaskSpecInfo } from "@/lib/completions";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,8 @@ import { Copy, Check, Eraser, TerminalSquare } from "lucide-react";
 import type { AgentStatus } from "@/types/agent";
 import { useI18n } from "@/lib/i18n";
 import { timeAgo } from "@/lib/utils";
+import { useWebSocket, type WSMessage } from "@/lib/useWebSocket";
+import { decodeShellOutput, isShellOutputFrame, shellWriteCommand } from "@/lib/shell-session";
 import {
   SHELL_FONT_KEY,
   SHELL_TERM_BG,
@@ -102,6 +105,16 @@ export default function ShellTerminal({
   const lastCommandRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef("");
+  const shellIDRef = useRef<string | null>(null);
+  const shellInputRef = useRef<(data: string) => Promise<unknown>>(async () => {});
+  const shellReadyRef = useRef(false);
+  const shellOutputBufferRef = useRef<WSMessage[]>([]);
+  const sessionStartRef = useRef<Promise<string> | null>(null);
+  const sessionGenerationRef = useRef(0);
+  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingWritesRef = useRef(0);
+  const [shellReady, setShellReady] = useState(false);
+  const interruptRef = useRef<() => void>(() => {});
   const tRef = useRef(t);
   tRef.current = t;
   const termCleanupRef = useRef<(() => void)>(() => {});
@@ -117,6 +130,130 @@ export default function ShellTerminal({
 
   const writePrompt = useCallback(() => termRef.current?.write(promptRef.current), []);
 
+  const appendShellOutput = useCallback((text: string) => {
+    if (!text) return;
+    const decoded = decodeShellWhitespace(text);
+    termRef.current?.write(decoded.replace(/\n/g, "\r\n"));
+    setLastOutput((previous) => (previous + decoded).slice(-256 * 1024));
+    const spoken = decoded.trim();
+    if (spoken) announce(spoken.slice(0, 500));
+  }, [announce]);
+
+  const flushShellOutput = useCallback((shellID: string) => {
+    const buffered = shellOutputBufferRef.current;
+    shellOutputBufferRef.current = [];
+    for (const frame of buffered) {
+      if (frame.shell_id !== shellID || typeof frame.data !== "string") continue;
+      appendShellOutput(decodeShellOutput(frame.data, frame.encoding));
+    }
+  }, [appendShellOutput]);
+
+  const queueShellTask = useCallback(async (
+    type: "interactive_shell_start" | "interactive_shell_write" | "interactive_shell_stop",
+    command: string,
+    signal?: AbortSignal,
+  ): Promise<TaskStatus> => {
+    const queued = await api.postJson<{ id?: number }>("paths.tasks.create", {
+      agent_id: agentId,
+      type,
+      command,
+    }, { signal });
+    if (!queued.id) throw new Error("Failed to queue interactive shell task");
+    return pollTask(agentId, queued.id, {
+      timeoutMs: TASK_HARD_TIMEOUT_MS,
+      signal,
+      onSoftTimeout: () => writeln(tRef.current("shell.still_running"), "90"),
+    });
+  }, [agentId, writeln]);
+
+  const sendShellInput = useCallback((data: string) => {
+    const shellID = shellIDRef.current;
+    if (!shellID) return Promise.resolve();
+    pendingWritesRef.current += 1;
+    setLoading(true);
+    const delivery = writeChainRef.current.then(async () => {
+      const result = await queueShellTask("interactive_shell_write", shellWriteCommand(shellID, data));
+      if (result.status === "failed") {
+        throw new Error(operatorErrorText(result.error, tRef.current("shell.command_failed")));
+      }
+    });
+    writeChainRef.current = delivery.catch(() => {});
+    return delivery.finally(() => {
+      pendingWritesRef.current -= 1;
+      if (pendingWritesRef.current === 0) setLoading(false);
+    });
+  }, [queueShellTask]);
+
+  const ensureShellSession = useCallback(async (): Promise<string> => {
+    if (shellIDRef.current) return shellIDRef.current;
+    if (sessionStartRef.current) return sessionStartRef.current;
+    const generation = sessionGenerationRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoading(true);
+    const start = (async () => {
+      try {
+        const result = await queueShellTask("interactive_shell_start", interpreterRef.current, controller.signal);
+        if (result.status !== "completed") {
+          throw new Error(operatorErrorText(result.status === "failed" ? result.error : result.status, tRef.current("shell.command_failed")));
+        }
+        const shellID = result.result.trim();
+        if (!shellID || generation !== sessionGenerationRef.current) throw new Error("Interactive shell session closed while starting");
+        shellIDRef.current = shellID;
+        shellReadyRef.current = true;
+        flushShellOutput(shellID);
+        setShellReady(true);
+        return shellID;
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+        setLoading(false);
+      }
+    })();
+    sessionStartRef.current = start;
+    try {
+      return await start;
+    } finally {
+      if (sessionStartRef.current === start) sessionStartRef.current = null;
+    }
+  }, [queueShellTask, flushShellOutput]);
+
+  const interruptShell = useCallback(() => {
+    if (shellIDRef.current) {
+      termRef.current?.writeln("^C");
+      void sendShellInput("\x03").catch((error) => {
+        writeln(`✕ ${formatThrownError(error)}`, "31");
+      });
+      return;
+    }
+    abortRef.current?.abort();
+    abortRef.current = null;
+    termRef.current?.writeln("^C");
+    setLoading(false);
+    inputRef.current = "";
+    writePromptRef.current();
+  }, [sendShellInput, writeln]);
+
+  useEffect(() => { interruptRef.current = interruptShell; }, [interruptShell]);
+
+  useWebSocket((msg) => {
+    if (msg.type !== "shell_output" || msg.agent_id !== agentId || typeof msg.data !== "string" || typeof msg.shell_id !== "string") return;
+    if (!shellIDRef.current) {
+      shellOutputBufferRef.current.push(msg);
+      if (shellOutputBufferRef.current.length > 64) shellOutputBufferRef.current.shift();
+      return;
+    }
+    if (!isShellOutputFrame(msg, agentId, shellIDRef.current)) return;
+    const output = decodeShellOutput(msg.data, msg.encoding);
+    appendShellOutput(output);
+    if (output.includes("[shell exited]")) {
+      shellIDRef.current = null;
+      shellReadyRef.current = false;
+      setShellReady(false);
+      writePromptRef.current();
+    }
+  });
+
+  useEffect(() => { shellInputRef.current = sendShellInput; }, [sendShellInput]);
   const executeCommand = useCallback(
     async (cmd: string) => {
       if (!cmd.trim() || loadingRef.current || !agentId) return;
@@ -129,71 +266,26 @@ export default function ShellTerminal({
         writePrompt();
         return;
       }
-      abortRef.current?.abort();
-      const ac = new AbortController();
-      abortRef.current = ac;
       loadingRef.current = true;
       setLoading(true);
       lastCommandRef.current = cmd;
-      let rendered = 0;
-      let fullOut = "";
-      const appendOutput = (text: string, announceText: string) => {
-        text = decodeShellWhitespace(text);
-        if (text.length <= rendered) return;
-        const fresh = text.slice(rendered);
-        rendered = text.length;
-        fullOut += fresh;
-        const highlighted = highlightOutput(fresh, lastCommandRef.current);
-        termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
-        if (announceText) announce(announceText);
-      };
       try {
-        const st = await runTask(
-          agentId,
-          paths.agents.command(agentId),
-          {
-            method: "postJson",
-            body: { command: cmd, shell: interpreterRef.current },
-            checkOnline: true,
-            // Hard deadline matches the server sweep; the soft hint below
-            // replaces the old 60s false-timeout that invited double-execution.
-            timeoutMs: TASK_HARD_TIMEOUT_MS,
-            signal: ac.signal,
-            onStatus: (s) => {
-              if (s.result) appendOutput(s.result, "");
-            },
-            onSoftTimeout: () => {
-              writeln(tRef.current("shell.still_running"), "90");
-            },
-          },
-        );
-        if (st.status === "failed") {
-          const msg = operatorErrorText(st.error, tRef.current("shell.command_failed"));
-          writeln(`✕ ${msg}`, "31");
-          setLastOutput(fullOut || msg);
-        } else if (st.result) {
-          appendOutput(st.result, st.result);
-          if (!st.result.endsWith("\n")) termRef.current?.write("\r\n");
-          setLastOutput(st.result);
-        } else {
-          writeln(tRef.current("shell.no_output"), "90");
-          setLastOutput("");
-        }
-      } catch (e) {
-        if (!ac.signal.aborted) {
-          const raw = e instanceof ApiError && e.status === 409 ? e.message : formatThrownError(e);
-          writeln(`✕ ${operatorErrorText(raw, tRef.current("shell.command_failed"))}`, e instanceof ApiError && e.status === 409 ? "33" : "31");
-        }
+        await ensureShellSession();
+        await sendShellInput(`${cmd}\r\n`);
+        termRef.current?.focus();
+      } catch (error) {
+        const raw = error instanceof ApiError && error.status === 409 ? error.message : formatThrownError(error);
+        writeln(`✕ ${operatorErrorText(raw, tRef.current("shell.command_failed"))}`, error instanceof ApiError && error.status === 409 ? "33" : "31");
+        shellIDRef.current = null;
+        shellReadyRef.current = false;
+        setShellReady(false);
+        writePrompt();
       } finally {
         loadingRef.current = false;
         setLoading(false);
-        if (!ac.signal.aborted) {
-          writePrompt();
-          termRef.current?.focus();
-        }
       }
     },
-    [agentId, writeln, writePrompt, announce],
+    [agentId, ensureShellSession, sendShellInput, writeln, writePrompt],
   );
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
@@ -248,15 +340,11 @@ export default function ShellTerminal({
         const termInst = term;
         if (!termInst) return;
         if (data === "\x03") {
-          if (abortRef.current) {
-            abortRef.current.abort();
-            abortRef.current = null;
-          }
-          termInst.writeln("^C");
-          loadingRef.current = false;
-          setLoading(false);
-          inputRef.current = "";
-          writePromptRef.current();
+          interruptRef.current();
+          return;
+        }
+        if (shellReadyRef.current && (data === "\x04" || data === "\x1a")) {
+          void shellInputRef.current(data).catch((error) => termInst.writeln(`✕ ${formatThrownError(error)}`));
           return;
         }
         if (loadingRef.current) return;
@@ -355,10 +443,21 @@ export default function ShellTerminal({
     };
 
     initTerminal().catch((err) => {
-      if (!disposed) termRef.current?.writeln(`\x1b[31m${tRef.current("shell.init_failed", { error: String(err) })}\x1b[0m`);
+      toast.error(tRef.current("shell.init_failed", { error: String(err) }));
     });
 
     return () => {
+      sessionGenerationRef.current += 1;
+      const shellID = shellIDRef.current;
+      shellIDRef.current = null;
+      shellReadyRef.current = false;
+      if (shellID) {
+        void api.postJson(paths.tasks.create, {
+          agent_id: agentId,
+          type: "interactive_shell_stop",
+          command: shellID,
+        }).catch((err) => toast.error(tRef.current("shell.stop_failed", { error: String(err) })));
+      }
       disposed = true;
       abortRef.current?.abort();
       abortRef.current = null;
@@ -417,6 +516,23 @@ export default function ShellTerminal({
     termRef.current?.focus();
   };
 
+  const changeInterpreter = (value: string | null) => {
+    if (!value || value === interpreter) return;
+    const shellID = shellIDRef.current;
+    sessionGenerationRef.current += 1;
+    shellIDRef.current = null;
+    shellReadyRef.current = false;
+    setShellReady(false);
+    if (shellID) {
+      void api.postJson(paths.tasks.create, {
+        agent_id: agentId,
+        type: "interactive_shell_stop",
+        command: shellID,
+      }).catch((err) => toast.error(tRef.current("shell.stop_failed", { error: String(err) })));
+    }
+    setInterpreter(value);
+    writePromptRef.current();
+  };
   const iconBtn = "size-7 text-slate-300 hover:bg-white/10 hover:text-white";
 
   return (
@@ -424,7 +540,7 @@ export default function ShellTerminal({
       <div className="flex shrink-0 items-center gap-1.5 overscroll-contain overflow-x-auto border-b border-white/10 px-2 py-1.5 scrollbar-thin">
         <TerminalSquare className="size-3.5 shrink-0 text-sky-400/80" aria-hidden />
         <span className="sr-only">{t("shell.title")}</span>
-        <Select value={interpreter} onValueChange={(v) => { if (v) setInterpreter(v); }}>
+        <Select value={interpreter} onValueChange={changeInterpreter}>
           <SelectTrigger className="h-7 w-[9rem] shrink-0 border-white/10 bg-white/5 font-mono text-xs text-slate-200" aria-label={t("shell.interpreter")}>
             <SelectValue />
           </SelectTrigger>
@@ -538,7 +654,7 @@ export default function ShellTerminal({
               <span className="text-sky-300">{t("shell.waiting_output")}</span>
             </>
           ) : (
-            <span className="truncate">{t("shell.session_hint")} · {t("shell.footer_shortcuts", { exitKey: osType === "linux" ? "Ctrl+D" : "Ctrl+Z" })}</span>
+            <span className="truncate">{shellReady ? t("shell.session_active") : t("shell.session_hint")} · {t("shell.footer_shortcuts", { exitKey: osType === "linux" ? "Ctrl+D" : "Ctrl+Z" })}</span>
           )}
         </span>
         <span className="shrink-0">{t("shell.font_label", { size: fontSize })}</span>

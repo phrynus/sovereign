@@ -17,6 +17,7 @@ import (
 func TestCreateTaskEncryptsSensitiveCommandAtRest(t *testing.T) {
 	crypto.InitLootEncryption(testStorageKeyHex)
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-enc")
 
 	task, err := s.createTask("agent-enc", "password_spray", "P@ssw0rd!|CORP||0", "", "", "jsmith", 0, 0)
 	if err != nil {
@@ -62,6 +63,7 @@ func TestCreateTaskEncryptsSensitiveCommandAtRest(t *testing.T) {
 func TestCreateTaskTokenMakeShellEncryptedAtRest(t *testing.T) {
 	crypto.InitLootEncryption(testStorageKeyHex)
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "agent-enc")
 
 	task, err := s.createTask("agent-enc", "token_make", "CORP\\jsmith", "S3cretP@ss!", "2", "", 0, 0)
 	if err != nil {

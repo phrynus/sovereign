@@ -231,15 +231,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         // checked from JS. An expired session is detected via the HTTP layer
         // (handleUnauthorized / probeSessionExpiry below) instead of redirecting
         // on every transient disconnect.
-        // Auth close codes mean the session is already dead: probe now instead
-        // of burning through ~10min of exponential backoff on a fake-live page.
-        // A reconnect is still scheduled (reset backoff) in case the probe
-        // finds the session alive.
+        // Auth close codes mean the session may already be dead: probe now
+        // instead of burning through backoff on a fake-live page. The probe
+        // redirects an expired session; a live session keeps the normal
+        // capped/jittered retry path below.
         if (event.code === 4401 || event.code === 1008) {
-          reconnectAttemptRef.current = 0;
           probeSessionExpiry();
-          reconnectRef.current = setTimeout(connect, 1000);
-          return;
         }
         // Abnormal closure (backend gone OR session dead server-side OR the
         // endpoint is absent): probe now instead of only after the ~10min
@@ -253,9 +250,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           // Two consecutive such failures are enough to stop the fast retry
           // loop and show Offline immediately instead of "Reconnecting..."
           // for the whole backoff. A backend restart fails the health probe
-          // too and keeps the fast retry.
           void probeHealth().then((up) => {
-            if (disposed || up === false) {
+            if (disposed || wsRef.current !== ws || up === false) {
               if (up === false) backendUpFailuresRef.current = 0;
               return;
             }
@@ -263,7 +259,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             if (backendUpFailuresRef.current < 2) return;
             setReconnectFailed(true);
             reconnectAttemptRef.current = 0;
-            if (reconnectRef.current) clearTimeout(reconnectRef.current);
+            clearTimeout(reconnectRef.current ?? undefined);
             reconnectRef.current = setTimeout(connect, BACKGROUND_RETRY_DELAY_MS);
           });
         }

@@ -7,8 +7,9 @@ built with mingw-w64. No Go toolchain, no runtime, ~660KB release binary
 ## Status: working prototype, E2E verified
 
 - v3 registration + ECDH session + AES-GCM encrypted beacons against the
-  live server (`/api/v1/beacon`), seq persistence + handshake recovery,
-  requeue on failure, resync fast-forward
+  requeue on failure, encrypted crash-recovery result spool, task ACKs,
+  bounded asynchronous execution queue with `task_capacity`, redelivery
+  dedupe, resync fast-forward
 - Tasks: shell, hostinfo/recon, file ops (upload/download/mkdir/rename/
   delete/chmod), download_url, **set_sleep**, **wechat_history**,
   system management (services, reg_get/reg_set/reg_delete, killproc,

@@ -201,7 +201,7 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 		// everyone else (offline, sleeping, future registrations).
 		var agents []db.Implant
 		dispatched, skipped := 0, 0
-		if err := s.db.Select("id", "tenant_id", "public_ip", "ip").Find(&agents).Error; err == nil {
+		if err := s.db.Select(dispatchAgentColumns).Find(&agents).Error; err == nil {
 			dispatched, skipped = s.dispatchFleetUninstall(agents)
 		}
 		s.LogAuditRecord(c, "kill_switch_arm", "security", user.Username,

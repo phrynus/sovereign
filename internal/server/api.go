@@ -1,10 +1,10 @@
 package server
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,21 +35,17 @@ func computeTaskStats(database *gorm.DB, ids []string) map[string]*db.TaskStats 
 		Count   int
 	}
 	var rows []row
-	database.Raw(
-		"SELECT agent_id, status, COUNT(*) as count FROM tasks WHERE agent_id IN ? GROUP BY agent_id, status",
-		ids,
-	).Scan(&rows)
-
+	database.Raw("SELECT agent_id, status, COUNT(*) as count FROM tasks WHERE agent_id IN ? GROUP BY agent_id, status", ids).Scan(&rows)
 	out := make(map[string]*db.TaskStats, len(ids))
 	for _, r := range rows {
-		ts, ok := out[r.AgentID]
-		if !ok {
+		ts := out[r.AgentID]
+		if ts == nil {
 			ts = &db.TaskStats{}
 			out[r.AgentID] = ts
 		}
 		switch r.Status {
-		case "pending":
-			ts.Pending = r.Count
+		case "pending", TaskStatusPendingApproval:
+			ts.Pending += r.Count
 		case "running":
 			ts.Running = r.Count
 		case "completed":
@@ -184,23 +180,29 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		EncryptResult    bool                 `json:"encrypt_result"`
 		CredentialID     *uint                `json:"credential_id,omitempty"`
 		CredentialParams CredentialTaskParams `json:"credential_params,omitempty"`
+		IdempotencyKey   string               `json:"idempotency_key,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	headerKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if idempotencyKey != "" && headerKey != "" && idempotencyKey != headerKey {
+		respondError(c, http.StatusBadRequest, "body and Idempotency-Key header disagree")
+		return
+	}
+	if idempotencyKey == "" {
+		idempotencyKey = headerKey
+	}
+
 	if !IsKnownTaskType(req.Type) && !protocol.ValidTaskType(req.Type) {
 		respondError(c, http.StatusBadRequest, "unknown task type: "+req.Type)
 		return
 	}
-
-	// Path/Data are optional but required by some types (rename/chmod need
-	// data). A missing mandatory parameter is a client error: answer 400 with
-	// the parameter name instead of an opaque 500.
-	// The agent id comes from the REQUEST BODY, and createTask does not scope by tenant
-	// (background callers have no gin context). Without this check a tenant-1 API client
-	// could queue a task on a tenant-2 implant merely by knowing its id.
+	// The agent id comes from the request body while createTask also serves
+	// background callers without a gin context. Resolve tenant visibility here.
 	if _, ok := s.getAgentOrFail(c, req.AgentID); !ok {
 		return
 	}
@@ -214,36 +216,34 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 			return
 		}
 	}
-	opts := callerOpts(c)
+	var taskKey string
+	if req.EncryptResult {
+		var err error
+		taskKey, err = generateTaskKey()
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to generate task result key")
+			return
+		}
+	}
+	opts := append(callerOpts(c), WithIdempotencyKey(idempotencyKey), withResultEncryption(req.EncryptResult), withTaskKey(taskKey))
 	if req.CredentialID != nil {
 		opts = append(opts, WithCredentialReference(*req.CredentialID, req.CredentialParams))
 	}
 	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, req.Path, req.Data, 0, 0, opts...)
 	if err != nil {
-		var reqErr *taskRequestError
-		if errors.As(err, &reqErr) {
-			respondError(c, http.StatusBadRequest, reqErr.Error())
-			return
-		}
-		slog.Error("Task creation failed", "agent_id", req.AgentID, "type", req.Type, "err", err)
-		respondError(c, http.StatusInternalServerError, "task creation failed")
+		respondTaskError(c, err)
+		return
+	}
+	if task.IdempotentReplay {
+		respond(c, taskForOperator(c, *task))
 		return
 	}
 	s.auditTaskCreation(c, task)
 
-	// Per-task result encryption (P2): mint a per-task AES-256-GCM key, store it
-	// on the task row, and the agent will seal this task's result with it.
-	if req.EncryptResult {
-		if k, kerr := generateTaskKey(); kerr == nil {
-			if uerr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Update("task_key", k).Error; uerr == nil {
-				task.TaskKey = k
-			}
-		}
-	}
 
 	s.broadcastTaskUpdate(req.AgentID, *task)
 	slog.Info("Task created via API", "task_id", task.ID, "agent_id", task.AgentID, "type", task.Type)
-	respond(c, task)
+	respond(c, taskForOperator(c, *task))
 }
 
 // ── REST API: Credentials ──
@@ -581,8 +581,8 @@ func (s *Server) apiHealth(c *gin.Context) {
 		}
 	}
 
-	// Backup freshness: an operator (or monitor) should be able to see that the
-	// last snapshot is stale without shelling into the box.
+	// Backup freshness and restore evidence are separate signals: producing a
+	// dump is not proof that it can be loaded into a disposable database.
 	if s != nil && s.backupManager != nil {
 		bh := s.backupManager.Health()
 		health["backup"] = gin.H{
@@ -593,7 +593,7 @@ func (s *Server) apiHealth(c *gin.Context) {
 			"last_error":   bh.LastError,
 		}
 	} else {
-		health["backup"] = gin.H{"enabled": false}
+		health["backup"] = gin.H{"enabled": false, "checkpoint_ready": false}
 	}
 
 	// Audit backlog: the async queue is bounded and non-blocking; operators can

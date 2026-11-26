@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   postJson: vi.fn(),
   post: vi.fn(),
-  ws: { connected: false },
+  ws: { connected: false, reconnectFailed: false },
+  reconnect: vi.fn(),
   chatFrame: undefined as undefined | ((event: Record<string, unknown>) => void),
 }));
 
@@ -24,10 +25,10 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/useWebSocket", () => ({
   useWebSocket: () => ({
     connected: mocks.ws.connected,
-    reconnectFailed: false,
+    reconnectFailed: mocks.ws.reconnectFailed,
     demoMode: false,
     subscribe: () => () => {},
-    reconnect: vi.fn(),
+    reconnect: mocks.reconnect,
   }),
 }));
 
@@ -105,6 +106,7 @@ describe("ChatPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.ws.connected = false;
+    mocks.ws.reconnectFailed = false;
     mocks.chatFrame = undefined;
     installApi();
   });
@@ -118,6 +120,7 @@ describe("ChatPage", () => {
     expect(await screen.findByText("alpha message")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Alpha Ops/ }).getAttribute("aria-current")).toBe("true");
     expect(screen.getByRole("button", { name: /Approvals/ })).toBeTruthy();
+    expect(screen.getByRole("log", { name: "chat.title" })).toBeTruthy();
   });
 
   it("clears the old transcript when the engagement or channel changes", async () => {
@@ -159,6 +162,28 @@ describe("ChatPage", () => {
     expect(screen.queryByText("foreign message")).toBeNull();
     await waitFor(() => expect(screen.getAllByText("alpha message")).toHaveLength(1));
   });
+  it("renders live approval cards with their server identity", async () => {
+    render(<ChatPage />);
+    expect(await screen.findByText("alpha message")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Approvals/ }));
+    expect(await screen.findByText("approvals message")).toBeTruthy();
+    act(() => {
+      mocks.chatFrame?.({
+        type: "chat", id: 78, engagement_id: 1, channel_id: 11, username: "system",
+        message: "task 78 awaits approval", kind: "approval", task_id: 78, metadata: "{}",
+      });
+    });
+    expect(await screen.findByTestId("approval-78")).toBeTruthy();
+  });
+
+  it("offers a manual reconnect when live chat is offline", async () => {
+    mocks.ws.reconnectFailed = true;
+    render(<ChatPage />);
+    expect(await screen.findByText("chat.offline")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "chat.reconnect" }));
+    expect(mocks.reconnect).toHaveBeenCalledTimes(1);
+  });
+
 
   it("calls the existing task approve and reject endpoints from approval cards", async () => {
     render(<ChatPage />);
@@ -180,6 +205,56 @@ describe("ChatPage", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "chat.search_placeholder" }), { target: { value: "needle" } });
     fireEvent.click(screen.getByRole("button", { name: "chat.search" }));
     await waitFor(() => expect(mocks.get.mock.calls.some((call) => String(call[0]).includes("q=needle"))).toBe(true));
+  });
+
+  it("shows an optimistic message and restores the draft when sending fails", async () => {
+    const { promise: pendingSend, reject: rejectSend } = Promise.withResolvers<unknown>();
+    mocks.postJson.mockImplementation((path: string) => path === "/chat/send" ? pendingSend : Promise.resolve({}));
+    render(<ChatPage />);
+    expect(await screen.findByText("alpha message")).toBeTruthy();
+    const composer = screen.getByRole("textbox", { name: "chat.message_placeholder" });
+    fireEvent.change(composer, { target: { value: "retry me" } });
+    fireEvent.click(screen.getByRole("button", { name: "chat.send" }));
+    expect(await screen.findByText("retry me")).toBeTruthy();
+    expect(composer).toHaveProperty("value", "");
+
+    act(() => rejectSend(new Error("network down")));
+    expect((await screen.findByRole("alert")).textContent).toContain("network down");
+    expect(screen.queryByText("retry me", { selector: "p" })).toBeNull();
+    expect(composer).toHaveProperty("value", "retry me");
+  });
+
+  it("counts a live message in another channel once", async () => {
+    render(<ChatPage />);
+    expect(await screen.findByText("alpha message")).toBeTruthy();
+    const frame = { type: "chat", id: 12, engagement_id: 1, channel_id: 11, username: "operator", message: "approval update", kind: "user" };
+    act(() => {
+      mocks.chatFrame?.(frame);
+      mocks.chatFrame?.(frame);
+    });
+    const approvals = screen.getByRole("button", { name: /Approvals/ });
+    expect(approvals.textContent).toContain("1 chat.unread");
+    expect(screen.queryByText("approval update")).toBeNull();
+  });
+
+  it("keeps a websocket-confirmed send when the HTTP response is lost", async () => {
+    const { promise: pendingSend, reject: rejectSend } = Promise.withResolvers<unknown>();
+    mocks.postJson.mockImplementation((path: string) => path === "/chat/send" ? pendingSend : Promise.resolve({}));
+    render(<ChatPage />);
+    expect(await screen.findByText("alpha message")).toBeTruthy();
+    const composer = screen.getByRole("textbox", { name: "chat.message_placeholder" });
+    fireEvent.change(composer, { target: { value: "confirmed once" } });
+    fireEvent.click(screen.getByRole("button", { name: "chat.send" }));
+    act(() => {
+      mocks.chatFrame?.({
+        type: "chat", id: 40, engagement_id: 1, channel_id: 10, username: "operator",
+        message: "confirmed once", kind: "user",
+      });
+      rejectSend(new Error("response lost"));
+    });
+    await waitFor(() => expect(screen.getAllByText("confirmed once")).toHaveLength(1));
+    expect(composer).toHaveProperty("value", "");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("sends plain text and exposes channel controls", async () => {

@@ -3,6 +3,9 @@ package server
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -252,25 +255,27 @@ func (s *Server) handleDBBackupList(c *gin.Context) {
 	respond(c, backups)
 }
 
-// requireSQLiteDB rejects SQLite-only maintenance endpoints when the server
-// runs on another driver, so operators get an explicit reason instead of an
-// opaque SQL failure (or a restore that silently writes an unreadable file).
+// requireSQLiteDB rejects maintenance operations that still rely on SQLite's
+// on-disk file format. PostgreSQL backup/restore have their own logical paths.
+var errSQLiteOnlyMaintenance = errors.New("this maintenance operation is SQLite only")
+
 func (s *Server) requireSQLiteDB(c *gin.Context) bool {
 	if isSQLiteDB(s.db) {
 		return true
 	}
-	driver := "unknown"
-	if s.db != nil && s.db.Dialector != nil {
-		driver = s.db.Dialector.Name()
-	}
+	driver := databaseDriver(s.db)
 	slog.Warn("SQLite-only maintenance endpoint refused", "endpoint", c.Request.URL.Path, "driver", driver)
-	s.LogAuditRecord(c, "db_maintenance_unsupported", "system", "", "driver="+driver, false, errNonSQLiteBackup)
-	respondError(c, http.StatusNotImplemented, errNonSQLiteBackup.Error())
+	s.LogAuditRecord(c, "db_maintenance_unsupported", "system", "", "driver="+driver, false, errSQLiteOnlyMaintenance)
+	respondError(c, http.StatusNotImplemented, errSQLiteOnlyMaintenance.Error())
 	return false
 }
 
 func (s *Server) handleDBBackup(c *gin.Context) {
 	if !s.requireOperator(c) {
+		return
+	}
+	if databaseDriver(s.db) == "postgres" {
+		s.handlePostgresBackup(c)
 		return
 	}
 	if !s.requireSQLiteDB(c) {
@@ -296,13 +301,27 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "encrypted backups unavailable: set crypto.backup_key (64 hex chars), or pass ?encrypt=false for an explicit plaintext snapshot")
 		return
 	}
+	s.createEncryptedBackupResponse(c)
+}
+
+func (s *Server) handlePostgresBackup(c *gin.Context) {
+	if c.Query("encrypt") == "false" {
+		respondError(c, http.StatusBadRequest, "plaintext PostgreSQL backups are not supported; use an encrypted .fbk backup")
+		return
+	}
+	if s.backupManager == nil {
+		respondError(c, http.StatusInternalServerError, "encrypted PostgreSQL backups unavailable: set crypto.backup_key (64 hex chars)")
+		return
+	}
+	s.createEncryptedBackupResponse(c)
+}
+
+func (s *Server) createEncryptedBackupResponse(c *gin.Context) {
 	name, size, err := s.backupManager.createBackup()
 	s.backupManager.noteBackupResult(err)
 	if err != nil {
-		if s.metrics != nil {
-			if s.metrics.BackupFailuresTotal != nil {
-				s.metrics.BackupFailuresTotal.Inc()
-			}
+		if s.metrics != nil && s.metrics.BackupFailuresTotal != nil {
+			s.metrics.BackupFailuresTotal.Inc()
 		}
 		slog.Error("Failed to create encrypted backup", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create backup")
@@ -313,11 +332,7 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 	}
 	slog.Info("Database backup created", "file", name, "size", size)
 	s.LogAuditRecord(c, "db_backup", "system", "", "encrypted database backup "+name, true, nil)
-	respond(c, backupEntry{
-		Name:    name,
-		Size:    size,
-		ModTime: time.Now().UTC().Format(time.RFC3339),
-	})
+	respond(c, backupEntry{Name: name, Size: size, ModTime: time.Now().UTC().Format(time.RFC3339)})
 }
 
 // handleDBBackupPlaintext is the explicit plaintext opt-out (?encrypt=false).
@@ -361,18 +376,23 @@ func (s *Server) handleDBRestore(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
+	restoreType := c.PostForm("type")
+	if restoreType != "upload" && restoreType != "file" {
+		respondError(c, http.StatusBadRequest, "restore type must be 'upload' or 'file'")
+		return
+	}
+	if databaseDriver(s.db) == "postgres" {
+		s.handlePostgresRestore(c, restoreType)
+		return
+	}
 	if !s.requireSQLiteDB(c) {
 		return
 	}
-	restoreType := c.PostForm("type")
-
 	switch restoreType {
 	case "upload":
 		s.handleRestoreFromUpload(c)
 	case "file":
 		s.handleRestoreFromFile(c)
-	default:
-		respondError(c, http.StatusBadRequest, "restore type must be 'upload' or 'file'")
 	}
 }
 

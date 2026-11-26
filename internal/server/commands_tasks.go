@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
@@ -101,40 +100,22 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 	// be queued and the agent may still execute ("already_executing").
 	outcome := "cancelled"
 	if wasRunning {
-		// Abort injection uses reserved headroom past the normal cap: a full
-		// backlog must not block the recall of a running task.
-		if err := s.trackPendingTaskReserved(agentID, AbortReserveSlots); err != nil {
-			slog.Warn("Abort task skipped: agent pending queue full", "agent_id", agentID, "original_task", taskID)
+		// Abort uses reserved headroom and the same emergency dispatch gate
+		// as engagement-close and fleet-stop aborts. createTask owns the
+		// capacity reservation, tenant inheritance and running claim state.
+		abortTask, createErr := s.createTask(agentID, "abort", fmt.Sprintf("%d", taskID), "", "", "", 0, 0,
+			withEmergencyAbortReservation(),
+			withSystemTaskMetadata("running", c.GetString("user")))
+		if createErr != nil {
+			slog.Warn("Abort task skipped", "agent_id", agentID, "original_task", taskID, "err", createErr)
 			outcome = "already_executing"
 		} else {
-			abortTask := db.Task{
-				AgentID:   agentID,
-				Type:      "abort",
-				Command:   fmt.Sprintf("%d", taskID),
-				Status:    "pending",
-				Priority:  3,
-				ClaimedBy: agentID,
-				ClaimedAt: time.Now(),
-				CreatedBy: c.GetString("user"),
+			if s.metrics != nil {
+				s.metrics.TasksTotal.Inc()
 			}
-			// Same tenant inheritance as createTask: without it
-			// tenant-scoped single-task reads 404 on the abort row.
-			var ag db.Implant
-			if err := s.db.Select("tenant_id").Where("id = ?", agentID).First(&ag).Error; err == nil {
-				abortTask.TenantID = ag.TenantID
-			}
-			if err := s.db.Create(&abortTask).Error; err != nil {
-				s.decPendingTasks(agentID)
-				slog.Error("Failed to inject abort task", "agent_id", agentID, "original_task", taskID, "err", err)
-				outcome = "already_executing"
-			} else {
-				if s.metrics != nil {
-					s.metrics.TasksTotal.Inc()
-				}
-				s.broadcastTaskUpdate(agentID, abortTask)
-				slog.Info("Abort task injected for cancelled running task", "agent_id", agentID, "original_task", taskID)
-				outcome = "abort_queued"
-			}
+			s.broadcastTaskUpdate(agentID, *abortTask)
+			slog.Info("Abort task injected for cancelled running task", "agent_id", agentID, "original_task", taskID)
+			outcome = "abort_queued"
 		}
 	}
 

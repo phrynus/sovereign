@@ -46,6 +46,11 @@ type Config struct {
 		Retain int `yaml:"retain"`
 		// Schedule is hourly/daily/weekly/monthly (default daily).
 		Schedule string `yaml:"schedule"`
+		// Disabled stops scheduled/manual backup creation. PostgreSQL restore
+		// checkpoint readiness and hot-update admission cannot be disabled.
+		Disabled bool `yaml:"disabled"`
+		// RestoreCheckpoint is the atomic restore-verification evidence file.
+		RestoreCheckpoint string `yaml:"restore_checkpoint"`
 	} `yaml:"backup"`
 	Server struct {
 		Port                 int    `yaml:"port"`
@@ -132,10 +137,11 @@ type Config struct {
 	} `yaml:"roe"`
 
 	Database struct {
-		Path   string `yaml:"path"`   // legacy: path for sqlite (deprecated, use DSN)
-		Driver string `yaml:"driver"` // "postgres" (default)
-		DSN    string `yaml:"dsn"`    // PostgreSQL connection string (e.g. "host=localhost user=sovereign password=... dbname=sovereign port=5432 sslmode=disable")
-	} `yaml:"database"`
+		Path     string `yaml:"path"`      // legacy: path for sqlite (deprecated, use DSN)
+		Driver   string `yaml:"driver"`    // "postgres" (default)
+		DSN      string `yaml:"dsn"`       // application PostgreSQL connection string
+		AdminDSN string `yaml:"admin_dsn"` // optional CREATEDB/scratch maintenance connection string
+	}
 
 	Implant struct {
 		DefaultInterval     int    `yaml:"default_interval"` // seconds
@@ -398,7 +404,7 @@ func DefaultConfig() *Config {
 	cfg.Server.SSHPassword = ""
 	cfg.Server.SSHKeyAuth = true
 	cfg.Server.DataDir = "data"
-	cfg.Server.SSHHostKey = filepath.Join(cfg.Server.DataDir, "ssh_host_key")
+	cfg.Backup.RestoreCheckpoint = filepath.Join(cfg.Server.DataDir, "backups", "restore-checkpoint.json")
 	cfg.Server.OfflineThreshold = 60
 	cfg.Server.SessionMaxAgeHours = 24
 	cfg.Server.CleanupRetentionDays = 30
@@ -682,6 +688,7 @@ func applyDataDirEnv(cfg *Config) {
 		}
 	}
 	rebase(&cfg.Database.Path, filepath.Join("db", "sovereign.db")) // check:runtime-paths-ok a relative DEFAULT that is immediately rebased onto the config file's directory
+	rebase(&cfg.Backup.RestoreCheckpoint, filepath.Join("backups", "restore-checkpoint.json")) // check:runtime-paths-ok rebase default, never read as a standalone relative path
 	rebase(&cfg.Server.CertFile, "server.crt")
 	rebase(&cfg.Server.KeyFile, "server.key")
 	rebase(&cfg.Server.SSHHostKey, "ssh_host_key")
@@ -820,6 +827,9 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.Database.Driver == "" || c.Database.Driver == "postgres" {
+		if strings.TrimSpace(c.Backup.RestoreCheckpoint) == "" {
+			errs = append(errs, errors.New("backup.restore_checkpoint is required for postgres restore readiness"))
+		}
 		if c.Server.DBMaxOpenConns > 1 {
 			errs = append(errs, errors.New("server.db_max_open_conns must be 1 for postgres (single writer; larger pools cause pool exhaustion under load)"))
 		}

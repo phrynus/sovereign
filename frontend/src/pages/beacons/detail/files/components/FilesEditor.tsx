@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { Permission } from "@/components/ui/permission";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { formatTimestamp } from "@/lib/agent-files/types";
+import { formatBytes, formatTimestamp } from "@/lib/agent-files/types";
 import { useFileEditor } from "./useFileEditor";
 
 type TKey = (key: string, params?: Record<string, string | number>) => string;
@@ -56,6 +56,14 @@ function FilesEditorContent({ t, agentId, path, filename, onClose, onSaved }: Fi
     }
   };
 
+  const handleViewRevision = async (taskId: number) => {
+    try {
+      await editor.viewRevision(taskId);
+    } catch {
+      toast.error(t("agents.files_editor_revision_failed"));
+    }
+  };
+
   return (
     <>
       <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -65,6 +73,15 @@ function FilesEditorContent({ t, agentId, path, filename, onClose, onSaved }: Fi
           </DialogHeader>
           {editor.loading && (
             <p className="text-xs text-muted-foreground">{t("agents.files_editor_loading")}</p>
+          )}
+          {editor.baselineTaskId > 0 && (
+            <p className="break-all font-mono text-[11px] text-muted-foreground" title={editor.baselineHash}>
+              {t("agents.files_editor_baseline", {
+                hash: `${editor.baselineHash.slice(0, 12)}…`,
+                size: formatBytes(editor.size),
+                mtime: editor.mtime,
+              })}
+            </p>
           )}
           {editor.error && <p role="alert" className="text-xs text-destructive-ink">{editor.error}</p>}
           {editor.conflict && (
@@ -136,7 +153,7 @@ function FilesEditorContent({ t, agentId, path, filename, onClose, onSaved }: Fi
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => { void editor.viewRevision(revision.task_id).catch(() => {}); }}
+                      onClick={() => { void handleViewRevision(revision.task_id); }}
                     >
                       {t("agents.files_editor_view")}
                     </Button>

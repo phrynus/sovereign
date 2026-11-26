@@ -211,18 +211,18 @@ func findChatChannelBySlug(database *gorm.DB, tenantID, engagementID uint, slug 
 // on a Server should use postSystemChatToTenant instead. Approval cards are
 // keyed by (task_id, kind) so re-delivering the same approval never stacks
 // duplicate cards in the channel. The message body is never logged.
-func postSystemChat(database *gorm.DB, tenantID, engagementID uint, kind, message string, taskID *uint, metadata string) error {
+func postSystemChat(database *gorm.DB, tenantID, engagementID uint, kind, message string, taskID *uint, metadata string) (*db.ChatMessage, error) {
 	if database == nil {
-		return errors.New("no database for system chat")
+		return nil, errors.New("no database for system chat")
 	}
 	if kind != "system" && kind != "approval" {
-		return fmt.Errorf("invalid system chat kind %q", kind)
+		return nil, fmt.Errorf("invalid system chat kind %q", kind)
 	}
 	if len(message) > MaxChatMessageBytes {
-		return fmt.Errorf("system chat message too long (max %d bytes)", MaxChatMessageBytes)
+		return nil, fmt.Errorf("system chat message too long (max %d bytes)", MaxChatMessageBytes)
 	}
 	if kind == "approval" && taskID == nil {
-		return errors.New("approval chat requires a task id")
+		return nil, errors.New("approval chat requires a task id")
 	}
 	var engagementIDValue *uint
 	if engagementID != 0 {
@@ -235,16 +235,16 @@ func postSystemChat(database *gorm.DB, tenantID, engagementID uint, kind, messag
 	channel, err := findChatChannelBySlug(database, tenantID, engagementID, slug)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
+			return nil, err
 		}
 		// Main normally calls ensureChatChannels at creation; the fallback
 		// keeps system posts from failing on engagements created before chat.
 		if err := ensureChatChannelsFor(database, tenantID, engagementIDValue, "system"); err != nil {
-			return err
+			return nil, err
 		}
 		channel, err = findChatChannelBySlug(database, tenantID, engagementID, slug)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -256,10 +256,13 @@ func postSystemChat(database *gorm.DB, tenantID, engagementID uint, kind, messag
 			existing.Message = message
 			existing.Metadata = metadata
 			// Save runs the encryption hook on the plaintext body.
-			return database.Save(&existing).Error
+			if err := database.Save(&existing).Error; err != nil {
+				return nil, err
+			}
+			return &existing, nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
+			return nil, err
 		}
 	}
 
@@ -275,12 +278,12 @@ func postSystemChat(database *gorm.DB, tenantID, engagementID uint, kind, messag
 		CreatedAt:    time.Now().UTC(),
 	}
 	if err := database.Create(&entry).Error; err != nil {
-		return err
+		return nil, err
 	}
 	// Ids only: the body may contain task parameters and must never enter the audit trail.
 	slog.Info("chat_system_message", "kind", kind, "tenant_id", tenantID,
 		"engagement_id", engagementID, "channel_id", channel.ID, "message_id", entry.ID, "task_id", taskID)
-	return nil
+	return &entry, nil
 }
 
 // postSystemChatToTenant is the Server-facing wrapper: persist the card, then
@@ -289,21 +292,28 @@ func (s *Server) postSystemChatToTenant(tenantID, engagementID uint, kind, messa
 	if s == nil || s.db == nil {
 		return errors.New("no database for system chat")
 	}
-	if err := postSystemChat(s.db, tenantID, engagementID, kind, message, taskID, metadata); err != nil {
+	entry, err := postSystemChat(s.db, tenantID, engagementID, kind, message, taskID, metadata)
+	if err != nil {
 		return err
+	}
+	channelSlug := "system"
+	if kind == "approval" {
+		channelSlug = "approvals"
 	}
 	frame := map[string]interface{}{
 		"type":          "chat",
-		"tenant_id":     tenantID,
+		"id":            entry.ID,
+		"tenant_id":     entry.TenantID,
 		"engagement_id": engagementID,
-		"channel_slug":  "system",
-		"kind":          kind,
+		"channel_id":    *entry.ChannelID,
+		"channel_slug":  channelSlug,
+		"user_id":       entry.UserID,
+		"kind":          entry.Kind,
 		"message":       message,
-		"username":      "system",
-		"created_at":    time.Now().UTC().Format(time.RFC3339),
-	}
-	if kind == "approval" {
-		frame["channel_slug"] = "approvals"
+		"task_id":       entry.TaskID,
+		"metadata":      metadata,
+		"username":      entry.Username,
+		"created_at":    entry.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if taskID != nil {
 		frame["task_id"] = *taskID

@@ -171,8 +171,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	// into failedCount below — no task is ever queued on another tenant's
 	// agent. The RoE columns ride along so the RoE gate can check the row
 	// in memory instead of re-SELECTing every agent (finding: up to 500
-	// point queries serialized on the single-writer pool).
-	if err := s.tenantScope(s.db, c).Select("id", "tenant_id", "public_ip", "ip").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
+	if err := s.tenantScope(s.db, c).Select(dispatchAgentColumns).Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
 		handleQueryError(c, err, "Failed to query existing agents for batch")
 		return
 	}
@@ -224,6 +223,14 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	headerKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if idempotencyKey != "" && headerKey != "" && idempotencyKey != headerKey {
+		respondError(c, http.StatusBadRequest, "body and Idempotency-Key header disagree")
+		return
+	}
+	if idempotencyKey == "" {
+		idempotencyKey = headerKey
+	}
 	if len(idempotencyKey) > 64 {
 		respondError(c, http.StatusBadRequest, "idempotency key too long (max 64 characters)")
 		return
@@ -254,11 +261,16 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 
 	// Idempotency pre-check (one query for the whole batch): agents already
 	// holding a live task with the key are skipped so a retried batch is a
-	// no-op per agent instead of duplicating work on every agent.
+	// no-op per agent instead of duplicating work on every agent. A different
+	// request under the same key rejects the whole batch with 409.
+	fingerprintPath, fingerprintData := req.File, req.Args
+	if batchRef.ID != 0 {
+		fingerprintPath, fingerprintData = batchRef.Path, batchRef.Data
+	}
 	liveKeyHolders := make(map[string]bool)
 	if idempotencyKey != "" {
 		var live []db.Task
-		if err := s.db.Select("agent_id").Where("agent_id IN ? AND idempotency_key = ? AND status IN ?",
+		if err := s.db.Where("agent_id IN ? AND idempotency_key = ? AND status IN ?",
 			uniqueIDs, idempotencyKey, []string{"pending", TaskStatusPendingApproval, "running"}).
 			Find(&live).Error; err != nil {
 			slog.Error("Batch command: idempotency lookup failed", "err", err)
@@ -266,10 +278,14 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			return
 		}
 		for _, t := range live {
+			fingerprint := canonicalTaskFingerprint(t.AgentID, req.TaskType, command, req.Shell, fingerprintPath, fingerprintData, 0, 0, batchRef, taskOptions{})
+			if _, err := replayIdempotentTask(t, fingerprint, batchRef); err != nil {
+				respondTaskError(c, err)
+				return
+			}
 			liveKeyHolders[t.AgentID] = true
 		}
 	}
-
 	tasks := make([]db.Task, 0, len(uniqueIDs))
 
 	// Phase 1 (NO lock): per-agent validation is now I/O-free for agents in
@@ -301,14 +317,14 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			continue
 		}
 
-		// Validation reuses the batch's own agent load for the RoE gate —
-		// no per-agent point SELECTs under the single-writer pool.
+		// Validation reuses the batch's complete agent projection for the
+		// shared dispatch-time policy gate; no per-agent point SELECTs.
 		preloaded := agentsByID[agentID]
 		validateData, validatePath := req.Args, req.File
 		if batchRef.ID != 0 {
 			validateData, validatePath = batchRef.Data, batchRef.Path
 		}
-		if err := s.validateTaskCreationWithAgent(c, agentID, req.TaskType, command, validateData, validatePath, callerUID, &preloaded); err != nil {
+		if err := s.validateTaskCreationWithAgentShell(c, agentID, req.TaskType, command, req.Shell, "", validateData, validatePath, callerUID, &preloaded); err != nil {
 			slog.Warn("Batch command: validation failed", "agent_id", agentID, "err", err)
 			continue
 		}

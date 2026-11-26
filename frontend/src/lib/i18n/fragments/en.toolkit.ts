@@ -80,5 +80,7 @@ export const enToolkit: Record<string, string> = {
   "toolkit.toast.action_dispatched": "Dispatched {action} (task #{task_id})",
   "toolkit.toast.action_failed": "Failed to execute action",
   "toolkit.toast.load_failed": "Toolkit: load data failed",
+  "toolkit.toast.agent_info_failed": "Toolkit: agent info could not be loaded",
+  "toolkit.agent_info_unreadable": "Agent information could not be read; the panel is unavailable, not empty.",
   "toolkit.toast.select_agent_first": "Select a beacon first",
 };

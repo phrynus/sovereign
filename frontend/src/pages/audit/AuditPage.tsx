@@ -1,10 +1,9 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
-import { downloadText } from "@/lib/download";
+import { downloadBlob, downloadText } from "@/lib/download";
 import { enumLabel } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { useI18n } from "@/lib/i18n";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Download, FileText, Filter, ShieldCheck, Terminal } from "lucide-react";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -43,7 +43,10 @@ export default function AuditPage() {
   const [perPage] = useState(50);
   const [userFilter, setUserFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
-  const [appliedFilters, setAppliedFilters] = useState({ user: "", action: "" });
+  const [agentFilter, setAgentFilter] = useState("");
+  const [sinceFilter, setSinceFilter] = useState("");
+  const [untilFilter, setUntilFilter] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({ user: "", action: "", agent: "", since: "", until: "" });
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [users, setUsers] = useState<{ username: string }[]>([]);
   const [verifyState, setVerifyState] = useState<{
@@ -68,8 +71,20 @@ export default function AuditPage() {
   const initialUser = searchParams.get("user") || "";
   const initialSearch = searchParams.get("search") || "";
   const initialHost = searchParams.get("host") || "";
+  const initialSince = searchParams.get("since") || "";
+  const initialUntil = searchParams.get("until") || "";
   const initialNewIp = searchParams.get("new_ip") === "1";
   const { t } = useI18n();
+
+  useEffect(() => {
+    const action = initialResult === "failed" ? "failed" : initialAction;
+    setUserFilter(initialUser);
+    setActionFilter(action);
+    setAgentFilter(initialAgentId);
+    setSinceFilter(initialSince);
+    setUntilFilter(initialUntil);
+    setAppliedFilters({ user: initialUser, action, agent: initialAgentId, since: initialSince, until: initialUntil });
+  }, [initialAgentId, initialAction, initialResult, initialSince, initialUntil, initialUser]);
 
   const handleTabChange = useCallback(
     (next: string) => {
@@ -80,7 +95,6 @@ export default function AuditPage() {
     },
     [searchParams, setSearchParams],
   );
-
   useEffect(() => {
     const controller = new AbortController();
     api.get(paths.users.list, { signal: controller.signal })
@@ -119,16 +133,18 @@ export default function AuditPage() {
     loadLogs(controller.signal);
     return () => controller.abort();
   }, [loadLogs]);
-
   const applyFilters = () => {
     setPage(1);
-    setAppliedFilters({ user: userFilter, action: actionFilter });
+    setAppliedFilters({ user: userFilter, action: actionFilter, agent: agentFilter, since: sinceFilter, until: untilFilter });
   };
   const resetFilters = () => {
     setUserFilter("");
     setActionFilter("");
+    setAgentFilter("");
+    setSinceFilter("");
+    setUntilFilter("");
     setPage(1);
-    setAppliedFilters({ user: "", action: "" });
+    setAppliedFilters({ user: "", action: "", agent: "", since: "", until: "" });
   };
 
   const handleExport = () => {
@@ -137,6 +153,26 @@ export default function AuditPage() {
       `audit-logs-page-${page}.csv`,
       "text/csv;charset=utf-8",
     );
+  };
+
+  const handleExportChain = async () => {
+    const params = new URLSearchParams({ format: "ndjson" });
+    if (appliedFilters.user) params.set("user", appliedFilters.user);
+    if (appliedFilters.agent) params.set("agent_id", appliedFilters.agent);
+    if (appliedFilters.since) params.set("since", new Date(appliedFilters.since).toISOString());
+    if (appliedFilters.until) params.set("until", new Date(appliedFilters.until).toISOString());
+    if (appliedFilters.action === "failed") {
+      params.set("result", "failed");
+    } else if (appliedFilters.action) {
+      params.set("action", appliedFilters.action);
+      params.set("match", "contains");
+    }
+    try {
+      const { blob, filename } = await api.downloadGet(paths.audit.exportChain(params.toString()), "audit-chain.ndjson");
+      downloadBlob(blob, filename);
+    } catch {
+      toast.error(t("audit.export_failed"));
+    }
   };
 
   const verifyChain = async () => {
@@ -208,6 +244,10 @@ export default function AuditPage() {
               <Download className="size-4" />
               <span>{t("audit.export_page_csv")}</span>
             </Button>
+            <Button variant="outline" onClick={() => void handleExportChain()}>
+              <FileText className="size-4" />
+              <span>{t("audit.export_chain")}</span>
+            </Button>
           </div>
         ) : null
       }
@@ -275,6 +315,26 @@ export default function AuditPage() {
               ))}
             </SelectContent>
           </Select>
+          <Input
+            value={agentFilter}
+            onChange={(event) => setAgentFilter(event.target.value)}
+            placeholder={t("audit.agent_id")}
+            className="w-[220px]"
+          />
+          <Input
+            type="datetime-local"
+            value={sinceFilter}
+            onChange={(event) => setSinceFilter(event.target.value)}
+            aria-label={t("audit.since")}
+            className="w-[220px]"
+          />
+          <Input
+            type="datetime-local"
+            value={untilFilter}
+            onChange={(event) => setUntilFilter(event.target.value)}
+            aria-label={t("audit.until")}
+            className="w-[220px]"
+          />
           <Button onClick={applyFilters} disabled={loading}>
             <Filter className="size-4" />
             <span>{t("audit.apply")}</span>

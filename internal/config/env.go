@@ -111,6 +111,16 @@ func ApplyEnvOverrides(cfg *Config) {
 	if envSchedule := os.Getenv("FORGEC2_BACKUP_SCHEDULE"); envSchedule != "" {
 		cfg.Backup.Schedule = envSchedule
 	}
+	if envDisabled, ok := os.LookupEnv("FORGEC2_BACKUP_DISABLED"); ok && envDisabled != "" {
+		if value, err := strconv.ParseBool(envDisabled); err == nil {
+			cfg.Backup.Disabled = value
+		} else {
+			slog.Warn("Ignoring FORGEC2_BACKUP_DISABLED: not a boolean", "value", envDisabled)
+		}
+	}
+	if envCheckpoint := os.Getenv("FORGEC2_BACKUP_RESTORE_CHECKPOINT"); envCheckpoint != "" {
+		cfg.Backup.RestoreCheckpoint = envCheckpoint
+	}
 
 	// Env overrides for critical settings
 	if envDBPath := os.Getenv("FORGEC2_DB_PATH"); envDBPath != "" {
@@ -121,6 +131,9 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 	if envDBDSN := os.Getenv("FORGEC2_DB_DSN"); envDBDSN != "" {
 		cfg.Database.DSN = envDBDSN
+	}
+	if envAdminDSN := os.Getenv("FORGEC2_DB_ADMIN_DSN"); envAdminDSN != "" {
+		cfg.Database.AdminDSN = envAdminDSN
 	}
 	if envHost := os.Getenv("FORGEC2_HOST"); envHost != "" {
 		cfg.Server.Host = envHost

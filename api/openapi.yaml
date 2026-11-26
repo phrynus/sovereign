@@ -673,6 +673,12 @@ paths:
       operationId: batchCommand
       security:
         - SessionCookie: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Optional deduplication key; must match idempotency_key when both are supplied
+          schema: { type: string, maxLength: 64 }
       requestBody:
         content:
           application/json:
@@ -690,6 +696,18 @@ paths:
                 type:
                   type: string
                   default: shell
+                task_type:
+                  type: string
+                  default: shell
+                shell: { type: string }
+                file: { type: string }
+                args: { type: string }
+                credential_id: { type: integer, nullable: true }
+                credential_params: {$ref: '#/components/schemas/CredentialTaskParams'}
+                idempotency_key:
+                  type: string
+                  maxLength: 64
+                  description: Live key replays only the same request; different arguments return 409
       responses:
         '200':
           description: Batch commands dispatched
@@ -704,17 +722,12 @@ paths:
                       data:
                         type: object
                         properties:
-                          success:
-                            type: boolean
-                          tasks:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                agent_id:
-                                  type: string
-                                task_id:
-                                  type: integer
+                          tasks_created: { type: integer }
+                          failed: { type: integer }
+                          locked_skipped: { type: integer }
+                          deduped: { type: integer }
+        '409':
+          description: Idempotency key belongs to a different task request
   /agents/{id}/command:
     post:
       tags: [Agents]
@@ -2620,8 +2633,16 @@ paths:
           schema: {type: string}
         - name: action
           in: query
-          description: Exact action name; makes the export a selection.
+          description: Action name; exact unless match=contains.
           schema: {type: string}
+        - name: match
+          in: query
+          description: Action matching mode.
+          schema: {type: string, enum: [exact, contains], default: exact}
+        - name: result
+          in: query
+          description: Filter by the recorded success boolean.
+          schema: {type: string, enum: [success, failed]}
         - name: agent_id
           in: query
           description: Exact related agent/target id; makes the export a selection.
@@ -11378,6 +11399,12 @@ paths:
       operationId: apiV1CreateTask
       security:
         - SessionCookie: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Optional deduplication key; must match idempotency_key when both are supplied
+          schema: { type: string, maxLength: 64 }
       requestBody:
         content:
           application/json:
@@ -11393,9 +11420,13 @@ paths:
                 encrypt_result: { type: boolean }
                 credential_id: { type: integer, nullable: true }
                 credential_params: {$ref: '#/components/schemas/CredentialTaskParams'}
+                idempotency_key:
+                  type: string
+                  maxLength: 64
+                  description: Live key replays only the same request; different arguments return 409
       responses:
         '200':
-          description: Task created
+          description: Task created or replayed
           content:
             application/json:
               schema:
@@ -11406,6 +11437,12 @@ paths:
                     properties:
                       data:
                         $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Idempotency key belongs to a different task request
+        '429':
+          description: Task dispatch refused by policy or queue limits
   /api/scripts:
     get:
       tags: [Settings]

@@ -217,6 +217,7 @@ describe("pullRemoteFile", () => {
     mocks.pollTask.mockImplementation(async () => {
       polls += 1;
       detail.committed_offset = polls * CHUNK;
+      detail.status = polls === 2 ? "completed" : "active";
       return { status: "completed" };
     });
     const onProgress = vi.fn();
@@ -238,6 +239,21 @@ describe("pullRemoteFile", () => {
     expect(onProgress).toHaveBeenLastCalledWith(transferProgressAt(2 * CHUNK, {
       total: 2 * CHUNK, chunk: CHUNK, partial: false,
     }));
+  });
+
+  it("treats an unknown-total EOF session as complete", async () => {
+    const detail = session({
+      direction: "pull", remote_path: "/tmp/pull.bin", total_size: 0,
+      committed_offset: 5, status: "completed", computed_sha256: "a".repeat(64),
+    });
+    mockTransfers([], () => detail);
+    mocks.postJson.mockResolvedValue({ transfer: detail });
+
+    await expect(pullRemoteFile({
+      agentId: "a1", remotePath: "/tmp/pull.bin", filename: "pull.bin", t,
+    })).resolves.toBe("pulled");
+    expect(mocks.postJson).not.toHaveBeenCalledWith(paths.agents.transferResume("a1", 7), expect.anything());
+    expect(mocks.downloadGet).toHaveBeenCalledWith(paths.agents.transferFile("a1", 7));
   });
 
   it("resumes an existing session from the API offset after refresh", async () => {

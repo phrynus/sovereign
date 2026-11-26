@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -46,7 +46,14 @@ vi.mock("@/lib/hooks/useConfirm", () => ({
   useConfirm: () => ({ confirm: confirmMock, modal: null }),
 }));
 
-const wsMock = vi.hoisted(() => ({ subscribe: vi.fn(() => () => {}), connected: false }));
+const wsMock = vi.hoisted(() => {
+  const holder: { listener: null | ((msg: { type: string }) => void) } = { listener: null };
+  return {
+    subscribe: vi.fn((listener: (msg: { type: string }) => void) => { holder.listener = listener; return () => {}; }),
+    connected: false,
+    holder,
+  };
+});
 vi.mock("@/lib/wsContext", () => ({ useWS: () => wsMock }));
 
 vi.mock("@/lib/agents", () => ({
@@ -105,7 +112,24 @@ async function renderPage() {
 describe("TasksPageContent error surfaces", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    wsMock.holder.listener = null;
     mockMountReads();
+  });
+
+  it("refreshes immediately on the reconnect sync snapshot", async () => {
+    await renderPage();
+    getMock.mockClear();
+    act(() => wsMock.holder.listener?.({ type: "sync" }));
+    await waitFor(() => expect(getMock).toHaveBeenCalled(), { timeout: 2000 });
+  });
+
+  it("surfaces a background refresh failure without blanking the table", async () => {
+    await renderPage();
+    getMock.mockRejectedValueOnce(serverError());
+    errorToast.mockClear();
+    act(() => wsMock.holder.listener?.({ type: "task_update" }));
+    await waitFor(() => expect(errorToast).toHaveBeenCalledWith("common.server_error"), { timeout: 2000 });
+    expect(screen.getByRole("button", { name: "tasks.cancel" })).toBeTruthy();
   });
 
   it("marks a cancelled task whose result arrived later", async () => {

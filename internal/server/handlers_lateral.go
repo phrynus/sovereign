@@ -12,8 +12,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/r0si/sovereign/internal/db"
 	"github.com/r0si/sovereign/internal/server/middleware"
+	"github.com/r0si/sovereign/pkg/protocol"
 	"gorm.io/gorm"
 )
+var lateralMovementTaskTypes = []string{
+	protocol.TaskTypeLateral, protocol.TaskTypeLateralWMI, protocol.TaskTypeLateralWinRM,
+	protocol.TaskTypeLateralPsexec, protocol.TaskTypeLateralDCOM, protocol.TaskTypeLateralSCF,
+	protocol.TaskTypeSSHLateral,
+}
+
+func isLateralMovementTask(taskType string) bool {
+	for _, candidate := range lateralMovementTaskTypes {
+		if taskType == candidate {
+			return true
+		}
+	}
+	return false
+}
 
 // handleLateralPage renders the lateral movement page
 func (s *Server) handleLateralPage(c *gin.Context) {
@@ -45,13 +60,12 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 	}
 
 	var totalTasks int64
-	if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("type = 'lateral'").Count(&totalTasks).Error; err != nil {
+	if err := s.tenantScope(s.db.Model(&db.Task{}), c).Where("type IN ?", lateralMovementTaskTypes).Count(&totalTasks).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to count tasks")
 		return
 	}
 
 	data := gin.H{
-		"Title":        "Sovereign - Lateral Movement",
 		"ActiveNav":    "lateral",
 		"Stats":        stats,
 		"Agents":       agents,
@@ -89,23 +103,21 @@ func (s *Server) handleLateralHistory(c *gin.Context) {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				respondError(c, http.StatusNotFound, "agent not found")
 			} else {
-				respondError(c, http.StatusInternalServerError, "failed to query agent")
 			}
 			return
 		}
 	}
 
-	query := s.tenantScope(s.db, c).Where("type = 'lateral'")
+	query := s.tenantScope(s.db, c).Where("type IN ?", lateralMovementTaskTypes)
 	if agentID != "all" {
 		query = query.Where("agent_id = ?", agentID)
 	}
 	var tasks []db.Task
 	if err := query.Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to query lateral history")
-		return
 	}
 
-	countQuery := s.tenantScope(s.db.Model(&db.Task{}), c).Where("type = 'lateral'")
+	countQuery := s.tenantScope(s.db.Model(&db.Task{}), c).Where("type IN ?", lateralMovementTaskTypes)
 	if agentID != "all" {
 		countQuery = countQuery.Where("agent_id = ?", agentID)
 	}
@@ -159,11 +171,29 @@ func canonicalLateralMethodTarget(command string) (method, target string) {
 		return "", ""
 	}
 	method = strings.ToLower(strings.TrimSpace(parts[0]))
+
 	target = strings.TrimSpace(parts[1])
 	if method == "" || target == "" {
 		return "", ""
 	}
 	return method, target
+}
+// auditLateralTaskResult records the movement edge without command, credential
+// material or raw output. Failed attempts are evidence too: an operator needs
+// to distinguish "never attempted" from "attempted and denied".
+func (s *Server) auditLateralTaskResult(task db.Task) {
+	command, _, err := taskWireArgs(task)
+	if err != nil {
+		return
+	}
+	method, target := canonicalLateralMethodTarget(command)
+	if method == "" || target == "" {
+		return
+	}
+	s.LogAuditRecord(nil, "lateral_result", "agent", task.AgentID,
+		fmt.Sprintf("task_id=%d source=%s method=%s target=%s status=%s",
+			task.ID, task.AgentID, method, target, task.Status),
+		task.Status == "completed", nil)
 }
 
 type lateralSpec struct {

@@ -517,6 +517,25 @@ func (s *Server) broadcastAgentDataUpdate(agentID string, data map[string]interf
 	s.broadcastToTenant(notification, agentID)
 }
 
+// broadcastShellOutput delivers unsolicited interactive-shell bytes. These
+// frames have no task row to poll, so they are tenant/task-permission scoped
+// and reliable: a full queue reconnects the client instead of silently
+// punching a hole in the terminal stream.
+func (s *Server) broadcastShellOutput(agentID, shellID, data, encoding string) {
+	payload := map[string]interface{}{
+		"type": "shell_output", "agent_id": agentID, "shell_id": shellID,
+		"data": data, "encoding": encoding,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("Failed to marshal shell output", "agent_id", agentID, "error", err)
+		return
+	}
+	s.broadcastToTenantWhere(raw, agentID, true, func(sub wsSubscriber) bool {
+		return sub.CanViewTasks
+	})
+}
+
 // broadcastTaskUpdate pushes task status (and result if completed) to WS clients
 func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 	task = taskForAuthorizedOperator(task)

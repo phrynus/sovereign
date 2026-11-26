@@ -111,6 +111,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			ProtocolVersion: req.ProtocolVersion,
 			Version:         req.Info["version"],
 			PID:             parseInt("pid"),
+			TaskTypes:       req.Info["task_types"],
 			ProcessName:     req.Info["process_name"],
 			Integrity:       req.Info["integrity"],
 			Elevated:        req.Info["elevated"] == "true",
@@ -189,6 +190,9 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		}
 		if v := req.Info["version"]; v != "" {
 			updates["version"] = v
+		}
+		if v := req.Info["task_types"]; v != "" {
+			updates["task_types"] = v
 		}
 		if v := req.Info["process_name"]; v != "" {
 			updates["process_name"] = v

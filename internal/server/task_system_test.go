@@ -83,6 +83,7 @@ func TestCreateSystemTaskApprovalExpiry(t *testing.T) {
 // swings sleeps negative (floored to zero) into a tight beacon loop.
 func TestCreateTaskClampsSetSleep(t *testing.T) {
 	s := newTasksTestServer(t)
+	seedAgent(t, s, "clamp-agent")
 	cases := []struct {
 		in, want string
 	}{

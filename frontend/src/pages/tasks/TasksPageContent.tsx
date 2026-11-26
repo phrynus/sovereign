@@ -153,6 +153,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   }, [agents]);
 
   const loadTasksAbortRef = useRef<AbortController | null>(null);
+  const lastBackgroundErrorRef = useRef(0);
 
   const loadTasks = useCallback((background = false) => {
     loadTasksAbortRef.current?.abort();
@@ -186,7 +187,12 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
       .catch((e) => {
         if (ac.signal.aborted) return;
         if (background) {
-          // Keep existing data on background poll failure �?don't blank the table or spam toasts.
+          const msg = errorText(t, e, () => t("tasks.toast_load_failed"));
+          setError(msg);
+          if (Date.now() - lastBackgroundErrorRef.current >= 30000) {
+            lastBackgroundErrorRef.current = Date.now();
+            toast.error(msg);
+          }
           return;
         }
         setTasks([]);
@@ -213,15 +219,15 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
 
   const { subscribe, connected } = useWS();
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const unsub = subscribe((msg) => {
-      if (msg.type === "task_update" || msg.type === "task_created" || msg.type === "task_deleted") {
-        if (timer) clearTimeout(timer);
+      if (msg.type === "sync" || msg.type === "task_update" || msg.type === "task_created" || msg.type === "task_deleted") {
+        clearTimeout(timer);
         timer = setTimeout(() => { loadTasksRef.current(true); }, 500);
       }
     });
     return () => {
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
       unsub();
     };
   }, [subscribe]);
@@ -579,10 +585,17 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         )}
       </PageToolbar>
 
+      {error && tasks.length > 0 && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 px-3 py-2 text-xs text-destructive-ink">
+          <span>{error}</span>
+          <Button size="sm" variant="outline" onClick={() => loadTasks()}>{t("common.try_again")}</Button>
+        </div>
+      )}
+
       <Card className="overflow-hidden">
         <DataState
           loading={loading}
-          error={error}
+          error={tasks.length === 0 ? error : null}
           empty={!loading && !error && tasks.length === 0}
           emptyIcon={Inbox}
           emptyTitle={t("tasks.empty_title")}

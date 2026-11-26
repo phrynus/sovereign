@@ -66,16 +66,54 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			if !ok || !strings.EqualFold(task.AgentID, rd.AgentID) {
 				continue
 			}
-			// Finality guard: cancelled is terminal even for relayed children
+			// A cancelled child task stays terminal, but preserve late evidence
+			// exactly as the direct path does.
 			if task.Status == "cancelled" {
+				s.captureLateResult(task, r, rd.AgentID, now)
 				continue
 			}
-			// Durable idempotency: exact rid already applied once.
 			if r.ResultID != "" && task.LastResultID == r.ResultID && (task.Status == "completed" || task.Status == "failed") {
 				continue
 			}
+			if r.EncryptedWithTaskKey {
+				if err := decryptTaskResultKey(task.TaskKey, &r); err != nil {
+					slog.Warn("Relayed per-task key decryption failed", "child", rd.AgentID, "task_id", r.TaskID, "err", err)
+				}
+			}
+			if task.AcknowledgedAt == nil {
+				acknowledgedAt := now
+				task.AcknowledgedAt = &acknowledgedAt
+			}
+			if r.Partial {
+				switch task.Status {
+				case "pending", "running", "sent":
+				default:
+					continue
+				}
+				appendTaskResultTail(task, decodeTaskResult(r.Type, r.Encoding, r.Output))
+				task.UpdatedAt = now
+				partial := s.withBusyRetryDB("result", func() *gorm.DB {
+					return s.db.Model(&db.Task{}).
+						Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).
+						Updates(map[string]interface{}{
+							"result": task.Result, "acknowledged_at": task.AcknowledgedAt, "updated_at": now,
+						})
+				})
+				if partial.Error != nil || partial.RowsAffected == 0 {
+					continue
+				}
+				s.broadcastTaskUpdate(rd.AgentID, *task)
+				continue
+			}
+			switch task.Status {
+			case "pending", "running", "sent":
+			default:
+				continue
+			}
+
+			childAgent := *childAgentMap[rd.AgentID]
 			if task.TransferID != nil && (task.Type == "upload" || task.Type == "download") {
-				handled, terr := s.commitTransferChunk(*childAgentMap[rd.AgentID], r, task, now)
+				handled, terr := s.commitTransferChunk(childAgent, r, task, now)
 				if terr != nil && !errors.Is(terr, errTransferStale) {
 					slog.Warn("Relayed transfer chunk rejected", "child", rd.AgentID, "task_id", task.ID, "error", terr)
 				}
@@ -83,30 +121,26 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 					continue
 				}
 			}
-			task.Status = "completed"
+
+			finalStatus := "completed"
 			if r.Error != "" {
-				task.Status = "failed"
+				finalStatus = "failed"
 				task.Error = r.Error
 			}
-			task.UpdatedAt = now
+			task.Result = decodeTaskResult(r.Type, r.Encoding, r.Output)
+			if r.SHA256 != "" {
+				task.ResultSHA256 = r.SHA256
+			}
+			if r.Mtime > 0 {
+				task.ResultModTime = r.Mtime
+			}
 			if r.ResultID != "" {
 				task.LastResultID = r.ResultID
 			}
-			if r.Encoding == "base64" && r.Output != "" {
-				decoded, err := base64.StdEncoding.DecodeString(r.Output)
-				if err == nil {
-					task.Result = string(decoded)
-				} else {
-					task.Result = r.Output
-				}
-			} else {
-				task.Result = r.Output
-			}
-			// Chain integrity for relayed file transfers: a compromised
-			// parent forwarding a child's exfil must present the child's
-			// chain link (keyed per-child, which the parent never holds), or
-			// the forged chunk is dropped before it reaches disk/parsers.
-			// Same empty-MAC legacy tolerance as the direct path.
+			task.UpdatedAt = now
+
+			// A relay parent never holds the child's chain key. Verify the
+			// child's link before accepting exfil bytes or parsing the result.
 			if r.Type == "upload" || r.Type == "download" {
 				chunk := []byte(r.Output)
 				if r.Encoding == "base64" && r.Output != "" {
@@ -119,34 +153,33 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 					continue
 				}
 			}
-			if len(task.Result) > MaxResultSize {
+			if r.Type != "screenshot" && r.Type != "webcam" && r.Type != "mic" && len(task.Result) > MaxResultSize {
 				task.Result = truncateString(task.Result, MaxResultSize)
 			}
-			// Keep the task object plaintext for operator-facing WebSocket
-			// broadcasts. Encrypt only a copy destined for storage; mutating task
-			// here leaked FC2ENC ciphertext into interactive shell output.
+			if r.Type == "token_list_procs" && task.Result != "" {
+				task.Result = FormatTokenProcsFromJSON(task.Result)
+			}
+			if r.Type == task.Type && task.Type == "privesc_check" && task.Result != "" {
+				task.Result = formatPrivescStructuredResult(task.Result)
+			}
+
 			dbTask := *task
+			dbTask.Status = finalStatus
 			if err := s.encryptTaskFieldsOrBlank(&dbTask); err != nil {
-				task.Status = "failed"
+				finalStatus = "failed"
+				dbTask.Status = finalStatus
+				task.Result = ""
+				task.Error = dbTask.Error
 			}
-			// Atomic first-final-wins: only pending/running/sent can transition to final
-			res := s.withBusyRetryDB("result", func() *gorm.DB {
-				return s.db.Model(&db.Task{}).Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).Updates(map[string]interface{}{
-					"status": task.Status, "result": dbTask.Result, "error": dbTask.Error, "last_result_id": task.LastResultID,
-				})
-			})
-			if res.Error != nil {
-				slog.Error("Failed to save relayed task result", "task_id", task.ID, "child", rd.AgentID, "error", res.Error)
+			committed, err := s.commitTaskResult(task, dbTask, now)
+			if err != nil {
+				slog.Error("Failed to save relayed task result", "task_id", task.ID, "child", rd.AgentID, "error", err)
 				continue
 			}
-			if res.RowsAffected == 0 {
+			if !committed {
 				continue
 			}
-			s.decrementPendingTasks(rd.AgentID)
-			if s.metrics != nil {
-				s.metrics.TaskExecuteDuration.WithLabelValues(task.Type).Observe(now.Sub(task.CreatedAt).Seconds())
-			}
-			s.fileChains.reset(task.ID)
+			s.afterTaskResultCommit(childAgent, task, r, now, true)
 			s.broadcastTaskUpdate(rd.AgentID, *task)
 			slog.Info("P2P relayed task result processed", "child", rd.AgentID, "task_id", r.TaskID)
 		}

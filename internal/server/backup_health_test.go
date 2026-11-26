@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,7 +100,7 @@ func TestBackupHealthTracksResults(t *testing.T) {
 		t.Fatalf("fresh manager reported success: %+v", h)
 	}
 
-	bm.noteBackupResult(errNonSQLiteBackup)
+	bm.noteBackupResult(errors.New("backup failed"))
 	h := bm.Health()
 	if h.LastFailure.IsZero() || h.LastError == "" {
 		t.Fatalf("failure not recorded: %+v", h)

@@ -43,9 +43,9 @@ func TestSmokeSlimWindowsEXE(t *testing.T) {
 
 // TestSmokeWin7WindowsEXE builds a legacy-toolchain Windows agent for
 // Windows 7 / Server 2008 R2 targets. It downloads the go1.20.14 toolchain
-// (~120MB) and repinned dependencies on first use, so it needs network and
-// is gated behind FORGEC2_SMOKE_WIN7 (never CI). Validate the artifact on a
-// real Win7/2008R2 host before relying on it.
+// (~120MB) and repinned dependencies on first use, so local runs need network.
+// Linux CI runs this gate; validate the artifact on a real Win7 host before
+// relying on runtime compatibility.
 func TestSmokeWin7WindowsEXE(t *testing.T) {
 	if os.Getenv("FORGEC2_SMOKE_WIN7") == "" {
 		t.Skip("set FORGEC2_SMOKE_WIN7=1 to run the legacy-toolchain build (needs network)")

@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/scripting/... ./internal/server/... ./pkg/... ./cmd/... -count=1 -timeout 8m -coverprofile=coverage.out 2>&1 | tee unit.log
+          go test ./internal/auditchain/... ./internal/bundle/... ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/malleable/... ./internal/mcp/... ./internal/playbook/... ./internal/obfuscation/... ./internal/payload/... ./internal/plugin/... ./internal/scripting/... ./internal/server/... ./pkg/... ./cmd/... -count=1 -timeout 8m -coverprofile=coverage.out 2>&1 | tee unit.log
       # The job log needs admin rights to download, and an annotation is the one
       # failure detail a non-admin can read. Collapse the failing-test context
       # into a single annotation instead of one per line (the API caps those).
@@ -124,12 +124,12 @@ jobs:
         # behavior) on the port config.example.yaml points at, and wait for it
         # to accept connections before booting the server.
         run: |
-          # Cold pulls of postgres:16-alpine plus first-boot init routinely
+          # Cold pulls of postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35 plus first-boot init routinely
           # exceed 30s on CI runners. Wait long enough and dump the container
           # log on timeout so the failure says WHY instead of just "not ready".
           docker run -d --name sovereign-pg \
             -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
-            -p 5432:5432 postgres:16-alpine
+            -p 5432:5432 postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35
           # The docker-entrypoint starts a temporary server during initdb that
           # accepts connections for a moment, creates the database, then shuts
           # down before the real server starts. One pg_isready success can
@@ -177,6 +177,11 @@ jobs:
             exit 1
           fi
           echo "boot log error patterns: 0"
+      - name: Package smoke
+        env:
+          SERVER_BIN: ./sovereign-server
+          TEST_POSTGRES_DSN: postgres://sovereign:sovereign@127.0.0.1:5432/sovereign?sslmode=disable
+        run: bash scripts/ci-package-smoke.sh
 
   backup-restore:
     name: PostgreSQL backup restore drill (row counts)
@@ -187,7 +192,7 @@ jobs:
         run: |
           docker run -d --name sovereign-pg \
             -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
-            -p 5432:5432 postgres:16-alpine
+            -p 5432:5432 postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35
           # Two consecutive successes: the entrypoint's temporary init server
           # accepts briefly, then shuts down before the real server starts.
           pg_ready=0
@@ -229,7 +234,7 @@ jobs:
             packages: ./internal/server/...
             shard: 3
           - suite: core
-            packages: ./internal/db/... ./internal/plugin/... ./internal/scripting/... ./internal/payload/agent/...
+            packages: ./internal/auditchain/... ./internal/bundle/... ./internal/db/... ./internal/mcp/... ./internal/playbook/... ./internal/plugin/... ./internal/scripting/... ./internal/payload/agent/...
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -356,6 +361,13 @@ jobs:
             fi
           done
           exit $status
+      - name: Compile result-spool and ACK self-test
+        run: |
+          cd proto/c-implant
+          x86_64-w64-mingw32-gcc -O2 -Wall -Wextra -Werror -Wno-unknown-pragmas \
+            -I. -o "$RUNNER_TEMP/cbeacon-spool-selftest.exe" \
+            spool_selftest.c crypto_cng.c curve25519.c evade.c "$RUNNER_TEMP/sqlite3.o" \
+            -lwinhttp -lbcrypt -lpsapi -liphlpapi -lgdiplus -lgdi32 -luser32 -lole32 -lws2_32
       - name: DNS transport variant still compiles
         run: |
           cd proto/c-implant
@@ -453,6 +465,11 @@ jobs:
         # that the embedded mTLS material actually reaches the handshake.
         run: |
           FORGEC2_SMOKE_BUILD=1 go test ./internal/payload/... -count=1 -timeout 15m -run 'TestSmokeGenerateWindowsEXE|TestSmokeWindowsPEOptions|TestSmokeLinuxELFSmoke|TestSmokeTokenStagerBuild|TestSmokeTokenStagerMTLSFetch' -v
+      - name: Win7 agent build (Go 1.20.14 toolchain)
+        # Cross-compiles on Linux: the legacy toolchain and repinned module
+        # closure are part of the shipped generator path, so a static go.mod
+        # assertion cannot prove this build still works.
+        run: FORGEC2_SMOKE_WIN7=1 go test ./internal/payload/... -count=1 -timeout 15m -run 'TestSmokeWin7WindowsEXE' -v
       - name: Cross-compile agent for darwin (link-only gate)
         # darwin has no smoke test; keep a pure-Go link check so stub
         # regressions fail CI before a macOS generate is attempted.
@@ -508,7 +525,7 @@ jobs:
         run: |
           docker run -d --name sovereign-pg \
             -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
-            -p 5432:5432 postgres:16-alpine
+            -p 5432:5432 postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35
           # Require two consecutive successes: the docker-entrypoint's
           # temporary init server accepts briefly then shuts down, and one
           # success can land in that window (see the API smoke step).
@@ -730,7 +747,7 @@ jobs:
         run: |
           docker run -d --name sovereign-pg \
             -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign \
-            -p 5432:5432 postgres:16-alpine
+            -p 5432:5432 postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35
           # Require two consecutive successes: the docker-entrypoint's
           # temporary init server accepts briefly then shuts down, and one
           # success can land in that window (see the API smoke step).
@@ -786,3 +803,29 @@ jobs:
       - name: Stop server
         if: always()
         run: kill "$(cat "$RUNNER_TEMP/server.pid")" || true
+
+  c-implant-e2e:
+    name: C implant E2E (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: true
+          cache-dependency-path: go.sum
+      - run: go mod download
+      - name: Start PostgreSQL 18
+        shell: pwsh
+        run: |
+          docker run -d --name sovereign-pg -e POSTGRES_USER=sovereign -e POSTGRES_PASSWORD=sovereign -e POSTGRES_DB=sovereign -p 5432:5432 postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35
+      - name: Run C implant E2E
+        shell: pwsh
+        run: ./scripts/e2e-c-implant-local.ps1
+
+  verify:
+    name: Aggregate verify
+    needs: [go, backup-restore, race, windows-agent-tests, c-implant, c-implant-e2e, docker, smoke, agent-e2e, lint, security, secrets, frontend, live-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "all required jobs succeeded"

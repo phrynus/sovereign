@@ -36,6 +36,7 @@ export interface ChatMessageView {
   task_id: number | null;
   metadata: string;
   created_at: string;
+  pending?: boolean;
 }
 
 function toId(value: unknown): number | null {
@@ -112,8 +113,7 @@ function mergeMessages(
 export function useChatWorkspace() {
   const { t } = useI18n();
   const tRef = useRef(t);
-  tRef.current = t;
-  const { connected } = useWebSocket();
+  const { connected, reconnectFailed, reconnect } = useWebSocket();
 
   const [engagements, setEngagements] = useState<EngagementOption[]>([]);
   const [engagementId, setEngagementId] = useState<number | null>(null);
@@ -144,9 +144,14 @@ export function useChatWorkspace() {
   const historyLoadedRef = useRef(false);
   const previousConnectedRef = useRef(connected);
   const readWatermarkRef = useRef("");
+  const optimisticIdRef = useRef(0);
+  const pendingSendRef = useRef<{ optimisticId: number; engagementId: number; channelId: number; text: string; confirmed: boolean } | null>(null);
+  const latestMessageRef = useRef(new Map<number, number>());
+  const searchRef = useRef(search);
   engagementIdRef.current = engagementId;
   channelIdRef.current = channelId;
   messagesRef.current = messages;
+  searchRef.current = search;
 
   const fail = useCallback((err: unknown, fallback: string) => {
     setError(errorText(tRef.current, err, () => fallback));
@@ -227,6 +232,9 @@ export function useChatWorkspace() {
       const rows = firstArray(data, ["messages", "data"])
         .map(parseMessage)
         .filter((row): row is ChatMessageView => row != null);
+      for (const row of rows) {
+        latestMessageRef.current.set(targetChannel, Math.max(latestMessageRef.current.get(targetChannel) ?? 0, row.id));
+      }
       setMessages((prev) => mergeMessages(prev, rows, !merge));
       setNextBeforeId(toId(asRecord(data)?.next_before_id));
       historyLoadedRef.current = true;
@@ -257,15 +265,27 @@ export function useChatWorkspace() {
   useEffect(() => {
     const wasConnected = previousConnectedRef.current;
     previousConnectedRef.current = connected;
-    if (connected && !wasConnected && historyLoadedRef.current) setReconnectToken((n) => n + 1);
-  }, [connected]);
+    if (!connected || wasConnected) return;
+    setReconnectToken((n) => n + 1);
+    const engagement = engagementIdRef.current;
+    if (engagement != null) void loadChannels(engagement);
+  }, [connected, loadChannels]);
 
   useTypedWS("chat", (frame) => {
     const frameEngagement = toId(frame.engagement_id);
     const frameChannel = toId(frame.channel_id);
     const id = toId(frame.id);
     if (id == null || frameEngagement == null || frameChannel == null) return;
-    if (frameEngagement !== engagementIdRef.current || frameChannel !== channelIdRef.current) return;
+    const previousId = latestMessageRef.current.get(frameChannel) ?? 0;
+    const isNew = id > previousId;
+    if (!isNew && frame.kind !== "approval") return;
+    latestMessageRef.current.set(frameChannel, Math.max(previousId, id));
+    if (frameEngagement !== engagementIdRef.current || frameChannel !== channelIdRef.current) {
+      if (isNew && frameEngagement === engagementIdRef.current) {
+        setChannels((prev) => prev.map((row) => row.id === frameChannel && !row.muted ? { ...row, unread_count: row.unread_count + 1 } : row));
+      }
+      return;
+    }
     const incoming: ChatMessageView = {
       id,
       engagement_id: frameEngagement,
@@ -278,6 +298,13 @@ export function useChatWorkspace() {
       metadata: typeof frame.metadata === "string" ? frame.metadata : "",
       created_at: typeof frame.created_at === "string" ? frame.created_at : new Date().toISOString(),
     };
+    const pending = pendingSendRef.current;
+    if (pending && !pending.confirmed && pending.engagementId === frameEngagement &&
+      pending.channelId === frameChannel && pending.text === incoming.message) {
+      pending.confirmed = true;
+      setMessages((prev) => mergeMessages(prev.filter((row) => row.id !== pending.optimisticId), [incoming], false));
+    }
+    if (searchRef.current.trim()) return;
     setMessages((prev) => mergeMessages(prev, [incoming], false));
   });
 
@@ -286,6 +313,7 @@ export function useChatWorkspace() {
     channelSeq.current++;
     historySeq.current++;
     engagementIdRef.current = id;
+    latestMessageRef.current.clear();
     setEngagementId(id);
     setChannels([]);
     setChannelId(null);
@@ -328,7 +356,7 @@ export function useChatWorkspace() {
   useEffect(() => {
     if (engagementId == null || channelId == null || search.trim()) return;
     const active = channels.find((row) => row.id === channelId);
-    if (!active || active.unread_count <= 0 || messages.length === 0) return;
+    if (!active || messages.length === 0) return;
     const latest = messages.reduce((max, row) => Math.max(max, row.id), 0);
     const key = `${channelId}:${latest}`;
     if (readWatermarkRef.current === key) return;
@@ -341,19 +369,43 @@ export function useChatWorkspace() {
     const targetEngagement = engagementIdRef.current;
     const targetChannel = channelIdRef.current;
     if (!text || targetEngagement == null || targetChannel == null || sending) return;
-    setSending(true);
+    const optimisticId = --optimisticIdRef.current;
+    const optimistic: ChatMessageView = {
+      id: optimisticId,
+      engagement_id: targetEngagement,
+      channel_id: targetChannel,
+      user_id: null,
+      username: "",
+      message: text,
+      kind: "user",
+      task_id: null,
+      metadata: "",
+      created_at: new Date().toISOString(),
+      pending: true,
+    };
+    pendingSendRef.current = { optimisticId, engagementId: targetEngagement, channelId: targetChannel, text, confirmed: false };
     setError(null);
+    setDraft("");
+    setMessages((prev) => mergeMessages(prev, [optimistic], false));
     try {
-      await api.postJson(paths.scopedChat.send, {
+      const data = await api.postJson(paths.scopedChat.send, {
         engagement_id: targetEngagement,
         channel_id: targetChannel,
         message: text,
       });
-      setDraft("");
+      const confirmedId = toId(asRecord(data)?.id) ?? optimisticId;
+      const confirmed: ChatMessageView = { ...optimistic, id: confirmedId, pending: false };
+      setMessages((prev) => mergeMessages(prev.filter((row) => row.id !== optimisticId), [confirmed], false));
       await loadHistory(undefined, true);
     } catch (err) {
-      fail(err, tRef.current("chat.error"));
+      const confirmed = pendingSendRef.current?.confirmed === true;
+      setMessages((prev) => prev.filter((row) => row.id !== optimisticId));
+      if (!confirmed) {
+        setDraft((prev) => prev.trim() ? prev : text);
+        fail(err, tRef.current("chat.send_failed"));
+      }
     } finally {
+      pendingSendRef.current = null;
       setSending(false);
     }
   }, [draft, fail, loadHistory, sending]);
@@ -439,6 +491,6 @@ export function useChatWorkspace() {
     showCreate, setShowCreate, newChannelName, setNewChannelName, createChannel,
     toggleMute, archiveChannel, markRead,
     busyTaskId, decideTask,
-    connected,
+    connected, reconnectFailed, reconnect,
   };
 }

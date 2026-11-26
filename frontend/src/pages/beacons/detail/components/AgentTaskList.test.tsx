@@ -104,4 +104,11 @@ describe("AgentTaskList task projections", () => {
     expect(readCreator).not.toHaveBeenCalled();
     expect(api.get).not.toHaveBeenCalled();
   });
+
+  it("counts pending approval tasks in the pending backlog", () => {
+    renderList({ id: 8, type: "shell", status: "pending_approval", created_at: "2026-08-14T00:00:00Z" });
+    const label = screen.getByText("agents.detail_pending");
+    expect(label.parentElement?.textContent).toContain("1");
+  });
 });
+

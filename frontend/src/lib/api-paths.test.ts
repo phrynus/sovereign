@@ -48,6 +48,7 @@ describe("api paths", () => {
     expect(paths.builds.list("page=1")).toBe("/builds?page=1");
     expect(paths.settings.root).toBe("/settings");
     expect(paths.settings.dbBackups).toBe("/settings/db/backups");
+    expect(paths.audit.exportChain("format=ndjson")).toBe("/audit/export?format=ndjson");
     expect(paths.settings.dbRestore).toBe("/settings/db/restore");
     expect(paths.settings.dbBackupsDownload("x.db")).toContain("name=x.db");
     expect(paths.settings.configDownload).toBe("/settings/config/download");

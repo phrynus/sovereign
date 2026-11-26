@@ -188,6 +188,9 @@ func TestFileTransferPushResumeAfterRestart(t *testing.T) {
 	if done.Status != transferStatusCompleted || done.CurrentTaskID != nil {
 		t.Fatalf("session not completed: %+v", done)
 	}
+	if done.ComputedSHA256 != hex.EncodeToString(whole[:]) {
+		t.Fatalf("completed push digest = %q, want %q", done.ComputedSHA256, hex.EncodeToString(whole[:]))
+	}
 	var ledger []db.FileTransferChunk
 	if err := database.Where("transfer_id = ?", ft.ID).Order(`"offset" ASC`).Find(&ledger).Error; err != nil || len(ledger) != 2 {
 		t.Fatalf("ledger: %v, %+v", err, ledger)
@@ -245,6 +248,9 @@ func TestFileTransferPullResumeAfterRestart(t *testing.T) {
 	done := reloadTransfer(t, database, ft.ID)
 	if done.Status != transferStatusCompleted {
 		t.Fatalf("pull session not completed: %+v", done)
+	}
+	if done.ComputedSHA256 != hex.EncodeToString(whole[:]) {
+		t.Fatalf("completed pull digest = %q, want %q", done.ComputedSHA256, hex.EncodeToString(whole[:]))
 	}
 	finalPath := transferFinalPath(filepath.Join(dataDir, "transfers"), done.Filename, done.ID)
 	got, err := os.ReadFile(finalPath)
@@ -350,9 +356,35 @@ func TestFileTransferEmptyFile(t *testing.T) {
 	if done.Status != transferStatusCompleted {
 		t.Fatalf("empty pull not completed: %+v", done)
 	}
+	if done.ComputedSHA256 != hex.EncodeToString(empty[:]) {
+		t.Fatalf("empty pull digest = %q, want %q", done.ComputedSHA256, hex.EncodeToString(empty[:]))
+	}
 	info, err := os.Stat(transferFinalPath(filepath.Join(dataDir, "transfers"), done.Filename, done.ID))
 	if err != nil || info.Size() != 0 {
 		t.Fatalf("empty final file: %v, %+v", err, info)
+	}
+}
+
+func TestFileTransferPullUnknownSizeRecordsFinalSizeAndDigest(t *testing.T) {
+	database, s, agent, _ := transferTestSetup(t)
+	payload := []byte("hello")
+	created := transferRequest(t, s.handleCreateTransfer, agent.ID, "", map[string]any{
+		"direction": "pull", "path": "/tmp/unknown-size.txt", "total_size": 0, "filename": "unknown-size.txt",
+	})
+	resumed := transferRequest(t, s.handleResumeTransfer, agent.ID, fmt.Sprintf("%d", created.Data.Transfer.ID), map[string]any{})
+	var task db.Task
+	if err := database.First(&task, resumed.Data.TaskID).Error; err != nil {
+		t.Fatal(err)
+	}
+	current := reloadTransfer(t, database, created.Data.Transfer.ID)
+	mac := transferChunkMACFor(t, s, agent.ID, current.PrevMAC, payload)
+	r := taskResult{TaskID: task.ID, Type: "download", Output: base64.StdEncoding.EncodeToString(payload),
+		Encoding: "base64", Offset: 0, Size: int64(len(payload)), MAC: mac, ResultID: "unknown-size", Final: true}
+	s.processTaskResults(agent, []taskResult{r}, agent.ID, time.Now())
+	done := reloadTransfer(t, database, created.Data.Transfer.ID)
+	want := sha256.Sum256(payload)
+	if done.Status != transferStatusCompleted || done.TotalSize != int64(len(payload)) || done.ComputedSHA256 != hex.EncodeToString(want[:]) {
+		t.Fatalf("unknown-size pull = %+v, want size %d digest %s", done, len(payload), hex.EncodeToString(want[:]))
 	}
 }
 
@@ -453,6 +485,10 @@ func TestFileTransferReconciliation(t *testing.T) {
 	if err != nil || string(got) != "hello" {
 		t.Fatalf("repaired final file: %v %q", err, got)
 	}
+	repaired := reloadTransfer(t, database, done.ID)
+	if len(repaired.ComputedSHA256) != 64 {
+		t.Fatalf("repaired pull digest = %q", repaired.ComputedSHA256)
+	}
 
 	// A completed push task whose session update was lost is replayed once.
 	pushDigest := sha256.Sum256([]byte("data"))
@@ -472,6 +508,9 @@ func TestFileTransferReconciliation(t *testing.T) {
 	replayed := reloadTransfer(t, database, push.ID)
 	if replayed.CommittedOffset != 4 || replayed.Status != transferStatusCompleted {
 		t.Fatalf("replayed push = %+v", replayed)
+	}
+	if replayed.ComputedSHA256 != hex.EncodeToString(pushDigest[:]) {
+		t.Fatalf("replayed push digest = %q, want %q", replayed.ComputedSHA256, hex.EncodeToString(pushDigest[:]))
 	}
 	var count int64
 	database.Model(&db.FileTransferChunk{}).Where("transfer_id = ?", push.ID).Count(&count)

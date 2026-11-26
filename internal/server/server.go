@@ -935,28 +935,27 @@ func (s *Server) InitOptimizations(configPath string) {
 
 	backupDir := filepath.Join(s.cfg.Server.DataDir, "backups")
 
-	// Built-in database backups are implemented for SQLite (VACUUM INTO +
-	// file replacement). On PostgreSQL the endpoints answer 501 with guidance
-	// instead of pretending to work; operators must use pg_dump/pgBackRest.
-	if !isSQLiteDB(s.db) {
-		slog.Warn("Built-in database backups disabled for PostgreSQL driver; use an external backup tool (pg_dump/pgBackRest)",
-			"driver", s.db.Dialector.Name())
-		return
-	}
-
 	var err error
 	s.backupManager, err = NewBackupManager(s.db, s.cfg.Database.Path, backupDir, s.backupKeyHex())
 	if err != nil {
 		slog.Warn("Failed to initialize backup manager", "error", err)
 		return
 	}
+	if databaseDriver(s.db) == "postgres" {
+		if err := s.backupManager.SetPostgresDSN(s.cfg.Database.DSN); err != nil {
+			slog.Warn("Failed to configure PostgreSQL backups", "error", err)
+		} else if err := s.backupManager.loadRestoreCheckpoint(); err != nil {
+			slog.Warn("Failed to load PostgreSQL restore checkpoint", "error", err)
+		}
+	}
 	s.backupManager.Sidecar = func() backupSidecar {
+		keyID := s.backupKeyID()
 		s.configMu.RLock()
 		defer s.configMu.RUnlock()
 		return backupSidecar{
 			Version:       "fbk1",
 			CreatedAt:     time.Now().UTC().Format(time.RFC3339),
-			KeyID:         s.backupKeyID(),
+			KeyID:         keyID,
 			ServerVersion: ServerVersion,
 			Host:          s.cfg.Server.Host,
 			Port:          s.cfg.Server.Port,

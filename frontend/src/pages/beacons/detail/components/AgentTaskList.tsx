@@ -163,7 +163,7 @@ export default memo(function AgentTaskList({
     if (tasksRedacted) return { ...counts, byType };
     for (const task of tasks) {
       if (task.status === "completed") counts.completed++;
-      else if (task.status === "pending") counts.pending++;
+      else if (task.status === "pending" || task.status === "pending_approval") counts.pending++;
       else if (task.status === "failed") counts.failed++;
       const type = task.type || "";
       if (type) byType.set(type, (byType.get(type) || 0) + 1);

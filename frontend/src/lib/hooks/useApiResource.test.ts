@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { __testDispatchWS } from "@/lib/wsContext";
 import { createElement, StrictMode, type PropsWithChildren } from "react";
 import { useApiResource } from "./useApiResource";
 
@@ -43,6 +44,23 @@ describe("useApiResource", () => {
     // old data kept, not flagged as a hard error
     expect(result.current.data).toEqual([1]);
     expect(result.current.error).toBeNull();
+  });
+
+  it("refreshes on the server sync snapshot when opted in", async () => {
+    const fetcher = vi.fn().mockResolvedValue([1]);
+    const { result } = renderHook(() => useApiResource<number[]>({ fetcher, resyncOnConnect: true }));
+    await waitFor(() => expect(result.current.data).toEqual([1]));
+    act(() => __testDispatchWS({ type: "sync" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  });
+
+  it("can surface a refresh error while retaining stale data", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce([1]).mockRejectedValueOnce(new Error("boom"));
+    const { result } = renderHook(() => useApiResource<number[]>({ fetcher, errorMessage: "nope", reportRefreshErrors: true }));
+    await waitFor(() => expect(result.current.data).toEqual([1]));
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.data).toEqual([1]);
+    expect(result.current.error).toBe("nope");
   });
 
   it("supersedes an in-flight refresh with a newer one", async () => {

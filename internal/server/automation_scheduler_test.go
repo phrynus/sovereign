@@ -173,55 +173,58 @@ func TestExecuteActionTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	evt := Event{Type: "agent.checkin", AgentID: "act-agent", AgentHost: "act-host", TenantID: 1}
-
 	execMust := func(action RuleAction) {
 		t.Helper()
 		if err := s.executeAction(AutomationRule{ID: "test"}, action, evt); err != nil {
 			t.Fatalf("executeAction(%s) dispatch failed: %v", action.Type, err)
 		}
 	}
+	execErr := func(action RuleAction) error {
+		t.Helper()
+		return s.executeAction(AutomationRule{ID: "test"}, action, evt)
+	}
 
-	// create_task expands templates and attributes the task to automation.
+	execMust(schedAction(t, ActionRunCommand, map[string]string{"command": "echo {{hostname}}"}))
 	execMust(schedAction(t, ActionCreateTask, map[string]string{
 		"type": "shell", "command": "echo {{hostname}} {{agent_id}}",
 	}))
-
-	// set_sleep clamps to the OPSEC floors and queues a set_sleep task.
 	execMust(schedAction(t, ActionSetSleep, map[string]int{"interval": 1, "jitter": 200}))
 
 	var tasks []db.Task
 	if err := s.db.Where("agent_id = ?", "act-agent").Order("id asc").Find(&tasks).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(tasks) != 2 {
-		t.Fatalf("tasks = %d, want create_task + set_sleep (%+v)", len(tasks), tasks)
+	if len(tasks) != 3 {
+		t.Fatalf("tasks = %d, want command + create_task + set_sleep (%+v)", len(tasks), tasks)
 	}
-	if tasks[0].Type != "shell" || tasks[0].Command != "echo act-host act-agent" || tasks[0].CreatedBy != "automation" {
-		t.Fatalf("create_task result = %+v", tasks[0])
+	if tasks[0].Type != "shell" || tasks[0].Command != "echo act-host" || tasks[0].CreatedBy != "automation" {
+		t.Fatalf("command result = %+v", tasks[0])
 	}
-	if tasks[1].Type != "set_sleep" || !strings.Contains(tasks[1].Command, ",") {
-		t.Fatalf("set_sleep result = %+v", tasks[1])
+	if tasks[1].Type != "shell" || tasks[1].Command != "echo act-host act-agent" || tasks[1].CreatedBy != "automation" {
+		t.Fatalf("create_task result = %+v", tasks[1])
+	}
+	if tasks[2].Type != "set_sleep" || !strings.Contains(tasks[2].Command, ",") {
+		t.Fatalf("set_sleep result = %+v", tasks[2])
 	}
 
-	// run_macro pointing at another tenant's macro is blocked (no run queued).
 	foreignMacro := db.CommandMacro{TenantID: 2, Name: "foreign", Steps: `[]`}
 	if err := s.db.Create(&foreignMacro).Error; err != nil {
 		t.Fatal(err)
 	}
 	before := len(tasks)
-	execMust(schedAction(t, ActionRunMacro, map[string]interface{}{"macro_id": foreignMacro.ID}))
+	if err := execErr(schedAction(t, ActionRunMacro, map[string]interface{}{"macro_id": foreignMacro.ID})); err == nil {
+		t.Fatal("cross-tenant macro block was not reported")
+	}
 	var after int64
 	s.db.Model(&db.Task{}).Where("agent_id = ?", "act-agent").Count(&after)
 	if int(after) != before {
 		t.Fatalf("cross-tenant macro queued %d tasks", int(after)-before)
 	}
 
-	// notify and a blocked webhook must not panic the dispatcher.
 	execMust(schedAction(t, ActionNotify, map[string]string{"message": "hello \"quoted\""}))
-	execMust(schedAction(t, ActionWebhook, map[string]string{"url": "http://127.0.0.1:9/hook"}))
-	// Give the async webhook goroutine a moment; it must fail closed on the
-	// private URL rather than reach the network.
-	time.Sleep(50 * time.Millisecond)
+	if err := execErr(schedAction(t, ActionWebhook, map[string]string{"url": "http://127.0.0.1:9/hook"})); err == nil {
+		t.Fatal("blocked webhook target was not reported")
+	}
 }
 
 func TestHandleDeleteAutomationRuleNotFound(t *testing.T) {

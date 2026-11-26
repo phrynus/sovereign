@@ -601,6 +601,7 @@ var allowedInfoKeys = map[string]bool{
 	// Live link quality reported by the agent each beacon (RTT median in ms,
 	// loss EWMA, sample count, total exchanges). Bounded strings, operator-only.
 	"link_rtt_ms": true, "link_loss": true, "link_samples": true, "link_total": true,
+	"task_types": true,
 }
 
 const maxInfoValueLen = 512
@@ -616,8 +617,12 @@ func sanitizeInfo(info map[string]string) map[string]string {
 		}
 		v = strings.ReplaceAll(v, "\x00", "")
 		v = strings.TrimSpace(v)
-		if len([]rune(v)) > maxInfoValueLen {
-			v = string([]rune(v)[:maxInfoValueLen])
+		limit := maxInfoValueLen
+		if k == "task_types" {
+			limit = 4096
+		}
+		if len([]rune(v)) > limit {
+			v = string([]rune(v)[:limit])
 		}
 		sanitized[k] = v
 	}

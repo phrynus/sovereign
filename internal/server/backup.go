@@ -7,8 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -55,6 +53,16 @@ type BackupManager struct {
 	lastSuccess time.Time
 	lastFailure time.Time
 	lastError   string
+	// PostgreSQL logical backups use the configured DSN and external client
+	// tools. The command/lookPath seams keep the workflow deterministic in tests.
+	postgresDSN   string
+	commandRunner backupCommandRunner
+	lookPath      backupLookPathFunc
+	// Restore evidence is kept separately from backup freshness: a backup can
+	// succeed while its automatic scratch restore fails.
+	lastRestore      time.Time
+	lastRestoreError string
+	checkpoint       *RestoreCheckpoint
 	// Sidecar, when set, supplies non-secret snapshot metadata written
 	// alongside each .fbk (key fingerprint, server identity). The restore
 	// path compares key_id up front for an early, explicit mismatch error.
@@ -84,34 +92,43 @@ func (bm *BackupManager) retention() int {
 	return bm.retain
 }
 
-// BackupHealth is the operator-facing view of backup freshness.
 type BackupHealth struct {
-	Enabled     bool      `json:"enabled"`
-	Retain      int       `json:"retain"`
-	LastSuccess time.Time `json:"last_success,omitempty"`
-	LastFailure time.Time `json:"last_failure,omitempty"`
-	LastError   string    `json:"last_error,omitempty"`
-	AgeSeconds  float64   `json:"age_seconds"`
-	SnapshotDir string    `json:"snapshot_dir"`
+	Enabled           bool               `json:"enabled"`
+	Retain            int                `json:"retain"`
+	LastSuccess       time.Time          `json:"last_success,omitempty"`
+	LastFailure       time.Time          `json:"last_failure,omitempty"`
+	LastError         string             `json:"last_error,omitempty"`
+	AgeSeconds        float64            `json:"age_seconds"`
+	SnapshotDir       string             `json:"snapshot_dir"`
+	LastRestore       time.Time          `json:"last_restore,omitempty"`
+	LastRestoreError  string             `json:"last_restore_error,omitempty"`
+	CheckpointReady   bool               `json:"checkpoint_ready"`
+	RestoreCheckpoint *RestoreCheckpoint `json:"restore_checkpoint,omitempty"`
 }
 
-// Health reports the current backup freshness. Before the first successful run
-// it reports a zero age, which callers treat as "not yet proven".
+// Health reports the current backup and restore-verification freshness. Before
+// the first successful run it reports a zero age, which callers treat as "not
+// yet proven".
 func (bm *BackupManager) Health() BackupHealth {
 	bm.mu.Lock()
-	last := bm.lastSuccess
-	bm.mu.Unlock()
 	h := BackupHealth{
-		Retain:      bm.retention(),
-		LastSuccess: last,
-		SnapshotDir: bm.backupDir,
+		Enabled:          true,
+		Retain:           bm.retention(),
+		LastSuccess:      bm.lastSuccess,
+		LastFailure:      bm.lastFailure,
+		LastError:        bm.lastError,
+		LastRestore:      bm.lastRestore,
+		LastRestoreError: bm.lastRestoreError,
+		CheckpointReady:  bm.checkpoint != nil,
+		SnapshotDir:      bm.backupDir,
 	}
-	bm.mu.Lock()
-	h.LastFailure = bm.lastFailure
-	h.LastError = bm.lastError
+	if bm.checkpoint != nil {
+		cp := *bm.checkpoint
+		h.RestoreCheckpoint = &cp
+	}
 	bm.mu.Unlock()
-	if !last.IsZero() {
-		h.AgeSeconds = time.Since(last).Seconds()
+	if !h.LastSuccess.IsZero() {
+		h.AgeSeconds = time.Since(h.LastSuccess).Seconds()
 	}
 	return h
 }
@@ -128,18 +145,39 @@ func (bm *BackupManager) noteBackupResult(err error) {
 	bm.mu.Unlock()
 }
 
+func (bm *BackupManager) noteRestoreResult(err error) {
+	bm.mu.Lock()
+	bm.lastRestore = time.Now()
+	if err != nil {
+		bm.lastRestoreError = err.Error()
+	} else {
+		bm.lastRestoreError = ""
+	}
+	bm.mu.Unlock()
+}
+
 // backupSidecar is the non-secret companion of a .fbk file. It deliberately
 // carries no key material or credentials — only identity needed to validate
 // a restore before attempting decryption.
 type backupSidecar struct {
-	Version       string `json:"version"`
-	CreatedAt     string `json:"created_at"`
-	KeyID         string `json:"key_id"`
-	ServerVersion string `json:"server_version"`
-	Host          string `json:"host"`
-	Port          int    `json:"port"`
-	TLSEnabled    bool   `json:"tls_enabled"`
-	DBDriver      string `json:"db_driver"`
+	Version         string           `json:"version"`
+	CreatedAt       string           `json:"created_at"`
+	KeyID           string           `json:"key_id"`
+	ServerVersion   string           `json:"server_version"`
+	Host            string           `json:"host"`
+	Port            int              `json:"port"`
+	TLSEnabled      bool             `json:"tls_enabled"`
+	DBDriver        string           `json:"db_driver"`
+	Format          string           `json:"format,omitempty"`
+	PgDumpVersion   string           `json:"pg_dump_version,omitempty"`
+	StartedAt       string           `json:"started_at,omitempty"`
+	CompletedAt     string           `json:"completed_at,omitempty"`
+	RestoredAt      string           `json:"restored_at,omitempty"`
+	DurationSeconds float64          `json:"duration_seconds,omitempty"`
+	SizeBytes       int64            `json:"size_bytes,omitempty"`
+	SHA256          string           `json:"sha256,omitempty"`
+	RowCounts       map[string]int64 `json:"row_counts,omitempty"`
+	RestoreReport   *RestoreReport   `json:"restore_report,omitempty"`
 }
 
 func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManager, error) {
@@ -177,14 +215,6 @@ func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManage
 	}, nil
 }
 
-// errNonSQLiteBackup is returned by every backup/restore/vacuum path when the
-// server runs on a non-SQLite driver. Those paths are implemented on top of
-// SQLite's VACUUM INTO plus file replacement: on PostgreSQL they would either
-// fail with a confusing SQL error or, worse, "restore" by writing a file that
-// nothing reads. Refusing loudly is the honest behaviour until a driver-aware
-// logical dump path exists.
-var errNonSQLiteBackup = errors.New("database backup/restore are implemented for SQLite only; use an external PostgreSQL backup tool (pg_dump/pgBackRest) for this deployment")
-
 // isSQLiteDB reports whether the live connection is SQLite.
 func isSQLiteDB(db *gorm.DB) bool {
 	if db == nil || db.Dialector == nil {
@@ -193,10 +223,26 @@ func isSQLiteDB(db *gorm.DB) bool {
 	return db.Dialector.Name() == "sqlite"
 }
 
+func databaseDriver(database *gorm.DB) string {
+	if database == nil || database.Dialector == nil {
+		return "unknown"
+	}
+	return database.Dialector.Name()
+}
+
+func (bm *BackupManager) isPostgresBackup() bool {
+	return bm.postgresDSN != "" || databaseDriver(bm.db) == "postgres"
+}
+
 func (bm *BackupManager) Start(cronSchedule string) error {
-	if !isSQLiteDB(bm.db) {
-		slog.Warn("Scheduled backups disabled: non-SQLite driver", "driver", bm.db.Dialector.Name())
-		return errNonSQLiteBackup
+	duration, err := parseCronSchedule(cronSchedule)
+	if err != nil {
+		return err
+	}
+	if bm.isPostgresBackup() {
+		if err := bm.validatePostgresTools(); err != nil {
+			return err
+		}
 	}
 	bm.mu.Lock()
 	if bm.running {
@@ -205,11 +251,6 @@ func (bm *BackupManager) Start(cronSchedule string) error {
 	}
 	bm.running = true
 	bm.mu.Unlock()
-
-	duration, err := parseCronSchedule(cronSchedule)
-	if err != nil {
-		return err
-	}
 
 	slog.Info("Backup manager started", "schedule", cronSchedule, "interval", duration)
 
@@ -311,14 +352,15 @@ func (bm *BackupManager) PerformBackup() error {
 // schedule. Used by PerformBackup (scheduled) and the manual backup
 // endpoint. Returns the .fbk filename and size.
 func (bm *BackupManager) createBackup() (string, int64, error) {
-	if !isSQLiteDB(bm.db) {
-		return "", 0, errNonSQLiteBackup
-	}
-	// One backup at a time: a scheduled run and a manual one can overlap, and two
-	// concurrent VACUUM INTO snapshots would fight over the writer and the output
-	// directory.
+	// One backup at a time: a scheduled run and a manual one can overlap.
 	bm.runMu.Lock()
 	defer bm.runMu.Unlock()
+	if bm.isPostgresBackup() {
+		return bm.createPostgresBackup()
+	}
+	if !isSQLiteDB(bm.db) {
+		return "", 0, fmt.Errorf("unsupported database driver %q for backups", databaseDriver(bm.db))
+	}
 	start := time.Now()
 	slog.Info("Starting database backup")
 
@@ -345,17 +387,7 @@ func (bm *BackupManager) createBackup() (string, int64, error) {
 		return "", 0, vacErr
 	}
 
-	timestamp := time.Now().Format(backupTimestamp)
-	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("sovereign_backup_%s.fbk", timestamp))
-	// Two backups can land in the same second (the scheduler fires on Start and a
-	// manual run arrives immediately after). Without a suffix the second rename
-	// overwrites the first on Unix and fails outright on Windows.
-	for i := 2; ; i++ {
-		if _, statErr := os.Stat(backupFile); os.IsNotExist(statErr) {
-			break
-		}
-		backupFile = filepath.Join(bm.backupDir, fmt.Sprintf("sovereign_backup_%s_%d.fbk", timestamp, i))
-	}
+	backupFile := bm.nextBackupPath()
 
 	data, err := os.ReadFile(snapshotPath)
 	if err != nil {
@@ -384,9 +416,7 @@ func (bm *BackupManager) createBackup() (string, int64, error) {
 	slog.Info("Backup completed", "file", backupFile, "size", len(encryptedData), "duration", time.Since(start))
 
 	if bm.Sidecar != nil {
-		if meta, err := json.MarshalIndent(bm.Sidecar(), "", "  "); err != nil {
-			slog.Warn("Failed to encode backup sidecar", "err", err)
-		} else if err := os.WriteFile(backupFile+".meta.json", meta, 0600); err != nil {
+		if err := writeBackupSidecar(backupFile+".meta.json", bm.Sidecar()); err != nil {
 			slog.Warn("Failed to write backup sidecar", "err", err)
 		}
 	}
@@ -394,6 +424,17 @@ func (bm *BackupManager) createBackup() (string, int64, error) {
 	bm.cleanupOldBackups()
 
 	return filepath.Base(backupFile), int64(len(encryptedData)), nil
+}
+
+func (bm *BackupManager) nextBackupPath() string {
+	timestamp := time.Now().Format(backupTimestamp)
+	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("sovereign_backup_%s.fbk", timestamp))
+	for i := 2; ; i++ {
+		if _, statErr := os.Stat(backupFile); os.IsNotExist(statErr) {
+			return backupFile
+		}
+		backupFile = filepath.Join(bm.backupDir, fmt.Sprintf("sovereign_backup_%s_%d.fbk", timestamp, i))
+	}
 }
 
 func (bm *BackupManager) encrypt(data []byte) ([]byte, error) {
@@ -459,7 +500,8 @@ func (bm *BackupManager) removeStaleTempFiles(files []os.DirEntry) {
 			continue
 		}
 		name := file.Name()
-		if !strings.HasSuffix(name, ".fbk.tmp") && !strings.HasPrefix(name, ".sovereign-snapshot-") {
+		if !strings.HasSuffix(name, ".fbk.tmp") && !strings.HasPrefix(name, ".sovereign-snapshot-") &&
+			!strings.HasPrefix(name, ".sovereign-pg-dump-") && !strings.HasPrefix(name, ".sovereign-restore-") {
 			continue
 		}
 		info, err := file.Info()

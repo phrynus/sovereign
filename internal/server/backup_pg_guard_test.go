@@ -106,15 +106,16 @@ func assertNotImplemented(t *testing.T, name string, w *httptest.ResponseRecorde
 	}
 }
 
-// TestBackupManagerRefusesNonSQLite proves the scheduled path refuses too,
-// instead of logging a cryptic VACUUM failure on every tick.
-func TestBackupManagerRefusesNonSQLite(t *testing.T) {
+// TestBackupManagerPostgresRequiresConfiguration proves the scheduled path no
+// longer refuses non-SQLite databases outright; it requires PostgreSQL backup
+// configuration (DSN/tools) instead.
+func TestBackupManagerPostgresRequiresConfiguration(t *testing.T) {
 	bm := &BackupManager{db: newFakePostgresDB(t), backupDir: t.TempDir()}
-	if _, _, err := bm.createBackup(); !errors.Is(err, errNonSQLiteBackup) {
-		t.Fatalf("createBackup error = %v, want errNonSQLiteBackup", err)
+	if _, _, err := bm.createBackup(); err == nil {
+		t.Fatal("createBackup succeeded without PostgreSQL backup configuration")
 	}
-	if err := bm.Start("daily"); !errors.Is(err, errNonSQLiteBackup) {
-		t.Fatalf("Start error = %v, want errNonSQLiteBackup", err)
+	if err := bm.Start("daily"); err == nil {
+		t.Fatal("Start succeeded without PostgreSQL backup configuration")
 	}
 }
 

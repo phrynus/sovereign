@@ -2,6 +2,7 @@
 # CI port of the demo restore drill. Everything runs through `docker exec`, so
 # the runner needs no local psql/pg_dump. It mirrors deploy/demo/restore-drill.sh:
 # dump the live database, restore into a scratch database, compare row counts on
+trap 'docker exec "$PG_CONTAINER" psql -U "$PG_ROLE" -d postgres -c "DROP DATABASE IF EXISTS \"$SCRATCH\"" >/dev/null 2>&1 || true' EXIT
 # the six tables the demo drill audits, then drop the scratch database.
 #
 #   bash scripts/ci-pg-restore-drill.sh [dump.sql.gz]

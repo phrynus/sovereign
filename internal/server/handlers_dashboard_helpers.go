@@ -150,11 +150,11 @@ func (s *Server) getNavStats(c *gin.Context) gin.H {
 		slog.Error("Failed to count listeners", "err", err)
 	}
 	if tid != 0 {
-		if err := s.db.Model(&db.Task{}).Where("status = ? AND tenant_id = ?", "pending", tid).Count(&pendingTasks).Error; err != nil {
+		if err := s.db.Model(&db.Task{}).Where("status IN ? AND tenant_id = ?", []string{"pending", TaskStatusPendingApproval, "running"}, tid).Count(&pendingTasks).Error; err != nil {
 			slog.Error("Failed to count pending tasks", "err", err)
 		}
 	} else {
-		if err := s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks).Error; err != nil {
+		if err := s.db.Model(&db.Task{}).Where("status IN ?", []string{"pending", TaskStatusPendingApproval, "running"}).Count(&pendingTasks).Error; err != nil {
 			slog.Error("Failed to count pending tasks", "err", err)
 		}
 	}

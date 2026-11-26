@@ -106,7 +106,7 @@ func (s *Server) handleExportCapabilities(c *gin.Context) {
 		}, "audit_export": exportCapabilities{
 			Path:       "/audit/export",
 			Formats:    []string{"ndjson", "json"},
-			Parameters: []string{"limit", "since_id", "since", "until", "user", "action", "agent_id", "format"},
+			Parameters: []string{"limit", "since_id", "since", "until", "user", "action", "match", "result", "agent_id", "format"},
 			MaxRows:    200000,
 			MaxBytes:   int64(auditExportMaxBytes),
 			Headers: []string{

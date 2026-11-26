@@ -461,15 +461,17 @@ func (s *Server) commitTransferChunk(agent db.Implant, r taskResult, task *db.Ta
 		sum := sha256.Sum256(data)
 		chunkSHA = hex.EncodeToString(sum[:])
 		chunkLen = int64(len(data))
-
+		computedSHA := ""
 		if session.Direction == transferDirectionPull {
 			if err := s.writePullChunk(session, offset, data); err != nil {
 				return fail("could not write pull chunk: " + err.Error())
 			}
 			if final {
-				if err := s.finishPullFile(session); err != nil {
+				digest, err := s.finishPullFile(session)
+				if err != nil {
 					return fail("could not finalize pull: " + err.Error())
 				}
+				computedSHA = digest
 			}
 		} else if final {
 			actual, err := s.pushTransferSHA256(tx, session.ID, offset+chunkLen)
@@ -479,6 +481,7 @@ func (s *Server) commitTransferChunk(agent db.Implant, r taskResult, task *db.Ta
 			if !strings.EqualFold(actual, session.SHA256) {
 				return fail("pushed file SHA-256 mismatch")
 			}
+			computedSHA = actual
 		}
 
 		ledger := db.FileTransferChunk{
@@ -503,6 +506,10 @@ func (s *Server) commitTransferChunk(agent db.Implant, r taskResult, task *db.Ta
 		if final {
 			updates["status"] = transferStatusCompleted
 			updates["completed_at"] = now
+			updates["computed_sha256"] = computedSHA
+			if session.TotalSize == 0 {
+				updates["total_size"] = offset + chunkLen
+			}
 		}
 		for k, v := range clearLock {
 			updates[k] = v
@@ -606,43 +613,44 @@ func (s *Server) writePullChunk(ft db.FileTransfer, offset int64, data []byte) e
 }
 
 // finishPullFile verifies the assembled file and atomically publishes it.
-func (s *Server) finishPullFile(ft db.FileTransfer) error {
+func (s *Server) finishPullFile(ft db.FileTransfer) (string, error) {
 	dir, err := s.transfersDir()
 	if err != nil {
-		return err
+		return "", err
 	}
 	part := transferPartPath(dir, ft.ID)
 	f, err := os.Open(part)
 	if err != nil {
-		return err
+		return "", err
 	}
 	h := sha256.New()
 	size, err := io.Copy(h, f)
 	closeErr := f.Close()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if closeErr != nil {
-		return closeErr
+		return "", closeErr
 	}
+	digest := hex.EncodeToString(h.Sum(nil))
 	if ft.TotalSize > 0 && size != ft.TotalSize {
-		return fmt.Errorf("pulled file is %d bytes, expected %d", size, ft.TotalSize)
+		return "", fmt.Errorf("pulled file is %d bytes, expected %d", size, ft.TotalSize)
 	}
-	if ft.SHA256 != "" && !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), ft.SHA256) {
-		return errors.New("pulled file SHA-256 mismatch")
+	if ft.SHA256 != "" && !strings.EqualFold(digest, ft.SHA256) {
+		return "", errors.New("pulled file SHA-256 mismatch")
 	}
 	final := transferFinalPath(dir, ft.Filename, ft.ID)
 	if _, err := os.Lstat(final); err == nil {
 		if err := os.Remove(final); err != nil {
-			return err
+			return "", err
 		}
 	} else if !os.IsNotExist(err) {
-		return err
+		return "", err
 	}
 	if err := os.Rename(part, final); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return digest, nil
 }
 
 // reconcileFileTransfers heals sessions after a restart or a crashed chunk
@@ -783,6 +791,16 @@ func (s *Server) replayCompletedPushTask(ft db.FileTransfer) {
 				return err
 			}
 		}
+		if final {
+			actual, err := s.pushTransferSHA256(tx, ft.ID, task.Offset+int64(len(data)))
+			if err != nil {
+				return err
+			}
+			if !strings.EqualFold(actual, ft.SHA256) {
+				return errors.New("pushed file SHA-256 mismatch")
+			}
+			updates["computed_sha256"] = actual
+		}
 		return tx.Model(&db.FileTransfer{}).Where("id = ? AND current_task_id = ?", ft.ID, *ft.CurrentTaskID).Updates(updates).Error
 	}); err != nil {
 		slog.Warn("Failed to replay completed push task", "transfer_id", ft.ID, "task_id", task.ID, "error", err)
@@ -843,10 +861,16 @@ func (s *Server) reconcileMissingFinalFile(ft db.FileTransfer) {
 		}
 		return
 	}
-	if err := s.finishPullFile(ft); err != nil {
+	digest, err := s.finishPullFile(ft)
+	if err != nil {
 		slog.Warn("Failed to repair completed transfer", "transfer_id", ft.ID, "error", err)
 		_ = s.db.Model(&db.FileTransfer{}).Where("id = ?", ft.ID).
 			Updates(map[string]any{"status": transferStatusFailed, "error": "final file could not be restored"}).Error
+		return
+	}
+	if ft.ComputedSHA256 == "" {
+		_ = s.db.Model(&db.FileTransfer{}).Where("id = ? AND computed_sha256 = ?", ft.ID, "").
+			Update("computed_sha256", digest).Error
 	}
 }
 

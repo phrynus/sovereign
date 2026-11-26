@@ -80,5 +80,7 @@ export const zhToolkit: Record<string, string> = {
   "toolkit.toast.action_dispatched": "已下发 {action}（任务 #{task_id}）",
   "toolkit.toast.action_failed": "执行操作失败",
   "toolkit.toast.load_failed": "工具集：加载数据失败",
+  "toolkit.toast.agent_info_failed": "工具集：无法加载 Agent 信息",
+  "toolkit.agent_info_unreadable": "无法读取 Agent 信息；面板不可用，并非没有数据。",
   "toolkit.toast.select_agent_first": "请先选择 Beacon",
 };

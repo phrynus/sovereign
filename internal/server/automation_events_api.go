@@ -31,6 +31,7 @@ var automationEventCatalogue = []struct {
 		[]string{"build_id", "platform", "format", "filename", "error", "hint_code"}},
 	{EventBuildSucceeded, "a payload build finished",
 		[]string{"build_id", "platform", "format", "filename"}},
+	{EventShellOutput, "an interactive shell produced output", []string{"shell_id", "data", "encoding"}},
 }
 
 // handleAutomationEvents lists the event types a rule may be written against.

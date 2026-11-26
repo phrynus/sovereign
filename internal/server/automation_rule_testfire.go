@@ -114,6 +114,10 @@ func (s *Server) handleTestAutomationRule(c *gin.Context) {
 		err := s.executeAction(rule, action, evt)
 		// Counted like a real firing: a test that fails is exactly the evidence the health report needs, and a test that
 		// succeeds after a fix is what clears the badge.
+		if err == nil && action.Type == ActionWebhook {
+			// Delivery records its real asynchronous outcome.
+			continue
+		}
 		recordRuleActionOutcome(rule.ID, err == nil, err)
 		if err != nil {
 			failed++

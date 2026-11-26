@@ -13,6 +13,7 @@ GET /audit/export                       # newline-delimited JSON, the default
 GET /audit/export?format=json           # one document with count/truncated/filtered/rows
 GET /audit/export?since=7d              # a window, same spellings as the task export
 GET /audit/export?since_id=<id>         # only rows newer than a copy you already verified
+GET /audit/export?action=login&match=contains&result=failed
 ```
 
 Every row carries **both hashes** and every field the digest covers. That is deliberate: there is **no column
@@ -90,7 +91,7 @@ A purge deletes rows by design, so the id sequence legitimately has gaps. Three 
 - `handlePurgeAuditLogs` writes an **`audit_purge` marker row** before deleting, so a gap is explainable.
 - The verifier counts gaps as `discontinuities` and reports them **as a note, not a failure** — an interior deletion
   that breaks a link still fails.
-- A **filtered** export (`since`, `until`, `user`, `action`, `agent_id`) is a **selection**, not a contiguous chain: the
+- A **filtered** export (`since`, `until`, `user`, `action`, `match`, `result`, `agent_id`) is a **selection**, not a contiguous chain: the
   response says so in `X-Audit-Export-Filtered` and a `Warning` header. Verify the **unfiltered** export when the
   question is "is the chain intact"; verify a filtered one when the question is "what happened in this window".
   The verifier repeats that distinction when the file carries it: the `format=json` document does, the newline-delimited

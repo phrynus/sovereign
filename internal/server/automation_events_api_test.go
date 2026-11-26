@@ -68,7 +68,7 @@ func TestAutomationEventCatalogueMatchesEverything(t *testing.T) {
 	registry := []string{
 		string(EventImplantCheckin), string(EventImplantDisconnect), string(EventTaskComplete),
 		string(EventTaskFail), string(EventCredentialFound), string(EventAlertTriggered),
-		string(EventBuildFailed), string(EventBuildSucceeded),
+		string(EventBuildFailed), string(EventBuildSucceeded), string(EventShellOutput),
 	}
 	sort.Strings(registry)
 	if strings.Join(served, ",") != strings.Join(registry, ",") {

@@ -2058,21 +2058,16 @@ func ldapACL() (string, error) {
 }
 
 func selfUpdateLinux(exe, tmpPath string) string {
-	shScript := fmt.Sprintf(
-		"#!/bin/sh\nsleep 1\ncp -f '%s' '%s'\nchmod +x '%s'\nexec '%s'\n",
-		tmpPath, exe, exe, exe)
 	tmpScript := exe + ".update.sh"
-	// #nosec G306 -- the update helper must execute the script it writes.
-	if err := os.WriteFile(tmpScript, []byte(shScript), 0755); err != nil { // #nosec G306
+	if err := os.WriteFile(tmpScript, []byte(buildUnixUpdateScript(exe, tmpPath)), 0755); err != nil {
 		return "failed to write update script: " + err.Error()
 	}
-
-	cmd := exec.Command("/bin/sh", "-c", "nohup '"+tmpScript+"' >/dev/null 2>&1 &")
+	cmd := exec.Command("/bin/sh", "-c", "nohup "+shellQuote(tmpScript)+" >/dev/null 2>&1 &")
 	if err := cmd.Start(); err != nil {
 		return "failed to start updater: " + err.Error()
 	}
-
-	return "self-update: new binary downloaded, replacing and restarting..."
+	scheduleUpdateExit()
+	return "self-update: verified binary staged; supervisor will replace, health-check and roll back on failure"
 }
 
 func selfUpdateDarwin(exe, tmpPath string) string { return "" }

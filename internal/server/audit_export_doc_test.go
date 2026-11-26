@@ -37,7 +37,7 @@ func TestAuditExportDocMatchesTheImplementation(t *testing.T) {
 	}
 
 	// 2. Every query parameter the handler honours is documented, so a reader can build the request they need.
-	for _, parameter := range []string{"since_id", "since", "until", "format"} {
+	for _, parameter := range []string{"since_id", "since", "until", "user", "action", "match", "result", "agent_id", "format"} {
 		if !strings.Contains(doc, parameter) {
 			t.Fatalf("the document does not document the %q parameter", parameter)
 		}

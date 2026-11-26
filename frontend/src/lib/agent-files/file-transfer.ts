@@ -28,6 +28,7 @@ export interface TransferSession {
   committed_offset: number;
   chunk_size?: number;
   sha256?: string;
+  computed_sha256?: string;
   status: TransferStatus;
   error?: string;
   current_task_id?: number | null;
@@ -74,6 +75,7 @@ function sessionOf(data: unknown): TransferSession | null {
     total_size: numericField(raw.total_size) ?? 0,
     committed_offset: numericField(raw.committed_offset) ?? 0,
     chunk_size: numericField(raw.chunk_size) ?? FILE_TRANSFER_CHUNK_SIZE,
+    computed_sha256: typeof raw.computed_sha256 === "string" ? raw.computed_sha256 : undefined,
     sha256: typeof raw.sha256 === "string" ? raw.sha256 : undefined,
     status: status === "paused" || status === "completed" || status === "failed" ||
       status === "cancelled" || status === "expired" ? status : "active",
@@ -124,7 +126,7 @@ function progressOf(session: TransferSession): TransferProgress {
   return transferProgressAt(session.committed_offset, {
     total,
     chunk: FILE_TRANSFER_CHUNK_SIZE,
-    partial: session.total_size <= 0,
+    partial: session.total_size <= 0 && session.status !== "completed",
   });
 }
 
@@ -294,7 +296,7 @@ export async function stageRemoteFile(opts: {
   return {
     url: paths.agents.transferFile(opts.agentId, session.id),
     filename: session.filename || opts.filename,
-    partial: session.total_size <= 0,
+    partial: session.status !== "completed",
   };
 }
 

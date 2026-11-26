@@ -342,33 +342,66 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 	// who never had access to these agents.
 	taskTenant := campaign.TenantID
 
-	// Respect the same per-agent pending ceiling and status resolution as the
-	// single/batch task paths, so seeding can't silently bypass queue limits.
-	var tasks []db.Task
+	// Validate every step against the same dispatch-time gate as direct and
+	// batch creation before reserving queue capacity. A policy-rejected
+	// campaign must not leave a partial chain behind.
+	prepared := make(map[string][]db.Task, len(agents))
 	skippedAgents := 0
-	s.agentPendingTasksMu.Lock()
 	for _, a := range agents {
-		if s.agentPendingTasks[a.ID]+len(tpl.Steps) > MaxPendingTasksPerAgent {
-			skippedAgents++
-			continue
-		}
+		rows := make([]db.Task, 0, len(tpl.Steps))
+		valid := true
 		for _, st := range tpl.Steps {
 			command, path, data := splitStepParams(st.Params)
 			if len(command) > MaxCommandLength {
-				continue
+				valid = false
+				break
 			}
-			tasks = append(tasks, db.Task{
+			if err := s.validateTaskCreationWithAgent(c, a.ID, st.TaskType, command, data, path, 0, &a); err != nil {
+				slog.Warn("Campaign kill chain: dispatch policy rejected step",
+					"agent_id", a.ID, "task_type", st.TaskType, "err", err)
+				valid = false
+				break
+			}
+			status := s.resolveInitialTaskStatus(st.TaskType)
+			row := db.Task{
 				TenantID:  taskTenant,
 				AgentID:   a.ID,
 				Type:      st.TaskType,
 				Command:   command,
 				Path:      path,
 				Data:      data,
-				Status:    s.resolveInitialTaskStatus(st.TaskType),
+				Status:    status,
+				Priority:  1,
 				CreatedBy: operator,
-			})
-			s.agentPendingTasks[a.ID]++
+			}
+			if status == TaskStatusPendingApproval {
+				exp := time.Now().Add(ApprovalExpiryDuration)
+				row.ApprovalExpiresAt = &exp
+			}
+			rows = append(rows, row)
 		}
+		if valid {
+			prepared[a.ID] = rows
+		} else {
+			skippedAgents++
+		}
+	}
+
+	// Respect the same per-agent pending ceiling as direct/batch creation,
+	// then commit every row atomically.
+	var tasks []db.Task
+	s.agentPendingTasksMu.Lock()
+	for _, a := range agents {
+		rows, ok := prepared[a.ID]
+		if !ok {
+			continue
+		}
+		if s.agentPendingTasks[a.ID]+len(rows) > MaxPendingTasksPerAgent {
+			skippedAgents++
+			continue
+		}
+		tasks = append(tasks, rows...)
+		s.agentPendingTasks[a.ID] += len(rows)
 	}
 	s.agentPendingTasksMu.Unlock()
 
@@ -389,6 +422,12 @@ func (s *Server) handleCampaignKillChain(c *gin.Context) {
 		return
 	}
 	for _, t := range tasks {
+		if s.pluginManager != nil {
+			s.fireTaskCreatedHook(t.AgentID, t.ID, t.Type, t.Command)
+		}
+		if s.metrics != nil {
+			s.metrics.TasksTotal.Inc()
+		}
 		s.broadcastTaskUpdate(t.AgentID, t)
 	}
 

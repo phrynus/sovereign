@@ -232,6 +232,7 @@ export const paths = {
   audit: {
     logs: (query: string) => `/audit/logs?${query}`,
     exportLogs: (query: string) => `/audit/logs/export?${query}`,
+    exportChain: (query: string) => `/audit/export?${query}`,
     actions: (query = "") =>
       query ? `/audit/actions?${query}` : "/audit/actions",
     verify: (query: string) => `/audit/verify?${query}`,
@@ -560,6 +561,7 @@ export const paths = {
   },
   tasks: {
     list: (query = "") => (query ? `/tasks?${query}` : "/tasks"),
+    create: "/api/v1/tasks",
     /** Full single-task record (includes complete result) under REST /api/v1. */
     one: (id: string | number) => `/api/v1/tasks/${id}`,
     /** Live dispatchable task catalogue (type + short description) for shell completions. */

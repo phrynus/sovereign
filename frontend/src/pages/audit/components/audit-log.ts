@@ -147,17 +147,20 @@ export function auditActionTone(action: string): "success" | "secondary" | "warn
  * maps to the `result` filter the operations view already uses.
  */
 export function auditEventsQuery(
-  filters: { user: string; action: string },
+  filters: { user: string; action: string; agent?: string; since?: string; until?: string },
   page: number,
   pageSize: number,
 ): string {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (filters.user) params.set("user", filters.user);
+  if (filters.agent) params.set("agent_id", filters.agent);
   if (filters.action === "failed") {
     params.set("result", "failed");
   } else if (filters.action) {
     params.set("action", filters.action);
     params.set("match", "contains");
   }
+  if (filters.since) params.set("since", filters.since);
+  if (filters.until) params.set("until", filters.until);
   return params.toString();
 }

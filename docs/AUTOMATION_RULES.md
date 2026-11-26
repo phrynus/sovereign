@@ -14,6 +14,7 @@ is no state in which a rule looks fine and silently does nothing.
 | `credential.found` | a credential was harvested | — |
 | `alert.triggered` | an alert rule fired | — |
 | `build.failed` | a payload build failed | `build_id`, `platform`, `format`, `filename`, `error`, `hint_code` |
+| `shell.output` | an interactive shell produced output | `shell_id`, `data`, `encoding` |
 | `build.succeeded` | a payload build finished | `build_id`, `platform`, `format`, `filename` |
 
 The list above is checked against the event registry in code, so a new event type cannot appear without a row here.

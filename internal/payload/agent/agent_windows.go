@@ -525,19 +525,13 @@ func lateralMove(spec string) (string, error) {
 }
 
 func selfUpdateWindows(exe, tmpPath string) string {
-	psScript := fmt.Sprintf(
-		`Start-Sleep -Milliseconds 300; `+
-			`Copy-Item -Path '%s' -Destination '%s' -Force; `+
-			`Start-Process -FilePath '%s';`,
-		tmpPath, exe, exe)
-
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-Command", buildWindowsUpdateScript(exe, tmpPath))
 	applyHideWindow(cmd)
 	if err := cmd.Start(); err != nil {
 		return "failed to start updater: " + err.Error()
 	}
-
-	return "self-update: new binary downloaded, replacing and restarting..."
+	scheduleUpdateExit()
+	return "self-update: verified binary staged; supervisor will replace, health-check and roll back on failure"
 }
 
 func selfUpdateLinux(exe, tmpPath string) string {

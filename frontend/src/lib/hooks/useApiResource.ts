@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { onWSMessage } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 
 interface UseApiResourceOptions<T> {
@@ -15,6 +16,10 @@ interface UseApiResourceOptions<T> {
   onError?: (err: unknown) => void;
   /** Throttle toast.error(errMsg) to once per N ms. 0 disables toasts. */
   toastThrottleMs?: number;
+  /** Surface refresh failures while retaining stale data. Default false. */
+  reportRefreshErrors?: boolean;
+  /** Re-fetch when the server sends its connection sync snapshot. */
+  resyncOnConnect?: boolean;
   /** Message used for `error`/toast when a fetch fails. */
   errorMessage?: string;
 }
@@ -44,6 +49,8 @@ export function useApiResource<T>({
   retainOnError = true,
   onError,
   toastThrottleMs = 0,
+  reportRefreshErrors = false,
+  resyncOnConnect = false,
   errorMessage: errorMessageOpt,
 }: UseApiResourceOptions<T>): UseApiResourceResult<T> {
   const { t } = useI18n();
@@ -65,6 +72,8 @@ export function useApiResource<T>({
   const hasDataRef = useRef(false);
   const inFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const reportRefreshRef = useRef(reportRefreshErrors);
+  reportRefreshRef.current = reportRefreshErrors;
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -94,7 +103,7 @@ export function useApiResource<T>({
     } catch (err) {
       if (ac.signal.aborted || !mountedRef.current) return;
       onErrorRef.current?.(err);
-      if (!retainRef.current || !hasDataRef.current) {
+      if (!retainRef.current || !hasDataRef.current || reportRefreshRef.current) {
         setError(errorMsgRef.current);
       }
       const { throttleMs, last } = toastRef.current;
@@ -122,6 +131,12 @@ export function useApiResource<T>({
     setLoading(false);
   }, [enabled, refresh]);
 
+  useEffect(() => {
+    if (!enabled || !resyncOnConnect) return;
+    return onWSMessage((msg) => {
+      if (msg.type === "sync") void refresh();
+    });
+  }, [enabled, refresh, resyncOnConnect]);
   useVisibleInterval(() => { if (!inFlightRef.current) void refresh(); }, enabled ? pollMs : 0);
 
   return { data, loading, error, refresh, setData, setError };

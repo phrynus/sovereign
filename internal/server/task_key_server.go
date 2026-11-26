@@ -50,3 +50,21 @@ func generateTaskKey() (string, error) {
 	}
 	return base64.StdEncoding.EncodeToString(b), nil
 }
+
+// decryptTaskResultKey clears an undecryptable result instead of allowing
+// ciphertext, or a plaintext fallback, to reach task storage and subscribers.
+func decryptTaskResultKey(keyB64 string, r *taskResult) error {
+	if r == nil || !r.EncryptedWithTaskKey {
+		return nil
+	}
+	plain, err := decryptTaskKeyOutput(keyB64, r.Output)
+	if err != nil {
+		r.Output = ""
+		r.Error = "per-task result decryption failed"
+		r.EncryptedWithTaskKey = false
+		return err
+	}
+	r.Output = plain
+	r.EncryptedWithTaskKey = false
+	return nil
+}

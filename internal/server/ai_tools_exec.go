@@ -464,7 +464,13 @@ func (s *Server) executeToolSwitchCtx(reqCtx *aiReqCtx, name string, argsJSON st
 		if p.Name == "" || p.EventType == "" {
 			return `{"error":"name and event_type required (event_type: agent.checkin, agent.disconnect, task.complete, task.fail, credential.found)"}`
 		}
-		validEvents := map[string]bool{"agent.checkin": true, "agent.disconnect": true, "task.complete": true, "task.fail": true, "credential.found": true}
+		validEvents := make(map[string]bool, len(automationEventCatalogue))
+		for _, entry := range automationEventCatalogue {
+			validEvents[string(entry.Event)] = true
+		}
+		// Older saved rules and AI tooling use the agent.* spellings.
+		validEvents["agent.checkin"] = true
+		validEvents["agent.disconnect"] = true
 		if !validEvents[p.EventType] {
 			return `{"error":"invalid event_type"}`
 		}

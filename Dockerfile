@@ -60,10 +60,25 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w
 # alpine builder image, so chown numerically instead of by name.
 RUN mkdir -p /data && chown -R 65532:65532 /data
 
-# Stage 3: Runtime — distroless for minimal attack surface
+# Stage 3: PostgreSQL logical-backup tools. The server owns backup/restore and
+# invokes pg_dump/pg_restore/createdb/dropdb/psql directly; the distroless runtime
+# has no package manager, so copy only the client binaries and their shared-library
+# closure from the same Debian release as the runtime base.
+FROM --platform=$TARGETPLATFORM postgres:18-bookworm@sha256:e742a2668255221388004f3a42b6150a2103f5054ab3a4a93ae9e4f01e551c35 AS postgres-tools
+RUN mkdir -p /tools/usr/local/bin /tools/usr/share/postgresql && \
+    for bin in pg_dump pg_restore createdb dropdb psql; do \
+      cp "/usr/lib/postgresql/18/bin/$bin" /tools/usr/local/bin/; \
+      for lib in $(ldd "/usr/lib/postgresql/18/bin/$bin" | awk '{for (i=1; i<=NF; i++) if ($i ~ /^\//) print $i}'); do \
+        cp --parents "$lib" /tools/; \
+      done; \
+    done && \
+    cp -a /usr/share/postgresql/18 /tools/usr/share/postgresql/
+
+# Stage 4: Runtime — distroless for minimal attack surface
 FROM gcr.io/distroless/static-debian12:latest@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
 LABEL org.opencontainers.image.title="Sovereign"
 LABEL org.opencontainers.image.description="Command & Control Framework"
+COPY --from=postgres-tools /tools/ /
 COPY --from=backend-builder /build/sovereign-server /usr/local/bin/
 COPY --from=backend-builder /build/healthcheck /usr/local/bin/healthcheck
 # Docker copies image content (including ownership) into a fresh named volume,

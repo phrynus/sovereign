@@ -4,10 +4,16 @@ import { useEffect } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import AuditPage from "@/pages/audit/AuditPage";
 import { api } from "@/lib/api";
+import { downloadBlob } from "@/lib/download";
+import type * as DownloadModule from "@/lib/download";
 
 vi.mock("@/lib/api", () => ({ api: { get: vi.fn(), downloadGet: vi.fn() } }));
 vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: (k: string) => k }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@/lib/download", async (importOriginal) => {
+  const actual = await importOriginal<typeof DownloadModule>();
+  return { ...actual, downloadBlob: vi.fn() };
+});
 
 // The probe records the address bar. It writes into an object rather than a
 // plain variable so the render stays pure (the lint rule forbids reassigning
@@ -170,5 +176,22 @@ describe("AuditPage tabs", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /audit\.verify_chain/ }));
     expect(await screen.findByText("audit.verify_failed")).toBeTruthy();
+  });
+});
+
+describe("AuditPage chain export", () => {
+  it("exports the backend chain with the applied filters, not the visible page", async () => {
+    vi.mocked(api.downloadGet).mockResolvedValue({ blob: new Blob(["row"]), filename: "audit-chain.ndjson" });
+    renderPage("/audit?agent_id=agent-1&user=alice&action=create");
+    fireEvent.click(await screen.findByRole("button", { name: /audit\.export_chain/ }));
+    await waitFor(() => expect(api.downloadGet).toHaveBeenCalledTimes(1));
+    const exported = String(vi.mocked(api.downloadGet).mock.calls[0][0]);
+    expect(exported).toContain("/audit/export?");
+    expect(exported).toContain("format=ndjson");
+    expect(exported).toContain("agent_id=agent-1");
+    expect(exported).toContain("user=alice");
+    expect(exported).toContain("action=create");
+    expect(exported).toContain("match=contains");
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
   });
 });

@@ -139,7 +139,7 @@ func callerOpts(c *gin.Context) []TaskOption {
 // this (the RoE gate SELECTs it); batch paths use
 // validateTaskCreationWithAgent to reuse their own batch load.
 func (s *Server) validateTaskCreation(c *gin.Context, agentID, taskType, command, data, path string, callerUserID uint) error {
-	return s.validateTaskCreationWithAgent(c, agentID, taskType, command, data, path, callerUserID, nil)
+	return s.validateTaskCreationWithAgentShell(c, agentID, taskType, command, "", "", data, path, callerUserID, nil)
 }
 
 // validateTaskCreationWithAgent is validateTaskCreation for callers that
@@ -308,10 +308,12 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	// Checked before the pending-counter increment so dedup hits never
 	// consume quota. Terminal tasks (completed/failed/cancelled/timeout)
 	// never block key reuse.
+	var idempotencyFingerprint string
 	if key := strings.TrimSpace(tOpts.idempotencyKey); key != "" {
 		if len(key) > 64 {
 			return nil, taskRequestErrorf("idempotency key too long (max 64 characters)")
 		}
+		idempotencyFingerprint = canonicalTaskFingerprint(agentID, taskType, command, shell, path, data, offset, size, ref, tOpts)
 		var existing db.Task
 		if err := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
 			agentID, key, []string{"pending", TaskStatusPendingApproval, "running"}).
@@ -379,6 +381,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		Final:          tOpts.final,
 		BaseTaskID:     tOpts.baseTaskID,
 		ExpectedSHA256: tOpts.expectedSHA256,
+		TaskKey:        tOpts.taskKey,
 		PrevMAC:        tOpts.fileChainPrev,
 		MAC:            tOpts.fileChainMAC,
 	}
@@ -403,6 +406,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	}
 	if tOpts.idempotencyKey != "" {
 		task.IdempotencyKey = tOpts.idempotencyKey
+		task.IdempotencyFingerprint = idempotencyFingerprint
 	}
 
 	task.Status = s.resolveInitialTaskStatusFor(taskType, tOpts.credentialID)
@@ -420,12 +424,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 			if e2 := s.db.Where("agent_id = ? AND idempotency_key = ? AND status IN ?",
 				agentID, tOpts.idempotencyKey, []string{"pending", TaskStatusPendingApproval, "running"}).
 				Order("id DESC").First(&existing).Error; e2 == nil {
-				if ref.ID == 0 || (existing.Type == taskType && existing.CredentialID != nil &&
-					*existing.CredentialID == ref.ID && existing.CredentialFingerprint == ref.Fingerprint) {
-					existing.IdempotentReplay = true
-					return &existing, nil
-				}
-				return nil, errCredentialReferenceConflict
+				return replayIdempotentTask(existing, idempotencyFingerprint, ref)
 			}
 		}
 		return nil, err
@@ -1125,15 +1124,12 @@ func (s *Server) rejectExpiredApprovals() {
 		return
 	}
 	ids := make([]uint, len(stale))
-	for i, t := range stale {
-		ids[i] = t.ID
+	for i, task := range stale {
+		ids[i] = task.ID
 	}
 	res := s.withBusyRetryDB("sweep", func() *gorm.DB {
 		return s.db.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, TaskStatusPendingApproval).
-			Updates(map[string]interface{}{
-				"status": "cancelled",
-				"error":  "approval expired without a second operator",
-			})
+			Updates(map[string]interface{}{"status": "cancelled", "error": approvalExpiredError})
 	})
 	if res.Error != nil {
 		slog.Error("Failed to reject expired approvals", "count", len(ids), "error", res.Error)
@@ -1157,8 +1153,7 @@ func (s *Server) rejectExpiredApprovals() {
 	}
 	s.LogAuditRecord(nil, "approval_expired", "task", "", "auto-rejected stale approvals", true, nil)
 	s.DispatchNotification(&db.Notification{
-		Type:     "approval_expired",
-		Title:    "Stale task approvals auto-rejected",
+		Type: "approval_expired", Title: "Stale task approvals auto-rejected",
 		Message:  fmt.Sprintf("%d tasks awaited approval past expiry and were cancelled", len(stale)),
 		Severity: "warning",
 	})
@@ -1355,7 +1350,7 @@ func clientErrorStatus(err error) (int, bool) {
 	if err == nil {
 		return 0, false
 	}
-	if errors.Is(err, errCredentialReferenceConflict) {
+	if errors.Is(err, errCredentialReferenceConflict) || errors.Is(err, errIdempotencyConflict) {
 		return http.StatusConflict, true
 	}
 	msg := err.Error()
@@ -1377,6 +1372,7 @@ func clientErrorStatus(err error) (int, bool) {
 		strings.Contains(msg, "requires 'shell' parameter"),
 		strings.Contains(msg, "requires 'path' parameter"),
 		strings.Contains(msg, "requires 'data' parameter"),
+		strings.Contains(msg, "requires 'expected_sha256' parameter"),
 		strings.Contains(msg, "command too long"):
 		return http.StatusBadRequest, true
 	case strings.Contains(msg, "credential reference"),

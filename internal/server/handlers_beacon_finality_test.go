@@ -29,6 +29,7 @@ func newBeaconFinalityTestServer(t *testing.T) (*Server, *gorm.DB) {
 	if err != nil {
 		t.Fatalf("new session manager: %v", err)
 	}
+	crypto.InitLootEncryption(testStorageKeyHex)
 	s := &Server{
 		db:                    database,
 		cfg:                   &config.Config{},
@@ -297,10 +298,9 @@ func TestTaskResultDurableDedupAcrossRestart(t *testing.T) {
 	}
 }
 
-// TestRelayedCancelledTaskResultNotApplied pins finality for P2P child results:
-// a cancelled child task must stay cancelled even when the result is relayed
-// through its parent.
-func TestRelayedCancelledTaskResultNotApplied(t *testing.T) {
+// TestRelayedCancelledTaskKeepsLateResult pins P2P parity with direct results:
+// a cancelled child task stays cancelled while late evidence is preserved.
+func TestRelayedCancelledTaskKeepsLateResult(t *testing.T) {
 	s, database := newBeaconFinalityTestServer(t)
 
 	parent := "aaaa1111-5555-4333-8444-111111111111"
@@ -334,8 +334,17 @@ func TestRelayedCancelledTaskResultNotApplied(t *testing.T) {
 	if reloaded.Status != "cancelled" {
 		t.Errorf("relayed result resurrected cancelled task: status=%q", reloaded.Status)
 	}
-	if reloaded.Result != "" {
-		t.Errorf("relayed result overwrote cancelled task result=%q", reloaded.Result)
+	if reloaded.Result != `child\admin` {
+		t.Errorf("relayed late result not preserved: %q", reloaded.Result)
+	}
+	if reloaded.Error != "cancelled by operator" {
+		t.Errorf("relayed late result overwrote cancellation reason: %q", reloaded.Error)
+	}
+	if !reloaded.LateResult || reloaded.LateResultStatus != "completed" || reloaded.LastResultID != "rid-relayed" {
+		t.Errorf("relayed late-result metadata missing: %+v", reloaded)
+	}
+	if n := s.agentPendingTasks[child]; n != 1 {
+		t.Errorf("relayed late result changed pending counter: %d", n)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,7 +54,9 @@ func TestExecuteWebhookSignatureAndMethod(t *testing.T) {
 		Headers: map[string]string{"X-Custom": "yes"},
 		Secret:  "s3cret",
 	}
-	s.executeWebhook(params, evt)
+	if err := s.executeWebhook(params, evt); err != nil {
+		t.Fatalf("webhook delivery failed: %v", err)
+	}
 
 	select {
 	case c := <-got:
@@ -86,7 +89,9 @@ func TestExecuteWebhookSignatureAndMethod(t *testing.T) {
 
 	// No secret: no signature header at all (an empty HMAC would be a lie).
 	params.Secret = ""
-	s.executeWebhook(params, evt)
+	if err := s.executeWebhook(params, evt); err != nil {
+		t.Fatalf("webhook delivery failed: %v", err)
+	}
 	select {
 	case c := <-got:
 		if c.headers.Get("X-Sovereign-Signature") != "" {
@@ -112,12 +117,29 @@ func TestExecuteWebhookRefusesInternalTargets(t *testing.T) {
 	s.httpClient = &http.Client{Timeout: 2 * time.Second}
 	s.cfg = &config.Config{}
 
-	s.executeWebhook(webhookParams{URL: srv.URL}, Event{Type: EventImplantCheckin})
+	if err := s.executeWebhook(webhookParams{URL: srv.URL}, Event{Type: EventImplantCheckin}); err == nil {
+		t.Fatal("private webhook target was not rejected")
+	}
 
 	select {
 	case <-hit:
 		t.Fatal("a webhook to a private address was delivered")
 	case <-time.After(300 * time.Millisecond):
 		// Expected: validateWebhookURL refused it before any request.
+	}
+}
+
+func TestExecuteWebhookReturnsReceiverFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, "receiver unavailable")
+	}))
+	defer srv.Close()
+	s := mustTenantServer(t)
+	s.httpClient = &http.Client{Timeout: 2 * time.Second}
+	webhookTargetValidator = func(string) error { return nil }
+	t.Cleanup(func() { webhookTargetValidator = validateWebhookURL })
+	if err := s.executeWebhook(webhookParams{URL: srv.URL}, Event{Type: EventImplantCheckin}); err == nil || !strings.Contains(err.Error(), "502") {
+		t.Fatalf("receiver failure error = %v", err)
 	}
 }

@@ -198,7 +198,9 @@ export default function LateralPageContent() {
         partialFailures,
       };
     },
-    toastThrottleMs: 0,
+    toastThrottleMs: 30000,
+    reportRefreshErrors: true,
+    resyncOnConnect: true,
     errorMessage: t("lateral.toast.load_failed"),
   });
   const partialFailures = data?.partialFailures ?? [];

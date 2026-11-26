@@ -326,8 +326,29 @@ func (s *Server) handleExportAuditChain(c *gin.Context) {
 		query = query.Where("\"user\" = ?", actor)
 		filtered = true
 	}
+	match := strings.ToLower(strings.TrimSpace(c.DefaultQuery("match", "exact")))
+	if match != "exact" && match != "contains" {
+		respondError(c, http.StatusBadRequest, `invalid match (expected "exact" or "contains")`)
+		return
+	}
 	if action := strings.TrimSpace(c.Query("action")); action != "" {
-		query = query.Where("action = ?", action)
+		if match == "contains" {
+			query = query.Where("action LIKE ? ESCAPE '\\'", "%"+escapeLike(action)+"%")
+		} else {
+			query = query.Where("action = ?", action)
+		}
+		filtered = true
+	}
+	if result := strings.ToLower(strings.TrimSpace(c.Query("result"))); result != "" {
+		switch result {
+		case "failed":
+			query = query.Where("success = ?", false)
+		case "success":
+			query = query.Where("success = ?", true)
+		default:
+			respondError(c, http.StatusBadRequest, `invalid result (expected "success" or "failed")`)
+			return
+		}
 		filtered = true
 	}
 	if agentID := strings.TrimSpace(c.Query("agent_id")); agentID != "" {

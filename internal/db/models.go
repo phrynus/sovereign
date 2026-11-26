@@ -161,6 +161,7 @@ type Implant struct {
 	BestRoute string `gorm:"default:''" json:"best_route"`
 	// Agent metadata (reported every beacon)
 	Version         string `json:"version"`               // agent build version
+	TaskTypes       string `gorm:"type:text" json:"task_types,omitempty"` // comma-separated agent-advertised dispatchable task types
 	ProtocolVersion uint   `json:"protocol_version"`      // wire protocol version
 	PID             int    `gorm:"column:pid" json:"pid"` // agent process ID
 	ProcessName     string `json:"process_name"`          // e.g. sovereign.exe
@@ -353,6 +354,9 @@ type Task struct {
 	// on the same agent returns the existing task instead of a duplicate.
 	// Empty = no dedup. Terminal tasks never block reuse of a key.
 	IdempotencyKey string `gorm:"size:64;index" json:"idempotency_key,omitempty"`
+	// IdempotencyFingerprint binds the key to the canonical task request. A
+	// live key reused for different arguments is a conflict, never a replay.
+	IdempotencyFingerprint string `gorm:"size:64" json:"-"`
 	// IdempotentReplay is set only on the in-memory task returned by a dedup
 	// hit. It is never persisted or serialized; creation audit paths use it to
 	// avoid recording a second task_create for the same row.

@@ -13,6 +13,9 @@ func TestFetchPendingTasksClaimsOnlyPendingTasks(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	s := &Server{db: database}
 	agentID := "agent-1"
+	if err := database.Create(&db.Implant{ID: agentID}).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 	now := time.Now()
 
 	oldRunning := db.Task{AgentID: agentID, Type: "old", Status: "running", Priority: 3, CreatedAt: now.Add(-time.Minute)}
@@ -80,6 +83,9 @@ func TestFetchPendingTasksRespectsCapacity(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	s := &Server{db: database}
 	agentID := "agent-capacity"
+	if err := database.Create(&db.Implant{ID: agentID}).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 	for i := 0; i < 2; i++ {
 		if err := database.Create(&db.Task{AgentID: agentID, Type: "shell", Status: "pending"}).Error; err != nil {
 			t.Fatalf("create task: %v", err)
@@ -151,6 +157,9 @@ func TestFetchPendingTasksRecarriesUnackedRunning(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	s := &Server{db: database}
 	agentID := "agent-recarry"
+	if err := database.Create(&db.Implant{ID: agentID}).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 
 	lost := db.Task{AgentID: agentID, Type: "shell", Status: "running", ClaimedBy: agentID, ClaimedAt: time.Now().Add(-time.Minute)}
 	acked := db.Task{AgentID: agentID, Type: "shell", Status: "running", ClaimedBy: agentID, ClaimedAt: time.Now().Add(-time.Minute)}

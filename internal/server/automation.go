@@ -88,7 +88,9 @@ func (s *Server) evaluateRule(evt Event, rule AutomationRule) {
 	for _, action := range rule.Actions {
 		if err := s.executeAction(rule, action, evt); err != nil {
 			recordRuleActionOutcome(rule.ID, false, err)
-		} else {
+		} else if action.Type != ActionWebhook {
+			// Webhook delivery is asynchronous; its goroutine records the
+			// receiver's actual outcome instead of claiming success here.
 			recordRuleActionOutcome(rule.ID, true, nil)
 		}
 	}
@@ -152,120 +154,132 @@ func (s *Server) matchCondition(cond RuleCondition, evt Event) bool {
 // The return value covers DISPATCH failures: the task could not be created, the macro does not exist. Those are the ones
 // that silently mean "the rule fired and nothing happened". Outcomes that happen later - a webhook answering 500 - are
 // counted by the goroutine that learns about them, so this never claims success for something still in flight.
+func (s *Server) authorizeAutomationAction(rule AutomationRule, action RuleAction) error {
+	// Empty creators are legacy/internal rules from before attribution existed.
+	// Operator-created rules are re-checked at fire time, so losing a
+	// permission stops the action instead of escalating through automation.
+	if strings.TrimSpace(rule.CreatedBy) == "" {
+		return nil
+	}
+	permission := db.PermAutomationWrite
+	switch action.Type {
+	case ActionRunCommand, ActionCreateTask, ActionSetSleep, ActionRunMacro:
+		permission = db.PermAgentsWrite
+	case ActionNotify:
+		permission = db.PermNotificationsWrite
+	}
+	allowed, err := middleware.UserHasPermission(s.db, rule.CreatedBy, permission)
+	if err != nil || !allowed {
+		return fmt.Errorf("automation action %s requires %s", action.Type, permission)
+	}
+	return nil
+}
+
 func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event) error {
+	if err := s.authorizeAutomationAction(rule, action); err != nil {
+		return err
+	}
 	switch action.Type {
 	case ActionRunCommand:
 		var params struct {
 			Command string `json:"command"`
-			AgentID string `json:"agent_id"` // optional: target specific agent
+			AgentID string `json:"agent_id"`
 		}
 		if err := json.Unmarshal(action.Params, &params); err != nil {
-			slog.Error("Automation: unmarshal command params", "error", err)
 			return fmt.Errorf("run_command: %w", err)
 		}
-		if params.Command != "" {
-			targetAgent := s.automationTarget(evt, params.AgentID)
-			if targetAgent != "" {
-				expanded := s.expandTemplate(params.Command, evt)
-				if _, err := s.createSystemTask(targetAgent, "automation", expanded, "", "pending", "automation"); err != nil {
-					slog.Error("Automation: failed to create command task", "error", err)
-					return fmt.Errorf("run_command: %w", err)
-				}
-			}
+		targetAgent := s.automationTarget(evt, params.AgentID)
+		if params.Command == "" || targetAgent == "" {
+			return fmt.Errorf("run_command: command and a visible target agent are required")
+		}
+		expanded := s.expandTemplate(params.Command, evt)
+		if _, err := s.createSystemTask(targetAgent, "shell", expanded, "", "pending", "automation"); err != nil {
+			return fmt.Errorf("run_command: %w", err)
 		}
 	case ActionWebhook:
 		var params struct {
 			URL     string            `json:"url"`
 			Method  string            `json:"method"`
 			Headers map[string]string `json:"headers"`
-			Secret  string            `json:"secret"` // HMAC secret
+			Secret  string            `json:"secret"`
 		}
 		if err := json.Unmarshal(action.Params, &params); err != nil {
-			slog.Error("Automation: unmarshal webhook params", "error", err)
 			return fmt.Errorf("webhook: %w", err)
 		}
-		if params.URL != "" {
-			// Recover like the notification dispatcher does: a panic in a bare goroutine takes the
-			// whole process down, and this one does JSON marshalling, header construction and client
-			// setup on operator-supplied input.
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("Automation: webhook goroutine panicked", "panic", r, "stack", string(debug.Stack()))
-					}
-				}()
-				s.executeWebhook(params, evt)
-			}()
+		if params.URL == "" {
+			return fmt.Errorf("webhook: url is required")
 		}
+		if err := webhookTargetValidator(params.URL); err != nil {
+			return fmt.Errorf("webhook: %w", err)
+		}
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Automation: webhook goroutine panicked", "panic", r, "stack", string(debug.Stack()))
+					recordRuleActionOutcome(rule.ID, false, fmt.Errorf("webhook panic: %v", r))
+				}
+			}()
+			if err := s.executeWebhook(params, evt); err != nil {
+				recordRuleActionOutcome(rule.ID, false, fmt.Errorf("webhook: %w", err))
+			} else {
+				recordRuleActionOutcome(rule.ID, true, nil)
+			}
+		}()
 	case ActionNotify:
 		var params struct {
 			Message string `json:"message"`
-			Channel string `json:"channel"` // "all", "ops", "admins"
+			Channel string `json:"channel"`
 		}
-		if err := json.Unmarshal(action.Params, &params); err == nil {
-			msg := s.expandTemplate(params.Message, evt)
-			// Structured marshal: the previous fmt.Sprintf template produced
-			// invalid JSON frames whenever the message contained a quote.
-			// A notification is not persisted anywhere: if the frame is lost it
-			// is gone, so the fan-out must not silently discard it.
-			if frame, ok := marshalJSONSafe(map[string]interface{}{"type": "notification", "message": msg, "source": "automation"}); ok {
-				s.broadcastToClientsReliable(frame)
-			}
+		if err := json.Unmarshal(action.Params, &params); err != nil {
+			return fmt.Errorf("notify: %w", err)
 		}
+		if params.Message == "" {
+			return fmt.Errorf("notify: message is required")
+		}
+		msg := s.expandTemplate(params.Message, evt)
+		frame, ok := marshalJSONSafe(map[string]interface{}{"type": "notification", "message": msg, "source": "automation"})
+		if !ok {
+			return fmt.Errorf("notify: failed to marshal notification")
+		}
+		s.broadcastToClientsReliable(frame)
 	case ActionRunScript:
 		var params struct {
 			ScriptID string `json:"script_id"`
 			Code     string `json:"code"`
 		}
-		if err := json.Unmarshal(action.Params, &params); err == nil {
-			engine := scripting.GetEngine()
-			// Deep-copy the event handed to the VM: goja exposes evt.Data as
-			// a MUTABLE Go map, and a script writing event.Data[x] would race
-			// the concurrently spawned webhook marshalers (fatal concurrent
-			// map write). Scripts get a snapshot.
-			dataCopy := make(map[string]interface{}, len(evt.Data))
-			for k, v := range evt.Data {
-				dataCopy[k] = v
-			}
-			scriptEvt := evt
-			scriptEvt.Data = dataCopy
-			context := map[string]interface{}{
-				"event":    scriptEvt,
-				"agent_id": evt.AgentID,
-			}
-			// Automation-triggered scripts run with the standard user role
-			// permissions: they can read agents/credentials and queue tasks
-			// (the same powers rule authors already have via other actions),
-			// but cannot reach the network (httpRequest stays admin-only).
-			// Tenant flows through the event (P0-2 fills evt.TenantID at
-			// fire time): scripts inherit exactly the firing tenant's reach.
-			caller := scripting.Caller{Username: "automation", Role: db.RoleUser, TenantID: evt.TenantID}
-			// Capture the outcome. These results used to be discarded, so an automation script
-			// that failed on every event - a typo, a permission the automation role does not have,
-			// a timeout - left no trace anywhere: the rule "ran", the event was consumed, and the
-			// only symptom was whatever the script was supposed to do not happening.
-			started := time.Now()
-			var res scripting.ExecutionResult
-			switch {
-			case params.ScriptID != "":
-				res = engine.Execute(params.ScriptID, context, caller)
-			case params.Code != "":
-				res = engine.ExecuteCode(params.Code, context, caller)
-			}
-			fields := []any{
-				"script_id", params.ScriptID,
-				"event", string(evt.Type),
-				"agent_id", evt.AgentID,
-				"tenant_id", evt.TenantID,
-				"duration_ms", time.Since(started).Milliseconds(),
-			}
-			if res.Success {
-				slog.Debug("Automation: script ran", fields...)
-			} else {
-				slog.Warn("Automation: script failed",
-					append(fields, "error", truncateString(res.Error, 300))...)
-			}
+		if err := json.Unmarshal(action.Params, &params); err != nil {
+			return fmt.Errorf("script: %w", err)
 		}
+		if params.ScriptID == "" && params.Code == "" {
+			return fmt.Errorf("script: script_id or code is required")
+		}
+		engine := scripting.GetEngine()
+		dataCopy := make(map[string]interface{}, len(evt.Data))
+		for k, v := range evt.Data {
+			dataCopy[k] = v
+		}
+		scriptEvt := evt
+		scriptEvt.Data = dataCopy
+		context := map[string]interface{}{"event": scriptEvt, "agent_id": evt.AgentID}
+		caller := scripting.Caller{Username: "automation", Role: db.RoleUser, TenantID: evt.TenantID}
+		started := time.Now()
+		var res scripting.ExecutionResult
+		switch {
+		case params.ScriptID != "":
+			res = engine.Execute(params.ScriptID, context, caller)
+		case params.Code != "":
+			res = engine.ExecuteCode(params.Code, context, caller)
+		}
+		fields := []any{
+			"script_id", params.ScriptID, "event", string(evt.Type), "agent_id", evt.AgentID,
+			"tenant_id", evt.TenantID, "duration_ms", time.Since(started).Milliseconds(),
+		}
+		if res.Success {
+			slog.Debug("Automation: script ran", fields...)
+			return nil
+		}
+		slog.Warn("Automation: script failed", append(fields, "error", truncateString(res.Error, 300))...)
+		return fmt.Errorf("script: %s", truncateString(res.Error, 300))
 	case ActionCreateTask:
 		var params struct {
 			AgentID          string               `json:"agent_id"`
@@ -274,34 +288,24 @@ func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event
 			CredentialID     *uint                `json:"credential_id,omitempty"`
 			CredentialParams CredentialTaskParams `json:"credential_params,omitempty"`
 		}
-		if err := json.Unmarshal(action.Params, &params); err == nil {
-			targetAgent := s.automationTarget(evt, params.AgentID)
-			if targetAgent == "" || params.Type == "" {
-				// A rule that cannot act must say so: silently doing nothing is the same symptom as
-				// a rule that never matched, and there was no trace of either.
-				slog.Warn("Automation: create_task skipped, the rule has no usable target",
-					"event", string(evt.Type), "agent_id", params.AgentID, "task_type", params.Type)
-				break
+		if err := json.Unmarshal(action.Params, &params); err != nil {
+			return fmt.Errorf("create_task: %w", err)
+		}
+		targetAgent := s.automationTarget(evt, params.AgentID)
+		if targetAgent == "" || params.Type == "" {
+			return fmt.Errorf("create_task: type and a visible target agent are required")
+		}
+		opts := []TaskOption{withSystemTaskMetadata("pending", "automation")}
+		if params.CredentialID != nil && *params.CredentialID != 0 {
+			allowed, permErr := middleware.UserHasPermission(s.db, rule.CreatedBy, db.PermCredsRead)
+			if permErr != nil || !allowed {
+				return fmt.Errorf("create_task: creator lacks credentials.read")
 			}
-			{
-				opts := []TaskOption{}
-				if params.CredentialID != nil && *params.CredentialID != 0 {
-					allowed, permErr := middleware.UserHasPermission(s.db, rule.CreatedBy, db.PermCredsRead)
-					if permErr != nil || !allowed {
-						slog.Warn("Automation: create_task refused, creator lost credentials.read",
-							"rule", rule.ID, "creator", rule.CreatedBy, "err", permErr)
-						break
-					}
-					opts = append(opts, WithCredentialReference(*params.CredentialID, params.CredentialParams))
-				}
-				expanded := s.expandTemplate(params.Command, evt)
-				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0, opts...)
-				if err != nil {
-					slog.Error("Automation: failed to create task", "error", err)
-				} else if err := s.db.Model(task).Update("created_by", "automation").Error; err != nil {
-					slog.Error("Automation: failed to mark task as automation", "task_id", task.ID, "error", err)
-				}
-			}
+			opts = append(opts, WithCredentialReference(*params.CredentialID, params.CredentialParams))
+		}
+		expanded := s.expandTemplate(params.Command, evt)
+		if _, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0, opts...); err != nil {
+			return fmt.Errorf("create_task: %w", err)
 		}
 	case ActionSetSleep:
 		var params struct {
@@ -309,24 +313,21 @@ func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event
 			Interval int    `json:"interval"`
 			Jitter   int    `json:"jitter"`
 		}
-		if err := json.Unmarshal(action.Params, &params); err == nil {
-			targetAgent := s.automationTarget(evt, params.AgentID)
-			if targetAgent == "" || params.Interval <= 0 {
-				slog.Warn("Automation: set_sleep skipped, the rule has no usable target or interval",
-					"event", string(evt.Type), "agent_id", params.AgentID, "interval", params.Interval)
-				break
-			}
-			{
-				interval, jitter, clamped := s.clampSleepInts(params.Interval, params.Jitter)
-				if clamped {
-					s.LogAuditRecord(nil, "automation_sleep_clamped", "agent", targetAgent,
-						"automation set_sleep raised to OPSEC floors", true, nil)
-				}
-				cmd := fmt.Sprintf("%d,%d", interval, jitter)
-				if _, err := s.createSystemTask(targetAgent, "set_sleep", cmd, "", "pending", "automation"); err != nil {
-					slog.Error("Automation: failed to create set_sleep task", "error", err)
-				}
-			}
+		if err := json.Unmarshal(action.Params, &params); err != nil {
+			return fmt.Errorf("set_sleep: %w", err)
+		}
+		targetAgent := s.automationTarget(evt, params.AgentID)
+		if targetAgent == "" || params.Interval <= 0 {
+			return fmt.Errorf("set_sleep: a visible target agent and positive interval are required")
+		}
+		interval, jitter, clamped := s.clampSleepInts(params.Interval, params.Jitter)
+		if clamped {
+			s.LogAuditRecord(nil, "automation_sleep_clamped", "agent", targetAgent,
+				"automation set_sleep raised to OPSEC floors", true, nil)
+		}
+		cmd := fmt.Sprintf("%d,%d", interval, jitter)
+		if _, err := s.createSystemTask(targetAgent, "set_sleep", cmd, "", "pending", "automation"); err != nil {
+			return fmt.Errorf("set_sleep: %w", err)
 		}
 	case ActionRunMacro:
 		var params struct {
@@ -334,35 +335,28 @@ func (s *Server) executeAction(rule AutomationRule, action RuleAction, evt Event
 			StopOnError bool `json:"stop_on_error"`
 		}
 		if err := json.Unmarshal(action.Params, &params); err != nil || params.MacroID == 0 {
-			slog.Error("Automation: invalid run_macro params")
-			return nil
+			return fmt.Errorf("run_macro: valid macro_id is required")
 		}
 		var macro db.CommandMacro
 		if err := s.db.First(&macro, params.MacroID).Error; err != nil {
-			slog.Error("Automation: macro not found for run_macro action", "macro_id", params.MacroID, "error", err)
 			return fmt.Errorf("run_macro: macro %d not found", params.MacroID)
 		}
-		// Macro rows are tenant assets too: a rule must not execute (or
-		// probe the existence of) another tenant's playbook.
 		if evt.TenantID != 0 && macro.TenantID != evt.TenantID {
-			slog.Warn("Automation: cross-tenant macro blocked", "macro_id", params.MacroID, "tenant", evt.TenantID)
 			s.LogAuditRecord(nil, "automation_blocked_cross_tenant", "macro", fmt.Sprint(params.MacroID),
 				"run_macro referenced foreign-tenant macro", true, nil)
-			return nil
+			return fmt.Errorf("run_macro: macro %d belongs to another tenant", params.MacroID)
 		}
 		targetAgent := evt.AgentID
 		if targetAgent == "" {
-			slog.Warn("Automation: run_macro skipped, event has no agent context", "macro", macro.Name)
-			return nil
+			return fmt.Errorf("run_macro: event has no agent context")
 		}
-		// Run against the triggering agent so playbooks like "on connect,
-		// auto-recon" work without pinning a specific host.
 		macroCopy := macro
 		if err := s.startMacroRun(&macroCopy, targetAgent, "automation", params.StopOnError); err != nil {
-			slog.Error("Automation: failed to start macro run", "macro", macro.Name, "agent_id", targetAgent, "error", err)
-		} else {
-			slog.Info("Automation: macro dispatched", "macro", macro.Name, "agent_id", targetAgent)
+			return fmt.Errorf("run_macro: %w", err)
 		}
+		slog.Info("Automation: macro dispatched", "macro", macro.Name, "agent_id", targetAgent)
+	default:
+		return fmt.Errorf("unknown automation action type %q", action.Type)
 	}
 	return nil
 }
@@ -385,15 +379,15 @@ func (s *Server) executeWebhook(params struct {
 	Method  string            `json:"method"`
 	Headers map[string]string `json:"headers"`
 	Secret  string            `json:"secret"`
-}, evt Event) {
+}, evt Event) error {
 	if err := webhookTargetValidator(params.URL); err != nil {
 		slog.Error("Automation: webhook URL rejected", "error", err)
-		return
+		return err
 	}
 	body, err := json.Marshal(evt)
 	if err != nil {
 		slog.Error("Automation: marshal webhook body", "error", err)
-		return
+		return err
 	}
 	method := params.Method
 	if method == "" {
@@ -402,32 +396,25 @@ func (s *Server) executeWebhook(params struct {
 	req, err := http.NewRequest(method, params.URL, bytes.NewReader(body))
 	if err != nil {
 		slog.Error("Automation: create webhook request", "error", err)
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Sovereign-Automation/1.0")
-
-	// Add custom headers
 	for k, v := range params.Headers {
 		req.Header.Set(k, v)
 	}
-
-	// Add HMAC signature if secret is configured
 	if params.Secret != "" {
 		h := hmac.New(sha256.New, []byte(params.Secret))
 		h.Write(body)
 		req.Header.Set("X-Sovereign-Signature", hex.EncodeToString(h.Sum(nil)))
 	}
-
 	resp, err := ssrfSafeClient(s.httpClient).Do(req)
 	if err != nil {
-		// *url.Error embeds the full URL, which may carry a webhook secret. The comment here always
-		// said "log cause only" but passed the wrapper; deliveryErrorText actually strips it.
 		slog.Error("Automation: webhook request failed", "error", deliveryErrorText(err))
-		return
+		return fmt.Errorf("request failed: %s", deliveryErrorText(err))
 	}
 	defer resp.Body.Close()
-	logWebhookResponse(params.URL, evt, resp)
+	return logWebhookResponse(params.URL, evt, resp)
 }
 
 // logWebhookResponse records what the receiver said.
@@ -435,30 +422,23 @@ func (s *Server) executeWebhook(params struct {
 // The status code was never inspected, so a webhook endpoint answering 500 or 404 was treated exactly
 // like a 200: the body - which is where a receiver puts "signature mismatch" or "unknown event" - went
 // unread. A rule pointing at a receiver that had moved or started rejecting was silently dead.
-func logWebhookResponse(targetURL string, evt Event, resp *http.Response) {
+func logWebhookResponse(targetURL string, evt Event, resp *http.Response) error {
 	if resp == nil {
-		return
+		return fmt.Errorf("webhook returned no response")
 	}
-	// A body is written by the receiver, so bound what is read before logging it.
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-
-	// The URL may carry a token in a query string, so only the host is logged.
 	host := targetURL
 	if u, err := url.Parse(targetURL); err == nil && u.Host != "" {
 		host = u.Host
 	}
-
-	fields := []any{
-		"host", host,
-		"event", string(evt.Type),
-		"status", resp.StatusCode,
-	}
+	fields := []any{"host", host, "event", string(evt.Type), "status", resp.StatusCode}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		slog.Debug("Automation: webhook delivered", fields...)
-		return
+		return nil
 	}
 	slog.Warn("Automation: webhook rejected by the receiver",
 		append(fields, "body", truncateString(strings.TrimSpace(string(body)), 200))...)
+	return fmt.Errorf("receiver returned HTTP %d", resp.StatusCode)
 }
 
 func (s *Server) loadAutomationRules() []AutomationRule {

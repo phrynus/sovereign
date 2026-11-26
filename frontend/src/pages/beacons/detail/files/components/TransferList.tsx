@@ -57,6 +57,19 @@ export default memo(function TransferList({
                 </span>
               </div>
               <Progress value={session.total_size > 0 ? pct : 0} />
+              {session.status === "completed" && (() => {
+                const checksum = session.computed_sha256;
+                const matches = !!checksum && (!session.sha256 || checksum.toLowerCase() === session.sha256.toLowerCase());
+                const state = !checksum || !matches
+                  ? "agents.files_transfer_unverified"
+                  : session.sha256 ? "agents.files_transfer_verified" : "agents.files_transfer_recorded";
+                return (
+                  <p className="break-all font-mono text-[11px] text-muted-foreground" title={checksum || undefined}>
+                    {checksum ? t("agents.files_transfer_checksum", { hash: `${checksum.slice(0, 12)}…` }) : t(state)}
+                    {checksum ? ` · ${t(state)}` : ""}
+                  </p>
+                );
+              })()}
               {session.error && <p className="text-xs text-destructive-ink">{session.error}</p>}
               <div className="flex flex-wrap gap-1">
                 {session.status === "active" && (

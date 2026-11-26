@@ -53,6 +53,8 @@ export default function ToolkitPage() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [activeTab, setActiveTab] = useState<"commands" | "templates" | "spray">("commands");
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
+  const [agentInfoFailed, setAgentInfoFailed] = useState(false);
+  const [agentInfoRequest, setAgentInfoRequest] = useState(0);
   const runAction = async (action: string, param = "") => {
     if (!selectedAgent) {
       toast.error(t("toolkit.toast.select_agent_first"));
@@ -86,26 +88,35 @@ export default function ToolkitPage() {
         recentTasks: (tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[],
       };
     },
-    toastThrottleMs: 0,
+    toastThrottleMs: 30000,
+    reportRefreshErrors: true,
+    resyncOnConnect: true,
     errorMessage: t("toolkit.toast.load_failed"),
   });
   const toolkitAgents = data?.toolkitAgents ?? [];
   const recentTasks = data?.recentTasks ?? [];
 
   useEffect(() => {
-    if (!selectedAgent) { setAgentInfo(null); return; }
+    if (!selectedAgent) {
+      setAgentInfo(null);
+      setAgentInfoFailed(false);
+      return;
+    }
     const controller = new AbortController();
     setAgentInfo(null);
+    setAgentInfoFailed(false);
     api.get<{ agent?: Record<string, unknown> }>(`/toolkit/agents/${selectedAgent}/info`, { signal: controller.signal })
       .then((d) => {
         if (!controller.signal.aborted) setAgentInfo(d.agent || null);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setAgentInfo(null);
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setAgentInfoFailed(true);
+          toastError(err, "toolkit.toast.agent_info_failed");
+        }
       });
     return () => controller.abort();
-  }, [selectedAgent]);
-
+  }, [selectedAgent, agentInfoRequest, t, toastError]);
   const quickActions = [
     { label: "whoami", value: "whoami" },
     { label: "hostname", value: "hostname" },
@@ -281,6 +292,9 @@ export default function ToolkitPage() {
         </div>
 
         <div className="flex flex-col gap-(--page-gap)">
+          {agentInfoFailed && (
+            <DataError message={t("toolkit.agent_info_unreadable")} onRetry={() => setAgentInfoRequest((n) => n + 1)} />
+          )}
           {agentInfo && (
             <Card className="p-(--card-spacing) text-xs space-y-1">
               <div className="font-semibold text-muted-foreground mb-2">{t("toolkit.agent_info")}</div>

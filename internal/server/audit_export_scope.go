@@ -29,7 +29,7 @@ func auditExportScope(c *gin.Context, tenantID uint) string {
 	if tenantID != 0 {
 		parts = append(parts, "tenant="+strconv.Itoa(int(tenantID)))
 	}
-	for _, name := range []string{"action", "user", "agent_id", "since", "until", "since_id"} {
+	for _, name := range []string{"action", "match", "result", "user", "agent_id", "since", "until", "since_id"} {
 		if value := strings.TrimSpace(c.Query(name)); value != "" {
 			parts = append(parts, name+"="+value)
 		}

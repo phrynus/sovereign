@@ -206,7 +206,6 @@ func (s *Server) handleReadyCheck(c *gin.Context) {
 		status = "not ready"
 		code = http.StatusServiceUnavailable
 	}
-
 	payload := gin.H{
 		"status": status,
 		"checks": checks,

@@ -21,7 +21,7 @@ function editorState(overrides: Record<string, unknown> = {}) {
   return {
     draft: "original", dirty: false, loading: false, saving: false,
     conflict: false, error: null, baselineTaskId: 11, baselineHash: "a".repeat(64),
-    mtime: 1, revisions: [], revisionText: null,
+    mtime: 1, size: 11, revisions: [], revisionText: null,
     changeDraft: vi.fn(), open: vi.fn().mockResolvedValue(undefined), save,
     reload, overwrite, loadHistory, viewRevision, clearRevision: vi.fn(),
     ...overrides,
@@ -46,6 +46,7 @@ describe("FilesEditor", () => {
   it("opens the baseline and only enables Save when the draft is dirty", () => {
     renderEditor();
     expect(vi.mocked(useFileEditor).mock.results[0].value.open).toHaveBeenCalled();
+    expect(screen.getByText("agents.files_editor_baseline")).toBeTruthy();
     const saveButton = screen.getByRole("button", { name: "agents.files_editor_save" });
     expect(saveButton).toHaveProperty("disabled", true);
   });
