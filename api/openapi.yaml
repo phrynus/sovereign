@@ -7397,9 +7397,23 @@ paths:
       operationId: agentsBatchDelete
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
 
   /agents/batch/tags:
     post:
@@ -7408,9 +7422,25 @@ paths:
       operationId: agentsBatchTags
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+                tag_id: { type: integer }
+                action: { type: string, enum: [add, remove] }
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
 
   /agents/bulk/task:
     post:
@@ -7419,9 +7449,25 @@ paths:
       operationId: agentsBulkTask
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_ids, type]
+              properties:
+                agent_ids:
+                  type: array
+                  items: { type: string }
+                type: { type: string }
+                command: { type: string }
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
 
   /agents/bulk/results:
     get:
@@ -7433,6 +7479,9 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
 
   /agents/{id}/config:
     get:
@@ -12523,6 +12572,9 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /admin/emergency-stop:
     post:
       tags: [Settings]
@@ -12530,9 +12582,21 @@ paths:
       operationId: post__admin_emergency_stop
       security:
         - SessionCookie: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string }
+                reason: { type: string }
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /admin/killswitch/status:
     get:
       tags: [Settings]
@@ -12543,6 +12607,9 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /admin/killswitch:
     post:
       tags: [Settings]
@@ -12567,6 +12634,9 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '401':
           description: Invalid password
   /listeners:
@@ -12639,6 +12709,36 @@ paths:
       responses:
         '200':
           description: OK
+  /api/privesc/run:
+    post:
+      tags: [Privilege Escalation]
+      summary: Queue a privilege escalation check task for an agent
+      operationId: runPrivescCheck
+      security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id: { type: string }
+                check_type: { type: string, default: all }
+      responses:
+        '200':
+          description: Check task queued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          task_id: { type: integer }
   /opsec/history:
     get:
       tags: [Settings]
@@ -12649,6 +12749,9 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /groups:
     get:
       tags: [Agents]
@@ -12659,15 +12762,32 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
     post:
       tags: [Agents]
       summary: Create group
       operationId: post__groups
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { type: string }
       responses:
         '200':
           description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /timeline:
     get:
       tags: [Agents]
@@ -12678,6 +12798,9 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /api/ai/runs:
     get:
       tags: [AI]
@@ -12688,7 +12811,11 @@ paths:
         - {name: session_id, in: query, schema: {type: integer}}
         - {name: status, in: query, schema: {type: string, enum: [active]}}
       responses:
-        '200': {description: Operator-owned runs}
+        '200':
+          description: Operator-owned runs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
     post:
       tags: [AI]
       summary: Create a durable background AI run
@@ -12700,7 +12827,11 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/AIRunInput'}
       responses:
-        '202': {description: Run queued}
+        '202':
+          description: Run queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '429': {description: Operator or tenant concurrency limit reached}
   /api/ai/runs/{id}:
     get:
@@ -12711,7 +12842,11 @@ paths:
       parameters:
         - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
-        '200': {description: Run state}
+        '200':
+          description: Run state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '404': {description: Run not visible}
   /api/ai/runs/{id}/events:
     get:
@@ -12724,7 +12859,11 @@ paths:
         - {name: Last-Event-ID, in: header, schema: {type: string}}
         - {name: after, in: query, schema: {type: integer, format: int64}}
       responses:
-        '200': {description: text/event-stream with monotonically increasing event IDs}
+        '200':
+          description: text/event-stream with monotonically increasing event IDs
+          content:
+            text/event-stream:
+              schema: { type: string }
   /api/ai/runs/{id}/cancel:
     post:
       tags: [AI]
@@ -12733,8 +12872,17 @@ paths:
       security: [{SessionCookie: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object }
       responses:
-        '200': {description: Cancellation requested}
+        '200':
+          description: Cancellation requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '409': {description: Run is already terminal}
   /api/ai/intents:
     get:
@@ -12743,7 +12891,11 @@ paths:
       operationId: listAIExecutionIntents
       security: [{SessionCookie: []}]
       responses:
-        '200': {description: Approval intents}
+        '200':
+          description: Approval intents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /api/ai/intents/{id}/approve:
     post:
       tags: [AI]
@@ -12752,8 +12904,17 @@ paths:
       security: [{SessionCookie: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object }
       responses:
-        '200': {description: Intent executed}
+        '200':
+          description: Intent executed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '409': {description: Intent already decided}
   /api/ai/intents/{id}/reject:
     post:
@@ -12763,8 +12924,20 @@ paths:
       security: [{SessionCookie: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
       responses:
-        '200': {description: Intent rejected}
+        '200':
+          description: Intent rejected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /api/ai/profiles:
     get:
       tags: [AI]
@@ -12772,14 +12945,36 @@ paths:
       operationId: listAIProfiles
       security: [{SessionCookie: []}]
       responses:
-        '200': {description: Redacted provider profiles}
+        '200':
+          description: Redacted provider profiles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
     post:
       tags: [AI]
       summary: Create an administrator-managed AI provider profile
       operationId: createAIProfile
       security: [{SessionCookie: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, provider, model]
+              properties:
+                name: { type: string }
+                provider: { type: string }
+                model: { type: string }
+                endpoint: { type: string }
+                api_key: { type: string }
+                enabled: { type: boolean }
       responses:
-        '201': {description: Profile created}
+        '201':
+          description: Profile created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /api/ai/profiles/{id}:
     put:
       tags: [AI]
@@ -12788,8 +12983,25 @@ paths:
       security: [{SessionCookie: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                provider: { type: string }
+                model: { type: string }
+                endpoint: { type: string }
+                api_key: { type: string }
+                enabled: { type: boolean }
       responses:
-        '200': {description: Profile updated}
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
     delete:
       tags: [AI]
       summary: Delete an unused AI provider profile
@@ -12798,7 +13010,11 @@ paths:
       parameters:
         - {name: id, in: path, required: true, schema: {type: integer}}
       responses:
-        '200': {description: Profile deleted}
+        '200':
+          description: Profile deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '409': {description: Profile is referenced by sessions}
   /api/ai/profiles/{id}/test:
     post:
@@ -12808,8 +13024,17 @@ paths:
       security: [{SessionCookie: []}]
       parameters:
         - {name: id, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object }
       responses:
-        '200': {description: Provider healthy}
+        '200':
+          description: Provider healthy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '502': {description: Provider unhealthy}
   /ai/sessions/{id}/branch:
     post:
@@ -12817,8 +13042,20 @@ paths:
       summary: Branch a conversation through a selected message
       operationId: branchAISession
       security: [{SessionCookie: []}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message_id: { type: integer }
       responses:
-        '201': {description: Independent child session created}
+        '201':
+          description: Independent child session created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /api/ai/sessions/{id}/attachments:
     get:
       tags: [AI]
@@ -12826,7 +13063,11 @@ paths:
       operationId: listAIAttachments
       security: [{SessionCookie: []}]
       responses:
-        '200': {description: Attachments without plaintext content}
+        '200':
+          description: Attachments without plaintext content
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
     post:
       tags: [AI]
       summary: Upload up to five validated UTF-8 text attachments
@@ -12841,7 +13082,11 @@ paths:
               properties:
                 files: {type: array, maxItems: 5, items: {type: string, format: binary}}
       responses:
-        '201': {description: Attachments encrypted and stored}
+        '201':
+          description: Attachments encrypted and stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
         '413': {description: Attachment limits exceeded}
   /api/ai/attachments/{attachmentID}:
     delete:
@@ -12852,7 +13097,11 @@ paths:
       parameters:
         - {name: attachmentID, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
-        '200': {description: Attachment deleted}
+        '200':
+          description: Attachment deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
   /api/ai/knowledge/collections:
     get:
       tags: [AI]
