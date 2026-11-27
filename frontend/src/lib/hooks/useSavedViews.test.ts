@@ -2,10 +2,11 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSavedViews } from "./useSavedViews";
 
-const { getMock, postJsonMock, delMock } = vi.hoisted(() => ({
+const { getMock, postJsonMock, delMock, tMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
   postJsonMock: vi.fn(),
   delMock: vi.fn(),
+  tMock: (key: string) => `T:${key}`,
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -14,6 +15,11 @@ vi.mock("@/lib/api", () => ({
     postJson: (...args: unknown[]) => postJsonMock(...args),
     del: (...args: unknown[]) => delMock(...args),
   },
+  getRateLimitRetryAfter: () => 5,
+}));
+
+vi.mock("@/lib/i18n", () => ({
+  useI18n: () => ({ t: tMock }),
 }));
 
 describe("useSavedViews", () => {
@@ -57,7 +63,16 @@ describe("useSavedViews", () => {
     const { result } = renderHook(() => useSavedViews("agents"));
     await waitFor(() => expect(result.current.loaded).toBe(true));
 
-    expect(result.current.error).toBeTruthy();
+    expect(result.current.error).toBe("settings offline");
     expect(result.current.views).toEqual([]);
+  });
+
+  it("normalizes structured HTTP errors through i18n", async () => {
+    getMock.mockRejectedValueOnce({ status: 403, message: "forbidden" });
+
+    const { result } = renderHook(() => useSavedViews("agents"));
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    expect(result.current.error).toBe("T:common.forbidden");
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runTask, type TaskStatus } from "@/lib/api";
+import { normalizeError, resolveErrorText } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 
 type LiveTaskStatus = "idle" | "pending" | "running" | "completed" | "failed" | "cancelled" | "timeout";
@@ -84,9 +85,14 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
         return final;
       } catch (e) {
         if (seqRef.current !== seq) return null;
-        const msg = e instanceof Error ? e.message : String(e);
+        const normalized = normalizeError(e);
+        const msg = resolveErrorText(t, normalized, () => t("common.task_failed"));
         setError(msg);
-        setStatus(msg.includes("did not respond") ? "timeout" : "failed");
+        setStatus(
+          normalized.kind === "timeout" || normalized.message.includes("did not respond")
+            ? "timeout"
+            : "failed",
+        );
         return null;
       } finally {
         if (seqRef.current === seq) cancelRef.current = null;

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { errorText } from "@/lib/errors";
+import { useI18n } from "@/lib/i18n";
 
 interface SavedView {
   id: number;
@@ -14,6 +16,7 @@ interface SavedView {
  * `page` must be one of the server-side whitelist (agents, tasks, ...).
  */
 export function useSavedViews(page: string) {
+  const { t } = useI18n();
   const [views, setViews] = useState<SavedView[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +30,11 @@ export function useSavedViews(page: string) {
       // Keep any views already known. Replacing them with [] was worse than a
       // missing list: the picker stayed fully usable, and saving under an
       // existing name silently replaced that view server-side.
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(t, err, () => t("common.error")));
     } finally {
       setLoaded(true);
     }
-  }, [page]);
+  }, [page, t]);
 
   useEffect(() => { void load(); }, [load]);
 

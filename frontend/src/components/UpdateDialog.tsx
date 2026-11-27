@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
 import { useWS } from "@/lib/wsContext";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { usePermissions } from "@/lib/hooks/usePermissions";
@@ -203,10 +204,10 @@ export function UpdateDialog() {
       setProgress((prev) => ({
         ...prev,
         stage: "failed",
-        error: e instanceof Error ? e.message : String(e),
+        error: errorText(t, e, () => t("update_dialog.failed")),
       }));
     }
-  }, [startPolling, stopPolling]);
+  }, [startPolling, stopPolling, t]);
 
   useEffect(() => {
     if (!open) stopPolling();

@@ -13109,7 +13109,10 @@ export interface operations {
     batchCommand: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional deduplication key; must match idempotency_key when both are supplied */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -13120,6 +13123,15 @@ export interface operations {
                     command: string;
                     /** @default shell */
                     type?: string;
+                    /** @default shell */
+                    task_type?: string;
+                    shell?: string;
+                    file?: string;
+                    args?: string;
+                    credential_id?: number | null;
+                    credential_params?: components["schemas"]["CredentialTaskParams"];
+                    /** @description Live key replays only the same request; different arguments return 409 */
+                    idempotency_key?: string;
                 };
             };
         };
@@ -13132,14 +13144,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuccessResponse"] & {
                         data: {
-                            success?: boolean;
-                            tasks?: {
-                                agent_id?: string;
-                                task_id?: number;
-                            }[];
+                            tasks_created?: number;
+                            failed?: number;
+                            locked_skipped?: number;
+                            deduped?: number;
                         };
                     };
                 };
+            };
+            /** @description Idempotency key belongs to a different task request */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14727,8 +14745,12 @@ export interface operations {
                 since_id?: number;
                 /** @description Exact audit username; makes the export a selection. */
                 user?: string;
-                /** @description Exact action name; makes the export a selection. */
+                /** @description Action name; exact unless match=contains. */
                 action?: string;
+                /** @description Action matching mode. */
+                match?: "exact" | "contains";
+                /** @description Filter by the recorded success boolean. */
+                result?: "success" | "failed";
                 /** @description Exact related agent/target id; makes the export a selection. */
                 agent_id?: string;
                 /** @description Lower time bound (relative 24h/7d or RFC3339); makes the export a selection. */
@@ -25287,7 +25309,10 @@ export interface operations {
     apiV1CreateTask: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional deduplication key; must match idempotency_key when both are supplied */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -25303,11 +25328,13 @@ export interface operations {
                     encrypt_result?: boolean;
                     credential_id?: number | null;
                     credential_params?: components["schemas"]["CredentialTaskParams"];
+                    /** @description Live key replays only the same request; different arguments return 409 */
+                    idempotency_key?: string;
                 };
             };
         };
         responses: {
-            /** @description Task created */
+            /** @description Task created or replayed */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -25317,6 +25344,21 @@ export interface operations {
                         data: components["schemas"]["TaskResponse"];
                     };
                 };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Idempotency key belongs to a different task request */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Task dispatch refused by policy or queue limits */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

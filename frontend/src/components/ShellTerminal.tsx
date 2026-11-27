@@ -6,7 +6,6 @@ import { api, pollTask, ApiError, formatThrownError, type TaskStatus } from "@/l
 import { TASK_HARD_TIMEOUT_MS } from "@/lib/task-poll";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { copyText } from "@/lib/clipboard";
-import { getCompletions } from "@/lib/completions";
 import { paths } from "@/lib/api-paths";
 import { fetchTaskSpecs, formatCompletionList, getCompletions, type TaskSpecInfo } from "@/lib/completions";
 import { Spinner } from "@/components/ui/spinner";
@@ -34,6 +33,12 @@ import {
 
 const MAX_DRAG_UPLOAD_BYTES = 4 * 1024;
 
+let taskSpecsPromise: Promise<TaskSpecInfo[]> | null = null;
+function loadTaskSpecs(): Promise<TaskSpecInfo[]> {
+  if (!taskSpecsPromise) taskSpecsPromise = fetchTaskSpecs().catch(() => []);
+  return taskSpecsPromise;
+}
+
 export default function ShellTerminal({
   agentId,
   shellType,
@@ -58,6 +63,7 @@ export default function ShellTerminal({
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const specsRef = useRef<TaskSpecInfo[]>([]);
   const historyRef = useRef<string[]>([]);
   const histIdxRef = useRef(-1);
   const loadingRef = useRef(false);
@@ -292,6 +298,7 @@ export default function ShellTerminal({
   useEffect(() => { writePromptRef.current = writePrompt; }, [writePrompt]);
 
   useEffect(() => {
+    void loadTaskSpecs().then((specs) => { specsRef.current = specs; });
     return () => { abortRef.current?.abort(); };
   }, []);
 
@@ -408,7 +415,7 @@ export default function ShellTerminal({
         if (data === "\x09") {
           const currentInput = inputRef.current;
           const trimmed = currentInput.trim();
-          const matches = getCompletions(trimmed, osTypeRef.current || "windows");
+          const matches = getCompletions(trimmed, osTypeRef.current || "windows", specsRef.current);
 
           if (matches.length === 1) {
             const completed = matches[0];
@@ -419,7 +426,7 @@ export default function ShellTerminal({
             }
           } else if (matches.length > 1) {
             termInst.write("\r\n");
-            termInst.write(matches.join("  "));
+            termInst.write(formatCompletionList(matches, specsRef.current));
             termInst.write("\r\n");
             termInst.write(promptRef.current);
             termInst.write(currentInput);

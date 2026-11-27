@@ -9,6 +9,10 @@ import { useWebSocket } from "@/lib/useWebSocket";
 
 const HISTORY_LIMIT = 50;
 
+function bumpSeq(ref: { current: number }) {
+  ref.current += 1;
+}
+
 export interface EngagementOption {
   id: number;
   name: string;
@@ -180,7 +184,7 @@ export function useChatWorkspace() {
 
   useEffect(() => {
     void loadEngagements();
-    return () => { engagementSeq.current++; };
+    return () => { bumpSeq(engagementSeq); };
   }, [loadEngagements]);
 
   const loadChannels = useCallback(async (targetEngagement: number, preferredId?: number | null) => {
@@ -213,7 +217,7 @@ export function useChatWorkspace() {
       return;
     }
     void loadChannels(engagementId);
-    return () => { channelSeq.current++; };
+    return () => { bumpSeq(channelSeq); };
   }, [engagementId, loadChannels]);
 
   const loadHistory = useCallback(async (beforeId?: number, merge = false) => {
@@ -259,8 +263,8 @@ export function useChatWorkspace() {
     }
     if (engagementId == null || channelId == null) return;
     void loadHistory(undefined, !switched);
-    return () => { historySeq.current++; };
-  }, [engagementId, channelId, loadHistory, reconnectToken]);
+    return () => { bumpSeq(historySeq); };
+  }, [engagementId, channelId, search, loadHistory, reconnectToken]);
 
   useEffect(() => {
     const wasConnected = previousConnectedRef.current;

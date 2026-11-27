@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTypedWS, isWSEvent } from "@/lib/typed-ws";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
 import { toastSoon } from "@/lib/toast";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -66,10 +67,10 @@ export function NotificationDropdown() {
       // A failed read must not leave the badge at 0: that is indistinguishable
       // from "no alerts", so only a successful response updates the count.
       .catch((err: unknown) => {
-        setLoadError(err instanceof Error ? err.message : String(err));
+        setLoadError(errorText(t, err, () => t("common.error")));
         setLoaded(true);
       });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadNotifications();

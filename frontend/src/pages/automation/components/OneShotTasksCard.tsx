@@ -5,6 +5,8 @@ import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { POLL } from "@/lib/polling";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,7 @@ function toLocalRFC3339(localInput: string): string {
 
 export function OneShotTasksCard() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const { confirm, modal } = useConfirm();
   const [showForm, setShowForm] = useState(false);
 
@@ -61,9 +64,9 @@ export function OneShotTasksCard() {
     } catch (e) {
       // Retain the last known agent list on failure so the empty dropdown
       // is never mistaken for "no agents exist".
-      setAgentsError(e instanceof Error ? e.message : String(e));
+      setAgentsError(errorText(t, e, () => t("common.error")));
     }
-  }, []);
+  }, [t]);
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   const [saving, setSaving] = useState(false);
 
@@ -95,7 +98,7 @@ export function OneShotTasksCard() {
       setRunAtLocal("");
       await refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("oneshot.toast_create_failed"));
+      toastError(e, "oneshot.toast_create_failed");
     } finally {
       setSaving(false);
     }
@@ -107,8 +110,8 @@ export function OneShotTasksCard() {
       await api.del(paths.scheduler.oneshot(task.id));
       toast.success(t("oneshot.toast_cancelled"));
       await refresh();
-    } catch {
-      toast.error(t("oneshot.toast_cancel_failed"));
+    } catch (e) {
+      toastError(e, "oneshot.toast_cancel_failed");
     }
   };
 

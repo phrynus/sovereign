@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import type { BOFFile, Execution, RepoItem } from "./types";
@@ -14,6 +16,7 @@ const log = logger.withScope("bof");
 
 export function useBOFData() {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [files, setFiles] = useState<BOFFile[]>([]);
   const [repoItems, setRepoItems] = useState<RepoItem[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
@@ -41,12 +44,12 @@ export function useBOFData() {
     } catch (e) {
       // Retain the last good snapshot: a failed refresh must not read as
       // "no BOFs / no executions / no agents" below.
-      setLoadError(e instanceof Error ? e.message : String(e));
+      setLoadError(errorText(t, e, () => t("common.error")));
       if (process.env.NODE_ENV === "development") log.error("load data failed", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadRepo = useCallback(async () => {
     setRepoLoading(true);
@@ -56,11 +59,11 @@ export function useBOFData() {
       setRepoItems(Array.isArray(data) ? data : []);
     } catch (e) {
       // Retain the last good list; wiping it to [] read as "no collections".
-      setRepoError(e instanceof Error ? e.message : String(e));
+      setRepoError(errorText(t, e, () => t("common.error")));
     } finally {
       setRepoLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadFiles();
@@ -85,11 +88,11 @@ export function useBOFData() {
         await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
         if (process.env.NODE_ENV === "development") log.error("upload failed", e);
-        toast.error(t("bof.toast.upload_failed"));
+        toastError(e, "bof.toast.upload_failed");
       }
       loadFiles();
     },
-    [loadFiles, t]
+    [loadFiles, t, toastError]
   );
 
   const deleteBOF = useCallback(
@@ -98,11 +101,11 @@ export function useBOFData() {
         await api.del(paths.bof.one(id));
       } catch (e) {
         if (process.env.NODE_ENV === "development") log.error("delete failed", e);
-        toast.error(t("bof.toast.delete_failed"));
+        toastError(e, "bof.toast.delete_failed");
       }
       loadFiles();
     },
-    [loadFiles, t]
+    [loadFiles, toastError]
   );
 
   const runBOF = useCallback(
@@ -111,11 +114,11 @@ export function useBOFData() {
         await api.post(paths.bof.run(id), { agent_id: agentId, args });
       } catch (e) {
         if (process.env.NODE_ENV === "development") log.error("run failed", e);
-        toast.error(t("bof.toast.run_failed"));
+        toastError(e, "bof.toast.run_failed");
       }
       loadFiles();
     },
-    [loadFiles, t]
+    [loadFiles, toastError]
   );
 
   const editBOF = useCallback(
@@ -124,11 +127,11 @@ export function useBOFData() {
         await api.post(paths.bof.edit(id), { name, description });
       } catch (e) {
         if (process.env.NODE_ENV === "development") log.error("edit failed", e);
-        toast.error(t("bof.toast.edit_failed"));
+        toastError(e, "bof.toast.edit_failed");
       }
       loadFiles();
     },
-    [loadFiles, t]
+    [loadFiles, toastError]
   );
 
   // The endpoint requires `url` AND `filename`; sending only `url` (as this page

@@ -22,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n";
+import { errorText } from "@/lib/errors";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 import { toast } from "sonner";
 import { fetchTaskTypes, type TaskTypeInfo } from "@/lib/taskTypes";
 import { AlertTriangle, Bug, Calendar, CalendarClock, Clock, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -45,6 +47,7 @@ interface ScheduledRule {
 
 export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const { t } = useI18n();
+  const { toastError } = useErrorToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -85,7 +88,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
       fetchData();
       onChanged?.();
     },
-    onError: () => toast.error(t("scheduler.save_failed")),
+    onError: (e) => toastError(e, "scheduler.save_failed"),
   });
 
   const { data, loading, error, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
@@ -111,9 +114,9 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
     } catch (e) {
       // Retain the last known task-type list on failure so the bare
       // dropdown is never mistaken for "the server has no task types".
-      setTaskTypesError(e instanceof Error ? e.message : String(e));
+      setTaskTypesError(errorText(t, e, () => t("common.error")));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadTaskTypes();
@@ -145,8 +148,8 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
       await api.postJson(paths.automation.ruleToggle(id), {});
       fetchData();
       onChanged?.();
-    } catch {
-      toast.error(t("scheduler.toggle_failed"));
+    } catch (e) {
+      toastError(e, "scheduler.toggle_failed");
     }
   }
 
@@ -156,8 +159,8 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
       await api.del(paths.automation.rule(id));
       fetchData();
       onChanged?.();
-    } catch {
-      toast.error(t("scheduler.delete_failed"));
+    } catch (e) {
+      toastError(e, "scheduler.delete_failed");
     }
   }
 
