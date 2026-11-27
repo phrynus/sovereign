@@ -85,6 +85,11 @@ func (s *Server) frontRefresh() {
 		go func(domain string) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("domain front probe panicked", "domain", domain, "panic", r)
+				}
+			}()
 			st := s.frontCheckDomain(domain)
 			if auto {
 				st.Active = true

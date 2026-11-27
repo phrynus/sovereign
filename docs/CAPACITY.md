@@ -258,8 +258,11 @@ plugin hooks, all of which share that core. Budget for headroom: the disk is
 the usual bottleneck long before the CPU is.
 
 Scaling out is by sharding fleets across teamservers (listeners are already
-per-listener addressable), not by adding cores to one process: the SQLite
-write path is deliberately single-writer, and `database.pool` stays 1 for it.
+per-listener addressable) backed by PostgreSQL (the production driver since
+v2.8; SQLite survives only in in-memory unit tests, where `database.pool` stays
+1). Real-world PostgreSQL deployments benefit from connection pooling and
+concurrent writes, though WAL fsync and network RTT still dominate over the
+in-memory SQLite benchmark numbers above.
 
 ## 4. Profiling a running server (opt-in, loopback only)
 

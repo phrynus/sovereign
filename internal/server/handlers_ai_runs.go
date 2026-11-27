@@ -157,6 +157,11 @@ func (b *aiRunBroker) publish(runID string, event aiLiveEvent, ephemeral bool) {
 					delete(b.retrying, dst)
 					b.mu.Unlock()
 				}()
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("AI broker retry worker panicked", "run_id", rid, "panic", r)
+					}
+				}()
 				// dst.done is already closed when the subscriber left, so a
 				// racing unsubscribe makes this drop instead of panic — and
 				// unlike a membership re-check it cannot lose the race between
@@ -487,6 +492,11 @@ func (s *Server) startAIBackgroundRun(run db.AIChatRun, req aiRunRequest, princi
 		defer s.wg.Done()
 		defer cancel()
 		defer s.aiRuns.finish(run.ID)
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("AI background run panicked", "run_id", run.ID, "panic", r)
+			}
+		}()
 		s.executeAIBackgroundRun(ctx, run, req, principal, profile)
 	}()
 }
@@ -610,6 +620,11 @@ func (s *Server) executeAIBackgroundRun(ctx context.Context, run db.AIChatRun, r
 	// #nosec G118 -- background summarization uses the server context on purpose.
 	go func() { // #nosec G118
 		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("AI session summarization panicked", "session_id", run.SessionID, "panic", r)
+			}
+		}()
 		// #nosec G118 -- post-run summarization intentionally outlives the request; s.ctx is the server context, not the request's.
 		ctx := s.ctx // #nosec G118
 		if ctx == nil {
@@ -821,6 +836,11 @@ func (s *Server) initializeAIRuns() {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("AI run retention cleanup panicked", "panic", r)
+				}
+			}()
 			ticker := time.NewTicker(24 * time.Hour)
 			defer ticker.Stop()
 			for {

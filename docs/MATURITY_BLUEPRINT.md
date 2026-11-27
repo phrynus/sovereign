@@ -1,4 +1,4 @@
-# Sovereign Maturity Blueprint (v2.6.2)
+# Sovereign Maturity Blueprint (v2.7.1)
 
 >对标 Cobalt Strike / Sliver / Mythic / Havoc 的高成熟度 C2 架构蓝图。
 >本文是 **设计 + 现有实现引用** 的单一入口；实现细节以源码为准。
@@ -21,7 +21,7 @@ sovereign/
 ├── internal/
 │   ├── config/                 # yaml + env 校验、热重载 token
 │   ├── crypto/                 # HKDF / X25519+AES-GCM session / Ed25519 / loot 静态加密
-│   ├── db/                     # GORM + sqlite(postgres profile)
+│   ├── db/                     # GORM + PostgreSQL（SQLite 仅限内存单测）
 │   ├── malleable/              # CS 风格 profile 引擎（URI/transform/UA）
 │   ├── obfuscation/            # 一行 payload / PS 混淆
 │   ├── payload/                # ★ Agent 生成与实现
@@ -100,9 +100,8 @@ QUIC/gRPC 已实现 accept 退避、panic recover、GracefulStop 超时；硬化
 
 ### 2.3 Tasking / Command Registry（`pkg/protocol`）
 
-**单一真源**：`tasks.go` 定义 219 个 `TaskType*` 常量；`taskspec_data.go` 注册
-217 个 `TaskSpec{Name, Description, Category, Parameters, Aliases, RequiresApproval}`。
-Server 元数据 API、approval gate（`tasktypes.go` ~70 个危险类型）、Agent 别名/
+**单一真源**：`tasks.go` 与 `taskspec_data.go` 统一注册 **231** 个可派发 `TaskSpec{Name, Description, Category, Parameters, Aliases, RequiresApproval}`（含 **62** 个高危审批门任务与 **3** 个别名；以 `docs/CAPABILITY_MATRIX.md` 生成段为准）。
+Server 元数据 API、approval gate（`tasktypes.go`）、Agent 别名/
 help 全部派生自 `AllSpecs()`。重复注册/别名冲突 **panic**（坏构建优于静默影子
 命令）。新增命令 = 改这一处 + agent handler + registry 绑定；手册用
 `scripts/gen-command-reference.mjs` 再生。
@@ -549,8 +548,7 @@ node scripts/gen-capability-matrix.mjs --check  # CI freshness gate
 credential-access, defense-evasion, lateral-movement, privesc, persistence,
 c2, impact, other`。每个条目含 type、aliases、parameters、approval 标记。
 
-当前生成物摘要（v2.6.2）：**217** 任务类型、**57** approval-gated、**3** 别名、
-**70** 参数。手册页脚列出的唯一无 spec 常量是 `shell_output` —— 这是**故意的**：
+当前生成物摘要（v2.7.1）：**231** 任务类型、**62** approval-gated、**3** 别名。手册页脚列出的唯一无 spec 常量是 `shell_output` —— 这是**故意的**：
 它是 implant 交互式 shell 回传的 RESULT 类型，不可派发（见
 `pkg/protocol/tasks.go:410` 与 `docs/COMMAND_REFERENCE.md` 页脚），不是覆盖缺口。
 

@@ -118,6 +118,11 @@ func (e *cookieProxyEngine) start(agentID string, port int) (int, error) {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("cookie proxy server panicked", "agent_id", agentID, "panic", r)
+			}
+		}()
 		if err := sess.srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			slog.Warn("cookie proxy stopped", "agent_id", agentID, "err", err)
 		}
@@ -260,6 +265,14 @@ func (h *cookieProxyHandler) handleConnect(w http.ResponseWriter, r *http.Reques
 	// leaving it relaying after the operator believes it is off.
 	h.sess.trackTunnel(conn)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("cookie proxy CONNECT tunnel panicked", "dest", dest, "panic", r)
+				_ = conn.Close()
+				_ = backend.Close()
+				h.sess.untrackTunnel(conn)
+			}
+		}()
 		var wg sync.WaitGroup
 		wg.Go(func() {
 			// Pump client→backend. The source is the buffered reader so any

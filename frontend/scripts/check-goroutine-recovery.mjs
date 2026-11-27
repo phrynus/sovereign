@@ -15,26 +15,9 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const serverDir = join(root, "internal", "server");
 
-// Existing sites, frozen at the state the gate was added. Each is reviewed when touched; the list must
-// only ever shrink.
-//
-// A site is keyed by file + enclosing function + its zero-based occurrence in that function, NOT by line
-// number. Line numbers move whenever an unrelated comment or handler above shifts, and every one of those
-// moves reads as "3 new unguarded goroutines" — a false alarm that trains people to bypass the gate.
-const LEGACY = new Set([
-  // select()s on dst.done, so a racing unsubscribe drops instead of panicking on a closed channel.
-  "handlers_ai_runs.go|publish|0",
-  "handlers_ai_runs.go|startAIBackgroundRun|0",
-  "handlers_ai_runs.go|executeAIBackgroundRun|0",
-  "handlers_ai_runs.go|initializeAIRuns|0",
-  "handlers_cookie_proxy.go|start|0",
-  "handlers_cookie_proxy.go|handleConnect|0",
-  "handlers_domain_front_stager.go|frontRefresh|0",
-  "handlers_lportfwd.go|lportfwdConnect|0",
-  "handlers_socks_relay.go|startUDPAssociate|0",
-  "handlers_websocket.go|handleOperatorWS|0",
-  "handlers_websocket.go|handleOperatorWS|1",
-]);
+// Existing sites, frozen at the state the gate was added. All 11 legacy sites
+// have been guarded with defer recover(), so the frozen set is now empty.
+const LEGACY = new Set([]);
 
 const START = /^\s*go func\s*\(/;
 const FUNC = /^func\s+(?:\([^)]*\)\s+)?(\w+)/;

@@ -784,6 +784,11 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("operator WS write pump panicked", "user", session.Username, "panic", r)
+			}
+		}()
 		session.writePump()
 	}()
 
@@ -819,6 +824,12 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 	// time.Ticker.Stop() does not close its channel, so a `for range` loop
 	// parked on it leaked one goroutine per operator connect/disconnect.
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("operator WS ping loop panicked", "user", session.Username, "panic", r)
+				conn.Close()
+			}
+		}()
 		pingTicker := time.NewTicker(BeaconPingInterval)
 		defer pingTicker.Stop()
 		for {

@@ -128,6 +128,12 @@ func (s *Server) lportfwdConnect(agentID string, connID uint64, target string) {
 	// target closes we tell the agent to drop its local leg. Queue overflow
 	// closes loudly (dropped data would corrupt the TCP stream silently).
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("lportfwd read pump panicked", "agent_id", agentID, "conn", connID, "panic", r)
+				s.lportfwdClose(agentID, connID)
+			}
+		}()
 		buf := make([]byte, 16*1024)
 		for {
 			n, rerr := conn.Read(buf)

@@ -949,6 +949,11 @@ func (e *socksRelayEngine) startUDPAssociate(s *Server, sess *socksRelaySession,
 	_ = ctrl.SetDeadline(time.Time{})
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("SOCKS UDP associate reader panicked", "agent_id", sess.agentID, "conn", rc.connID, "panic", r)
+			}
+		}()
 		buf := make([]byte, 65535)
 		for {
 			n, src, err := udpConn.ReadFromUDP(buf)
