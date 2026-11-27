@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
