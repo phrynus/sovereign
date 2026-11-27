@@ -35,7 +35,10 @@ import { fileURLToPath } from "node:url";
 // side keeps: a large new component shipping without tests still trips it.
 // Re-measured 2026-11-19 (windows): 40.26% statements (10448/25947), after the
 // transport-matrix page + test. Floor raised to 39.5 (~0.8-point headroom).
-const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 39.5);
+// Re-measured 2026-11-27 (windows): 43.90% statements (11989/27307), after
+// adding BOF/automation/roles/notifications/builds unit tests. Floor raised
+// to 43.0 (~0.9-point headroom).
+const FLOOR = Number(process.env.COVERAGE_FLOOR ?? 43.0);
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const summaryPath = join(root, "coverage", "coverage-summary.json");

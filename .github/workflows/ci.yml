@@ -693,7 +693,7 @@ jobs:
         run: npm run check:pre
       - run: npm test
       # Ratcheting floor: 40.26% of statements in src/ (10448/25947), with the
-      # floor itself at 39.5% (frontend/scripts/check-coverage.mjs - the file
+      # floor itself at 43.0% (frontend/scripts/check-coverage.mjs - the file
       # that carries the number and the reason). It reads lower than it looks
       # because most uncovered code is page components no test imports at all,
       # not a missed branch inside a tested file. Raise this whenever tests are

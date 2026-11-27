@@ -2073,7 +2073,7 @@ be refreshed from a Linux host the same way the Linux visual baselines are.
 
 | Batch | Defect | Evidence |
 | --- | --- | --- |
-| U9.5 | Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome | page-by-page review — still open |
+| U9.5 (verified closed 2026-11-27) | ~~Detail pages (beacon: 15 sections, listener, campaign, report, circuit breaker) and the four workspace surfaces (shell / files / screen / remote desktop) each grow their own chrome~~ | All 4 workspace surfaces (`FilesToolbar`, `RdpToolbar`, `ScreenToolbar`, `ShellPage`) adopt `WorkspaceToolbar`, and all 5 detail pages (`BeaconDetailPage`, `ListenerDetailPage`, `CampaignPageContent`, `ReportPageContent`, `CircuitBreakerPage`) adopt `PageContainer`; `check:layout` passes with 0 violations |
 | U9.6 (landed 2026-10-24) | ~~Density mode changes the type ramp and the table cell padding only~~ | `globals.css`'s `[data-density="compact"]` now also drives `--page-pad-y` / `--page-gap` / `--control-height*` and `[data-slot="card"]` spacing, consumed by `AppLayout`, `page-container`, `button`, `input` and the table primitives |
 | U9.7 (landed 2026-10-24) | ~~No layout gate~~ | `scripts/check-layout.mjs` enforces the contract (wired as `check:layout` in `npm run check`; `audit:layout` for the report-only walk) |
 
