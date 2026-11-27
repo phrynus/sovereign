@@ -1,0 +1,1 @@
+import{t as e}from"./card-header-Cyd7uE1z.js";import{Xn as t}from"./vendor-baseui-DxklGiws.js";var n=t();function r(t){return(0,n.jsx)(e,{...t})}export{r as t};
